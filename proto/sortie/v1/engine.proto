@@ -1,0 +1,55 @@
+// Engine identity and health (grpc.health.v1 is served as well).
+syntax = "proto3";
+
+package sortie.v1;
+
+service Engine {
+  rpc Version(VersionRequest) returns (VersionResponse);
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+message VersionRequest {}
+
+message VersionResponse {
+  string engine_version = 1;
+  // Always "sortie.v1" for this package.
+  string api = 2;
+  uint32 link_major = 3;
+  uint32 link_minor = 4;
+  // Of the connected bridge, empty when no bridge is connected.
+  string bridge_version = 5;
+  string dcs_version = 6;
+}
+
+message HealthRequest {}
+
+enum HealthStatus {
+  HEALTH_STATUS_UNSPECIFIED = 0;
+  HEALTH_STATUS_OK = 1;
+  // Running, but something needs attention (see notes).
+  HEALTH_STATUS_DEGRADED = 2;
+  HEALTH_STATUS_DOWN = 3;
+}
+
+message LinkHealth {
+  // "hooks" or "mission".
+  string env = 1;
+  bool connected = 2;
+  // Credits the bridge currently grants the engine for commands.
+  uint32 credits = 3;
+  uint64 events_dropped = 4;
+  // Seconds since the last heartbeat from the bridge.
+  double heartbeat_age_s = 5;
+}
+
+message HealthResponse {
+  HealthStatus status = 1;
+  repeated LinkHealth links = 2;
+  // Current session, empty when no mission is attached.
+  string session = 3;
+  string scenario = 4;
+  double model_time = 5;
+  bool paused = 6;
+  uint32 logic_clients = 7;
+  repeated string notes = 8;
+}

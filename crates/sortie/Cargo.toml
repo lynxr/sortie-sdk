@@ -1,0 +1,37 @@
+[package]
+name = "sortie"
+description = "Sortie SDK: write DCS World mission logic as async Rust against a typed scenario"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[features]
+# `#[sortie::test]` (forwarded to sortie-macros). Enabled by FakeDcs (`sortie-fake`), which is
+# not part of SDK 0.1; without it `#[sortie::test]` is a compile error that says so.
+fake-dcs = ["sortie-macros/fake-dcs"]
+
+[dependencies]
+futures = { workspace = true }
+miette = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sortie-macros = { workspace = true }
+sortie-manifest = { workspace = true }
+sortie-proto = { workspace = true, features = ["grpc"] }
+sortie-types = { workspace = true }
+sortie-world = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros", "sync", "time"] }
+tokio-stream = { workspace = true }
+tonic = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros", "sync", "time", "test-util"] }
+
+[lints]
+workspace = true

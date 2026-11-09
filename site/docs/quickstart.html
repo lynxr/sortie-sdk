@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Быстрый старт | Sortie SDK</title>
+<meta name="description" content="От двух архивов до первой миссии в игре. Понадобятся DCS, Rust, uv и Git (см. требования).">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/docs/quickstart.html">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-doc has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html" aria-current="page">Быстрый старт</a><a href="index.html">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Страницы документации">
+<nav class="toc">
+<a class="toc-home" href="index.html">Документация</a>
+<ul>
+<li><a href="index.html">Обзор</a></li>
+<li><a href="install-runtime.html">Установка рантайма</a></li>
+<li><a href="quickstart.html" aria-current="page">Быстрый старт</a></li>
+<li><a href="dependency.html">Подключение SDK</a></li>
+<li><a href="sdk.html">Логика на Rust</a></li>
+<li><a href="generator.html">Сценарий на Python</a></li>
+<li><a href="testing.html">Тестирование</a></li>
+<li><a href="operations.html">Эксплуатация</a></li>
+<li><a href="troubleshooting.html">Диагностика</a></li>
+<li><a href="faq.html">Вопросы и ограничения</a></li>
+<li><a href="changelog.html">Что нового</a></li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="быстрый-старт">Быстрый старт<a class="anchor" href="#быстрый-старт" aria-label="Ссылка на этот раздел">#</a></h1>
+<p>От двух архивов до первой миссии в игре. Понадобятся DCS, Rust, uv и Git (см.
+<a href="index.html#%D1%82%D1%80%D0%B5%D0%B1%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D1%8F">требования</a>).</p>
+<h2 id="1-рантайм">1. Рантайм<a class="anchor" href="#1-рантайм" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Скачайте и установите рантайм по <a href="install-runtime.html">инструкции</a>: <code>sortie install</code>,
+<code>sortie doctor</code>, перезапуск DCS. Дальше считается, что он распакован в <code>C:\Sortie</code>.</p>
+<h2 id="2-шаблон-миссии">2. Шаблон миссии<a class="anchor" href="#2-шаблон-миссии" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>На странице выпуска <a href="https://github.com/lynxr/sortie-sdk/releases/tag/v0.1.0">v0.1.0</a>
+скачайте исходники SDK («Source code (zip)») и распакуйте. Скопируйте из них папку <code>template</code>
+туда, где будет жить ваша миссия, например в <code>C:\Missions\my_mission</code>. Или возьмите шаблон через
+Git:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">git clone --branch v0.1.0 https://github.com/lynxr/sortie-sdk sortie-sdk
+Copy-Item -Recurse sortie-sdk\template C:\Missions\my_mission
+</code></pre></div>
+<p>В шаблоне:</p>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Файл</th><th>Что это</th></tr></thead><tbody>
+<tr><td><code>scenario.py</code></td><td>сценарий: карта, зона цели, три группы противника, слоты игроков</td></tr>
+<tr><td><code>scenario.lock.json</code></td><td>символы сценария для логики; его пишет генератор</td></tr>
+<tr><td><code>pyproject.toml</code></td><td>Python-проект с зависимостью <code>sortie-gen</code></td></tr>
+<tr><td><code>Cargo.toml</code></td><td>крейт логики с зависимостями <code>sortie</code> и <code>sortie-build</code></td></tr>
+<tr><td><code>build.rs</code></td><td>превращает <code>scenario.lock.json</code> в типизированные константы</td></tr>
+<tr><td><code>src/lib.rs</code></td><td>логика миссии</td></tr>
+<tr><td><code>src/main.rs</code></td><td><code>main</code> программы логики</td></tr>
+<tr><td><code>AGENTS.md</code></td><td>инструкции для ИИ-агентов (Codex, Cursor, Claude Code); навыки — в папке <code>agents/</code> SDK</td></tr>
+</tbody></table>
+</div>
+<p>Зависимости в <code>Cargo.toml</code> и <code>pyproject.toml</code> уже указывают на этот выпуск SDK. Если репозиторий
+SDK закрытый, сначала настройте <a href="dependency.html#%D0%B7%D0%B0%D0%BA%D1%80%D1%8B%D1%82%D1%8B%D0%B9-%D1%80%D0%B5%D0%BF%D0%BE%D0%B7%D0%B8%D1%82%D0%BE%D1%80%D0%B8%D0%B9">доступ к нему</a>.</p>
+<h2 id="3-сценарий">3. Сценарий<a class="anchor" href="#3-сценарий" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">from dcs import planes, vehicles
+from dcs.terrain import caucasus
+from sortie_gen import Scenario, StartType
+
+sc = Scenario(&quot;my_mission&quot;, schema=1, theatre=caucasus.Caucasus(),
+              start=&quot;2026-06-01T08:00:00Z&quot;, time_limit=&quot;2h&quot;)
+
+# Зона цели: круг радиусом 3 км. ident делает её символом zones::TARGET в Rust.
+target = sc.zone(&quot;Target&quot;, ident=&quot;TARGET&quot;, at=sc.latlon(42.27, 42.90), radius=3_000)
+
+# Противник в зоне цели: три наземные группы.
+sc.ground_group(&quot;Armor&quot;, ident=&quot;ARMOR&quot;, country=&quot;Russia&quot;, at=target.center,
+                units=[vehicles.Armor.T_72B] * 3 + [vehicles.Armor.BMP_2] * 2)
+sc.ground_group(&quot;SAM&quot;, ident=&quot;SAM&quot;, country=&quot;Russia&quot;, at=sc.latlon(42.285, 42.915),
+                units=[vehicles.AirDefence.Osa_9A33_ln])
+sc.ground_group(&quot;AAA&quot;, ident=&quot;AAA&quot;, country=&quot;Russia&quot;, at=sc.latlon(42.26, 42.885),
+                units=[vehicles.AirDefence.ZSU_23_4_Shilka] * 2)
+
+# Слоты игроков: два Су-25Т на стоянке Кутаиси. Холодный старт отдаёт аэродром
+# коалиции полёта (синим), иначе в сетевой игре слот не занять.
+sc.player_flight(&quot;Blue 1&quot;, planes.Su_25T, country=&quot;Georgia&quot;,
+                 airbase=&quot;Kutaisi&quot;, start=StartType.Cold, size=2)
+
+if __name__ == &quot;__main__&quot;:
+    sc.cli()   # lock | build | validate | register | launch | restart | watch | results
+</code></pre></div>
+<p>Су-25Т бесплатный, он есть в любой DCS. Проверьте, что сценарий собирается:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">cd C:\Missions\my_mission
+uv run python scenario.py lock
+uv run python scenario.py build
+</code></pre></div>
+<p>Первый запуск <code>uv</code> создаёт <code>.venv</code> и ставит <code>sortie-gen</code> с pydcs. <code>lock</code> переписывает
+<code>scenario.lock.json</code>, только если изменился набор символов, и говорит, что изменилось. <code>build</code>
+собирает <code>dist\&lt;build_id&gt;.miz</code> и manifest без движка: так видно, что сценарий корректен.</p>
+<h2 id="4-логика">4. Логика<a class="anchor" href="#4-логика" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">#[sortie::mission]
+pub async fn run(ctx: Ctx&lt;MyMission&gt;, start: Start) -&gt; sortie::Result&lt;()&gt; {
+    let armor = ctx.group(groups::ARMOR)?; // Group&lt;Ground&gt;: группа есть в мире
+    let sam = ctx.group(groups::SAM)?;
+
+    if start.is_fresh() {
+        ctx.message(Coalition::Blue)
+            .text(&quot;Цель: бронегруппа в зоне Target. Её прикрывают «Оса» и «Шилки».&quot;)
+            .secs(20)
+            .key(&quot;intro&quot;)
+            .await?;
+    }
+
+    // ЗРК молчит, пока синие самолёты не подойдут к цели ближе 15 км.
+    sam.set_option(Alarm::Green).key(&quot;sam-green&quot;).await?;
+    ctx.wait_until(|w| {
+        w.units()
+            .coalition(Coalition::Blue)
+            .air()
+            .within(zones::TARGET.center(), km(15))
+            .any()
+    })
+    .await;
+    if sam.is_alive() {
+        sam.set_option(Alarm::Red).key(&quot;sam-red&quot;).await?;
+        ctx.message(Coalition::Blue)
+            .text(&quot;«Оса» включила радар!&quot;)
+            .key(&quot;sam-alert&quot;)
+            .await?;
+    }
+
+    // Победа, когда от бронегруппы ничего не осталось.
+    ctx.wait_until(|w| w.group(&amp;armor).alive_count() == 0).await;
+    ctx.message(Coalition::Blue)
+        .text(&quot;Цель уничтожена. Миссия выполнена!&quot;)
+        .secs(30)
+        .key(&quot;win&quot;)
+        .await?;
+    ctx.end_session(Outcome::BlueWin)
+        .text(&quot;бронегруппа уничтожена&quot;)
+        .await
+}
+</code></pre></div>
+<p><code>groups::ARMOR</code>, <code>groups::SAM</code> и <code>zones::TARGET</code> сгенерированы из <code>scenario.lock.json</code>. Их
+подключают <code>build.rs</code> и одна строка в начале <code>src/lib.rs</code>:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">fn main() {
+    sortie_build::scenario(&quot;my_mission&quot;, &quot;scenario.lock.json&quot;).emit();
+}
+</code></pre></div>
+<p><code>src/main.rs</code> — одна строка:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">sortie::main!(my_mission_logic::run);
+</code></pre></div>
+<p>Соберите логику:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">cargo build --release
+</code></pre></div>
+<p>Первая сборка скачивает зависимости и занимает несколько минут.</p>
+<h2 id="5-движок-и-логика">5. Движок и логика<a class="anchor" href="#5-движок-и-логика" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>В отдельном окне запустите движок:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">C:\Sortie\bin\sortied.exe --dev
+</code></pre></div>
+<p>В другом окне — логику:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">cd C:\Missions\my_mission
+cargo run --release
+</code></pre></div>
+<p>Логика подключается к <code>sortied</code> и ждёт сессию <code>my_mission</code>. Если движок ещё не запущен, она
+повторяет попытки сама.</p>
+<h2 id="6-регистрация-миссии">6. Регистрация миссии<a class="anchor" href="#6-регистрация-миссии" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">uv run python scenario.py register
+</code></pre></div>
+<p><code>register</code> берёт у движка новый build id, собирает миссию, проверяет типы юнитов и отдаёт сборку
+движку. Движок кладёт её в <code>Saved Games\DCS\Missions\Sortie\my_mission-&lt;build_id&gt;.miz</code>. Если в
+DCS сейчас не идёт ни одна миссия, проверить типы нельзя: команда предупредит и зарегистрирует
+сборку без проверки.</p>
+<h2 id="7-запуск-в-dcs">7. Запуск в DCS<a class="anchor" href="#7-запуск-в-dcs" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li>
+<p><strong>Одиночная игра.</strong> В DCS откройте «Миссия» и выберите файл из
+<code>Saved Games\DCS\Missions\Sortie\</code>. Займите слот Blue 1.</p>
+</li>
+<li>
+<p><strong>Сетевая игра, хост — ваш клиент DCS.</strong> «Мультиплеер» → «Новый сервер», добавьте ту же миссию
+в список и запустите. Игроки занимают слоты Blue 1.</p>
+</li>
+<li>
+<p><strong>Dedicated server.</strong> Нужна установка с <code>--instance</code> и миссия-заглушка в списке миссий сервера
+(см. <a href="operations.html#dedicated-server">Эксплуатацию</a>). Сборку загружает сам движок:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">uv run python scenario.py launch
+</code></pre></div>
+</li>
+</ul>
+<p>При старте миссии мост сообщает движку build id сборки. Движок сверяет его с зарегистрированной
+сборкой и начинает сессию, а логика получает вызов <code>run</code>. Если мост не установлен, на экране
+появится «Sortie bridge is not installed: run sortie doctor».</p>
+<h2 id="8-что-вы-увидите">8. Что вы увидите<a class="anchor" href="#8-что-вы-увидите" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li>Сразу после старта миссии синим придёт сообщение о цели.</li>
+<li>Когда синий самолёт подойдёт к цели ближе 15 км, «Оса» включит радар и придёт сообщение.</li>
+<li>Когда бронегруппа будет уничтожена, придёт «Цель уничтожена», и сессия закончится с победой
+синих. Миссия в DCS при этом продолжается.</li>
+</ul>
+<p>Наблюдать за сессией:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">uv run python scenario.py watch     # события сессии до Ctrl-C
+uv run python scenario.py results   # итоги последней сессии
+C:\Sortie\bin\sortie.exe status     # движок, мост, сессия
+</code></pre></div>
+<h2 id="9-дальше">9. Дальше<a class="anchor" href="#9-дальше" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li>Изменили логику — пересоберите и перезапустите её, DCS перезапускать не нужно. Новый процесс
+подключится к той же сессии и получит <code>Start::AfterCrash</code>. Команды с тем же <code>.key(..)</code> второй
+раз в DCS не уйдут.</li>
+<li>Изменили сценарий — выполните <code>lock</code>. Если изменился набор символов, пересоберите логику и
+зарегистрируйте новую сборку. Сдвиг зоны или группы логику пересобирать не заставляет.</li>
+<li>Переименовать шаблон: имя сценария стоит в <code>scenario.py</code> (<code>Scenario("my_mission", ...)</code>), в
+<code>build.rs</code>, в <code>src/lib.rs</code> (<code>include_scenario!(my_mission)</code> и <code>use my_mission::...</code>); имя
+крейта — в <code>Cargo.toml</code> и в <code>src/main.rs</code>. После переименования выполните <code>lock</code>.</li>
+</ul>
+<p>Подробно об API — в разделах <a href="sdk.html">Логика на Rust</a> и <a href="generator.html">Сценарий на Python</a>.</p>
+</article>
+<nav class="pager" aria-label="Соседние страницы">
+<a class="pager-prev" rel="prev" href="install-runtime.html"><span class="pager-dir">Назад</span><span class="pager-title">Установка рантайма</span></a>
+<a class="pager-next" rel="next" href="dependency.html"><span class="pager-dir">Дальше</span><span class="pager-title">Подключение SDK</span></a>
+</nav>
+<p class="page-source"><a href="quickstart.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+error: #[sortie::mission] takes no arguments
+ --> tests/ui/mission_signature.rs:3:19
+  |
+3 | #[sortie::mission(fast)]
+  |                   ^^^^
+
+error: a mission is not generic: name the scenario in the argument type, e.g. `ctx: Ctx<op_north::OpNorth>`
+ --> tests/ui/mission_signature.rs:4:17
+  |
+4 | pub async fn run<M>(_ctx: &Ctx<M>) {}
+  |                 ^^^
+
+error: a mission takes its arguments by value (the context is cheap to clone); this argument is the context, `Ctx<M>`
+ --> tests/ui/mission_signature.rs:4:27
+  |
+4 | pub async fn run<M>(_ctx: &Ctx<M>) {}
+  |                           ^^^^^^^
+
+error: a mission takes exactly two arguments, `ctx: Ctx<M>` and `start: Start`; found 1
+ --> tests/ui/mission_signature.rs:4:21
+  |
+4 | pub async fn run<M>(_ctx: &Ctx<M>) {}
+  |                     ^^^^^^^^^^^^^
+
+error: a mission must declare its return type: `-> sortie::Result<()>`
+ --> tests/ui/mission_signature.rs:4:5
+  |
+4 | pub async fn run<M>(_ctx: &Ctx<M>) {}
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

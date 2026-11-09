@@ -1,0 +1,18 @@
+[package]
+name = "sortie-snippets"
+description = "Compiled code examples of the Sortie SDK docs and agent skills"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+sortie = { workspace = true }
+serde = { workspace = true }
+
+[build-dependencies]
+sortie-build = { workspace = true }
+
+[lints]
+workspace = true

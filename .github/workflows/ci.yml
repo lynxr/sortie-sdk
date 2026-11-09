@@ -1,0 +1,76 @@
+# Builds and tests the SDK on every push and pull request.
+#
+# template/ and examples/ depend on the SDK through git (v0.1.0), the form client
+# projects copy. A cargo [patch] would still fetch that repository first, so CI builds a copy
+# of each project whose two git dependencies are rewritten to the crates of this commit.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Tests
+        run: cargo test --workspace --locked
+      - name: Template and example against the crates of this commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(pwd -W)"
+          export CARGO_TARGET_DIR="$root/target"
+          # <project>:<the manifest of its logic crate>
+          for spec in template:Cargo.toml examples/op_north:logic/Cargo.toml; do
+            project="${spec%%:*}"
+            copy="$RUNNER_TEMP/$(basename "$project")"
+            manifest="$copy/${spec#*:}"
+            rm -rf "$copy"
+            cp -r "$project" "$copy"
+            cp Cargo.lock "$(dirname "$manifest")/Cargo.lock"   # the versions the SDK is tested with
+            sed -E -i "s#^(sortie[a-z-]*) = \{ git = \"[^\"]+\", tag = \"[^\"]+\" \}#\1 = { path = \"$root/crates/\1\" }#" "$manifest"
+            grep -n 'path = ' "$manifest"
+            cargo build --manifest-path "$manifest"
+          done
+
+  python:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.x"
+      - name: Tests
+        working-directory: python/sortie-gen
+        run: uv run --locked pytest -q
+      - name: Wheel
+        working-directory: python/sortie-gen
+        run: uv build --wheel --out-dir dist
+      - name: Template and example scenarios build with the wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv venv "$RUNNER_TEMP/venv"
+          uv pip install --python "$RUNNER_TEMP/venv" python/sortie-gen/dist/*.whl
+          py="$RUNNER_TEMP/venv/Scripts/python.exe"
+          for scenario in template/scenario.py examples/op_north/scenario.py; do
+            "$py" "$scenario" lock --check
+            "$py" "$scenario" build --locked --out "$RUNNER_TEMP/build/$(basename "$(dirname "$scenario")")"
+          done

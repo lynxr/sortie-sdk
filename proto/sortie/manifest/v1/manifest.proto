@@ -1,0 +1,169 @@
+// Mission manifest: everything the engine and the SDK need to know about a generated
+// mission at run time. Written by the generator (manifest.pb, plus manifest.json for humans)
+// next to the .miz; registered with Missions.Register; delivered to logic in Start.
+//
+// Symbols (ident fields) are SCREAMING_SNAKE_CASE ([A-Z][A-Z0-9_]*) and are what
+// scenario.lock.json and the generated Rust handles refer to. DCS names are free-form.
+syntax = "proto3";
+
+package sortie.manifest.v1;
+
+import "sortie/v1/common.proto";
+
+message Manifest {
+  // Scenario name ([a-z][a-z0-9_]*), e.g. "op_north".
+  string scenario = 1;
+  // Schema number chosen by the scenario author.
+  uint32 schema = 2;
+  // Lowercase hex sha256 of the canonical symbol set (identical to scenario.lock.json).
+  string schema_sha256 = 3;
+  // ULID from Generator.BeginBuild; also embedded in the .miz bootstrap.
+  string build_id = 4;
+  // DCS theatre name, e.g. "Caucasus".
+  string theatre = 5;
+  // Mission start date-time, RFC 3339 UTC, e.g. "2026-11-01T06:30:00Z".
+  string start_time = 6;
+  // Session time limit in seconds of model time; 0 = no limit.
+  uint32 time_limit_s = 7;
+  repeated Group groups = 10;
+  repeated Zone zones = 11;
+  // Spawnable groups kept out of the .miz.
+  repeated Template templates = 12;
+  repeated Flag flags = 13;
+  repeated Airbase airbases = 14;
+  repeated Menu menus = 15;
+  repeated PlayerFlight player_flights = 16;
+  MaxIds max_ids = 17;
+  ToolVersions tools = 18;
+}
+
+// A group placed in the .miz.
+message Group {
+  // Symbol; empty for groups that have no Rust handle.
+  string ident = 1;
+  // DCS group name (unique in the mission).
+  string name = 2;
+  // CATEGORY_AIRPLANE | CATEGORY_HELICOPTER | CATEGORY_GROUND_UNIT | CATEGORY_SHIP.
+  sortie.v1.Category category = 3;
+  sortie.v1.Coalition coalition = 4;
+  // pydcs country name, e.g. "Russia".
+  string country = 5;
+  // DCS country id as written into the .miz, e.g. 0 for Russia.
+  int32 country_id = 6;
+  // Sorted, unique, [a-z][a-z0-9_-]*.
+  repeated string roles = 7;
+  repeated Unit units = 8;
+  // groupId in the .miz (never renumbered).
+  uint32 group_id = 9;
+  bool late_activation = 10;
+}
+
+message Unit {
+  // DCS unit name (unique in the mission).
+  string name = 1;
+  // DCS type name, e.g. "S-300PS 54K6 cp".
+  string type_name = 2;
+  sortie.v1.MapPoint position = 3;
+  // Altitude above sea level, metres.
+  double alt_m = 4;
+  double heading_rad = 5;
+  // unitId in the .miz (never renumbered); 0 in templates.
+  uint32 unit_id = 6;
+  sortie.v1.LatLon latlon = 7;
+  // DCS skill, e.g. "Excellent", "Client".
+  string skill = 8;
+}
+
+message Zone {
+  string ident = 1;
+  // Trigger zone name in the .miz.
+  string name = 2;
+  oneof shape {
+    Circle circle = 3;
+    Polygon polygon = 4;
+  }
+}
+
+message Circle {
+  sortie.v1.MapPoint center = 1;
+  double radius_m = 2;
+}
+
+message Polygon {
+  // Vertices in order; the polygon is closed implicitly.
+  repeated sortie.v1.MapPoint points = 1;
+}
+
+message Template {
+  string ident = 1;
+  // Base name for runtime groups: <name>#<session4>-<n> unless .named() is used.
+  string name = 2;
+  sortie.v1.Category category = 3;
+  sortie.v1.Coalition coalition = 4;
+  string country = 5;
+  int32 country_id = 6;
+  repeated string roles = 7;
+  // Unit types, order and default placement (unit_id = 0: DCS assigns ids at spawn).
+  repeated Unit units = 8;
+  // DCS group task, e.g. "CAP".
+  string task = 9;
+  // The full DCS group table produced by pydcs (Group.dict()) as JSON; the engine uses it
+  // as the base of coalition.addGroup (payloads, liveries, callsigns) when present.
+  string dcs_group_json = 10;
+}
+
+message Flag {
+  string ident = 1;
+  // DCS user flag name.
+  string name = 2;
+  int32 initial = 3;
+}
+
+message Airbase {
+  string ident = 1;
+  // DCS airbase name, e.g. "Maykop-Khanskaya".
+  string name = 2;
+  sortie.v1.MapPoint position = 3;
+  // DCS airdromeId, e.g. 16.
+  uint32 airbase_id = 4;
+  // Initial owner.
+  sortie.v1.Coalition coalition = 5;
+}
+
+message Menu {
+  string ident = 1;
+  string label = 2;
+  // Sub-menu path under the F10 root, e.g. ["Sortie"].
+  repeated string path = 3;
+}
+
+message PlayerFlight {
+  // DCS group name, e.g. "Blue 1".
+  string name = 1;
+  string type_name = 2;
+  uint32 size = 3;
+  sortie.v1.Coalition coalition = 4;
+  string country = 5;
+  int32 country_id = 6;
+  // DCS airbase name, e.g. "Senaki-Kolkhi".
+  string airbase = 7;
+  sortie.v1.StartType start = 8;
+  repeated Unit units = 9;
+  uint32 group_id = 10;
+}
+
+// Highest ids used in the .miz; runtime spawns never set ids (DCS assigns them).
+message MaxIds {
+  uint32 group_id = 1;
+  uint32 unit_id = 2;
+}
+
+message ToolVersions {
+  // e.g. "sortie-gen 0.1.0"
+  string generator = 1;
+  // e.g. "1.0.0"
+  string pydcs = 2;
+  // e.g. "3.13.1"
+  string python = 3;
+  map<string, string> extra = 4;
+}

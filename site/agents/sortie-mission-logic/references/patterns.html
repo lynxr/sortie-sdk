@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patterns for a long multiplayer mission (for agents) | Sortie SDK</title>
+<meta name="description" content="A server mission runs for hours, holds thousands of units, and players come and go. The patterns below keep it cheap and replay-safe. They use the frontline scenario.">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/agents/sortie-mission-logic/references/patterns.html">
+<link rel="stylesheet" href="../../../assets/style.css">
+<link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-agent has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../../../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="../../../docs/quickstart.html">Быстрый старт</a><a href="../../../docs/index.html">Документация</a><a href="../../../agents.html" aria-current="true">Для агентов</a><a href="../../../downloads.html">Загрузки</a><a href="../../../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Файлы для агентов">
+<nav class="toc">
+<a class="toc-home" href="../../../agents.html">Для агентов</a>
+<ul>
+<li><a href="../../AGENTS.html">AGENTS.md</a></li>
+<li><a href="../../README.html">README.md</a></li>
+</ul>
+<p class="toc-part">Навыки</p>
+<ul>
+<li><a href="../../sortie-live-debugging/SKILL.html"><code>sortie-live-debugging</code></a>
+<ul>
+<li><a href="../../sortie-live-debugging/references/failures.html">references/failures.md</a></li>
+</ul>
+</li>
+<li><a href="../SKILL.html"><code>sortie-mission-logic</code></a>
+<ul>
+<li><a href="api.html">references/api.md</a></li>
+<li><a href="errors.html">references/errors.md</a></li>
+<li><a href="patterns.html" aria-current="page">references/patterns.md</a></li>
+</ul>
+</li>
+<li><a href="../../sortie-scenario/SKILL.html"><code>sortie-scenario</code></a>
+<ul>
+<li><a href="../../sortie-scenario/references/reference.html">references/reference.md</a></li>
+</ul>
+</li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<p class="lang-note">Инструкции и навыки для агентов написаны на английском.</p>
+<article class="prose" lang="en">
+<h1 id="patterns-for-a-long-multiplayer-mission-for-agents">Patterns for a long multiplayer mission (for agents)<a class="anchor" href="#patterns-for-a-long-multiplayer-mission-for-agents" aria-label="Ссылка на этот раздел">#</a></h1>
+<p>A server mission runs for hours, holds thousands of units, and players come and go. The
+patterns below keep it cheap and replay-safe. They use the <code>frontline</code> scenario.</p>
+<h2 id="shape-one-task-per-concern">Shape: one task per concern<a class="anchor" href="#shape-one-task-per-concern" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">use sortie::prelude::*;
+use sortie::proto::v1;
+use sortie::types::Eid;
+
+use frontline::{Frontline, airbases, groups, menus, templates, zones};
+
+#[sortie::mission]
+pub async fn run(ctx: Ctx&lt;Frontline&gt;, _start: Start) -&gt; sortie::Result&lt;()&gt; {
+    // One task per concern; each lives until the session ends.
+    ctx.spawn(support_menu);
+    ctx.spawn(players);
+    ctx.spawn(red_waves);
+    ctx.spawn(front_control);
+    ctx.spawn(idle_end);
+
+    // The turn ends when the objective falls; otherwise the manifest&#39;s time limit ends it.
+    ctx.wait_until(|w| w.group(&amp;groups::SAM_NORTH).alive_count() == 0)
+        .await;
+    ctx.end_session(Outcome::BlueWin)
+        .text(&quot;SAM North destroyed&quot;)
+        .await
+}
+</code></pre></div>
+<ul>
+<li>Each concern (menus, players, AI waves, zone control, the idle timeout) is a plain
+<code>async fn name(ctx: Ctx&lt;M&gt;) -&gt; sortie::Result&lt;()&gt;</code> started with <code>ctx.spawn(name)</code>. An error
+in one is recorded and ends only that task.</li>
+<li>The mission function itself waits for the end condition and calls <code>end_session</code>. Without
+one, the time limit of the scenario (<code>time_limit=</code> in <code>scenario.py</code>) ends the turn.</li>
+<li>Every task is a replayable script: after a logic restart all of them start again from the
+top, so each step is keyed, <code>once</code>d, timed by a named timer or a wait on world state.</li>
+</ul>
+<h2 id="players-joining-and-leaving">Players joining and leaving<a class="anchor" href="#players-joining-and-leaving" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">/// Players joining and leaving: one loop over the raw event stream.
+pub async fn players(ctx: Ctx&lt;Frontline&gt;) -&gt; sortie::Result&lt;()&gt; {
+    let mut events = ctx.events();
+    while let Some(ev) = events.next().await {
+        match ev.kind {
+            Some(v1::event::Kind::PlayerEnteredUnit(e)) =&gt; {
+                let Some(unit) = e.unit else { continue };
+                let group = AnyGroup {
+                    eid: unit.group_eid.and_then(Eid::from_u64),
+                    name: unit.group_name,
+                };
+                let text = format!(&quot;Welcome, {}. F10 &gt; Support has smoke.&quot;, e.player);
+                match ctx.message(group).text(text).secs(15).await {
+                    // Gone: the player left the slot before the message went out.
+                    Ok(()) | Err(sortie::Error::Gone(_)) =&gt; {}
+                    Err(err) =&gt; return Err(err),
+                }
+            }
+            Some(v1::event::Kind::PlayerDisconnected(e)) =&gt; {
+                eprintln!(&quot;{} left&quot;, e.name); // the logic&#39;s stderr
+            }
+            _ =&gt; {}
+        }
+    }
+    Ok(())
+}
+</code></pre></div>
+<ul>
+<li><code>PlayerEnteredUnit</code> comes for every player who takes a slot, also on a respawn into a new
+aircraft. <code>PlayerConnected</code> and <code>PlayerDisconnected</code> (player id, name, <code>ucid</code>) and
+<code>PlayerChangedSlot</code> (player id, name, coalition, slot) come from the server.</li>
+<li>Who is flying now is world state: <code>w.players()</code> (units with a player), <code>.coalition(..)</code>,
+<code>entity.player</code>. After a logic restart the event history is gone; the world is not.</li>
+<li>Per-group menus (<code>.per_group()</code>) reach groups that spawn later on their own: no code per
+join.</li>
+<li>Event-driven messages need no key: a replay does not see old events, so it cannot repeat
+them.</li>
+</ul>
+<h2 id="ai-waves">AI waves<a class="anchor" href="#ai-waves" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">/// AI pressure: paced by named timers, keyed per wave, capped, scaled to the players online.
+pub async fn red_waves(ctx: Ctx&lt;Frontline&gt;) -&gt; sortie::Result&lt;()&gt; {
+    let mut alive: Vec&lt;Group&lt;Air&gt;&gt; = Vec::new();
+    for n in 1u32.. {
+        ctx.timer(&amp;format!(&quot;wave-{n}&quot;), mins(15)).await;
+        alive.retain(Group::is_alive);
+        let blue = ctx.world().players().coalition(Coalition::Blue).count();
+        if blue == 0 || alive.len() &gt;= 4 {
+            continue; // nobody to fight, or enough red in the air already
+        }
+        let cap = ctx
+            .spawn_group(templates::RED_CAP)
+            .from_airbase(airbases::MAYKOP, StartType::Hot)
+            .key(format!(&quot;wave-{n}&quot;))
+            .await?;
+        cap.push_task(Task::cap(zones::FRONT))
+            .key(format!(&quot;wave-{n}-task&quot;))
+            .await?;
+        alive.push(cap);
+    }
+    Ok(())
+}
+</code></pre></div>
+<ul>
+<li>A named timer per wave paces the loop and survives a logic restart; a key per wave makes the
+spawn and its task happen once.</li>
+<li>The decision (players online, red already in the air) reads the world as it is now. A replay
+decides again only for waves that never spawned.</li>
+<li>Cap the number of live AI groups. The engine paces spawns (currently 2 groups or 24 units a
+second) and a spawn waits at most 30 s by default: a wave of many groups is a loop of
+awaited spawns, not hundreds of commands at once.</li>
+<li>A spawned group's name is <code>&lt;template name&gt;#&lt;session4&gt;-&lt;n&gt;</code>; find spawned groups in queries by
+their <code>Group</code> handle, not by name.</li>
+</ul>
+<h2 id="thousands-of-units">Thousands of units<a class="anchor" href="#thousands-of-units" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li><code>wait_until</code> runs its predicate after every tick (10 a second) and every event. A predicate
+over a group (<code>w.group(&amp;g).alive_count()</code>) or a zone (<code>.any_inside(zone)</code>, indexed by a
+spatial grid) is cheap. A predicate that scans every unit is not: poll it every few seconds
+with <code>ctx.sleep</code> instead.</li>
+</ul>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">/// A periodic check instead of `wait_until`: cheap with thousands of units.
+pub async fn front_control(ctx: Ctx&lt;Frontline&gt;) -&gt; sortie::Result&lt;()&gt; {
+    loop {
+        ctx.sleep(secs(30)).await;
+        let (red, blue) = {
+            let w = ctx.world();
+            let red = w
+                .units()
+                .coalition(Coalition::Red)
+                .ground()
+                .count_inside(zones::FRONT);
+            let blue = w
+                .units()
+                .coalition(Coalition::Blue)
+                .ground()
+                .count_inside(zones::FRONT);
+            (red, blue)
+        }; // the borrow of the world ends here, before the next .await
+        if red == 0 &amp;&amp; blue &gt; 0 {
+            ctx.message(sortie::MessageTarget::All)
+                .text(&quot;Blue holds the front&quot;)
+                .key(&quot;front-taken&quot;)
+                .await?;
+            return Ok(());
+        }
+    }
+}
+</code></pre></div>
+<ul>
+<li>Symbols are for what the logic names. Ten scenario groups with idents and hundreds of
+anonymous ones (from templates or a <code>@sc.pydcs</code> hook) is normal: query those by zone, type
+(<code>.of_type(..)</code>), coalition, or DCS name (<code>.in_group("Name")</code>).</li>
+<li>An event stream that falls more than 1024 events behind drops the oldest. Keep each event
+loop short; hand slow work (spawns, many messages) to another task. Several typed streams
+(<code>.of::&lt;v1::Dead&gt;()</code>, <code>.of::&lt;v1::Kill&gt;()</code>) are cheaper to keep up than one loop that awaits
+inside.</li>
+<li>Read the world in a block and drop the borrow before the next <code>.await</code>.</li>
+</ul>
+<h2 id="idle-server">Idle server<a class="anchor" href="#idle-server" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">/// Ends the turn after 30 minutes of model time without a player in a slot.
+pub async fn idle_end(ctx: Ctx&lt;Frontline&gt;) -&gt; sortie::Result&lt;()&gt; {
+    let mut idle_minutes = 0;
+    loop {
+        ctx.sleep(mins(1)).await;
+        let online = ctx.world().players().count();
+        idle_minutes = if online == 0 { idle_minutes + 1 } else { 0 };
+        if idle_minutes == 30 {
+            return ctx
+                .end_session(Outcome::Aborted)
+                .text(&quot;No players for 30 minutes&quot;)
+                .await;
+        }
+    }
+}
+</code></pre></div>
+<p>Model time stops while the simulation is paused; a server that pauses without players never
+reaches the 30 minutes, which is what you want.</p>
+<h2 id="scores-and-other-campaign-data">Scores and other campaign data<a class="anchor" href="#scores-and-other-campaign-data" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">/// Campaign-wide scores, kept by the engine.
+#[derive(Default, Serialize, Deserialize)]
+pub struct Scores {
+    pub kills: std::collections::BTreeMap&lt;String, u32&gt;,
+}
+
+pub async fn scores(ctx: Ctx&lt;Frontline&gt;) -&gt; sortie::Result&lt;()&gt; {
+    let scores = ctx.state::&lt;Scores&gt;(&quot;scores&quot;).await?;
+    let mut kills = ctx.events().of::&lt;v1::Kill&gt;().coalition(Coalition::Blue);
+    while let Some(kill) = kills.next().await {
+        let Some(player) = kill.initiator.and_then(|u| u.player) else {
+            continue; // an AI kill
+        };
+        scores
+            .update(|s| *s.kills.entry(player.clone()).or_default() += 1)
+            .await?;
+    }
+    Ok(())
+}
+</code></pre></div>
+<ul>
+<li>Campaign documents live in the engine and survive restarts of the logic, the mission and the
+engine; the generator reads them for the next turn.</li>
+<li>Every <code>update</code> is a round trip to the engine. One per kill is fine; for high-rate data
+(hits, shots) count locally and write once a minute.</li>
+<li>A logic restart does not replay old events, so an event-driven counter never counts twice.
+A counter driven by a replayed step (a wave, an objective) goes inside <code>ctx.once_per_turn</code>.</li>
+</ul>
+<h2 id="instead-of--do">Instead of → do<a class="anchor" href="#instead-of--do" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Instead of</th><th>Do</th></tr></thead><tbody>
+<tr><td>a spawn or destroy without a key</td><td><code>.key("step-name")</code> on every spawn and destroy</td></tr>
+<tr><td>a key built from model time, a random number or an Eid</td><td>a key built from the step: a literal or a deterministic counter</td></tr>
+<tr><td>the same key with a changing text</td><td>a key per distinct command, or no key for event-driven messages</td></tr>
+<tr><td><code>ctx.sleep</code> for a delay that must survive a restart</td><td><code>ctx.timer("name", dur)</code></td></tr>
+<tr><td>waiting for a <code>Dead</code> event</td><td>a <code>wait_until</code> on <code>w.group(&amp;g).alive_count() == 0</code></td></tr>
+<tr><td><code>campaign.update(..)</code> in the open</td><td>inside <code>ctx.once_per_turn(..)</code></td></tr>
+<tr><td>holding <code>ctx.world()</code> or <code>doc.get()</code> across <code>.await</code></td><td>a block that ends before the <code>.await</code></td></tr>
+<tr><td><code>std::thread::sleep</code>, blocking I/O, <code>std::thread::spawn</code></td><td><code>ctx.sleep</code>, <code>ctx.spawn</code></td></tr>
+<tr><td>hundreds of spawns at once</td><td>a loop of awaited spawns with a cap</td></tr>
+<tr><td>a <code>wait_until</code> predicate scanning every unit</td><td>a group or zone predicate, or a poll with <code>ctx.sleep</code></td></tr>
+<tr><td><code>ctx.group(groups::X)?</code> on a group that may be dead</td><td>match <code>Error::NotInWorld</code>, or check <code>alive_count()</code> first</td></tr>
+<tr><td><code>.unwrap()</code> on command results</td><td><code>?</code>, or a <code>match</code> on the errors the step expects (<code>Gone</code>, <code>SessionEnded</code>)</td></tr>
+<tr><td>editing <code>scenario.lock.json</code></td><td><code>python scenario.py lock</code></td></tr>
+</tbody></table>
+</div>
+</article>
+<p class="page-source"><a href="patterns.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

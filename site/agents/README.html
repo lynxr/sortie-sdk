@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sortie for AI coding agents | Sortie SDK</title>
+<meta name="description" content="This folder helps coding agents work on a Sortie mission (Sortie SDK 0.1.0). It is written in English; the SDK docs are in Russian.">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/agents/README.html">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-agent has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="../docs/quickstart.html">Быстрый старт</a><a href="../docs/index.html">Документация</a><a href="../agents.html" aria-current="true">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Файлы для агентов">
+<nav class="toc">
+<a class="toc-home" href="../agents.html">Для агентов</a>
+<ul>
+<li><a href="AGENTS.html">AGENTS.md</a></li>
+<li><a href="README.html" aria-current="page">README.md</a></li>
+</ul>
+<p class="toc-part">Навыки</p>
+<ul>
+<li><a href="sortie-live-debugging/SKILL.html"><code>sortie-live-debugging</code></a>
+<ul>
+<li><a href="sortie-live-debugging/references/failures.html">references/failures.md</a></li>
+</ul>
+</li>
+<li><a href="sortie-mission-logic/SKILL.html"><code>sortie-mission-logic</code></a>
+<ul>
+<li><a href="sortie-mission-logic/references/api.html">references/api.md</a></li>
+<li><a href="sortie-mission-logic/references/errors.html">references/errors.md</a></li>
+<li><a href="sortie-mission-logic/references/patterns.html">references/patterns.md</a></li>
+</ul>
+</li>
+<li><a href="sortie-scenario/SKILL.html"><code>sortie-scenario</code></a>
+<ul>
+<li><a href="sortie-scenario/references/reference.html">references/reference.md</a></li>
+</ul>
+</li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<p class="lang-note">Инструкции и навыки для агентов написаны на английском.</p>
+<article class="prose" lang="en">
+<h1 id="sortie-for-ai-coding-agents">Sortie for AI coding agents<a class="anchor" href="#sortie-for-ai-coding-agents" aria-label="Ссылка на этот раздел">#</a></h1>
+<p>This folder helps coding agents work on a Sortie mission (Sortie SDK 0.1.0). It is
+written in English; the SDK docs are in Russian.</p>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>File</th><th>For</th><th>What it is</th></tr></thead><tbody>
+<tr><td><a href="sortie-mission-logic/SKILL.html">sortie-mission-logic/</a></td><td>Claude Code</td><td>skill: the mission logic in Rust (<code>Ctx</code>, keys, waits, events, menus, state, long multiplayer missions, errors)</td></tr>
+<tr><td><a href="sortie-scenario/SKILL.html">sortie-scenario/</a></td><td>Claude Code</td><td>skill: <code>scenario.py</code> with sortie-gen and its commands</td></tr>
+<tr><td><a href="sortie-live-debugging/SKILL.html">sortie-live-debugging/</a></td><td>Claude Code</td><td>skill: install, logs and failures in a live DCS</td></tr>
+<tr><td><a href="AGENTS.html">AGENTS.md</a></td><td>Codex, Cursor, others</td><td>instructions for the root of a mission repository</td></tr>
+<tr><td><a href="../llms.txt">llms.txt</a></td><td>any agent that reads the web</td><td>an index of the docs and skills (<a href="https://llmstxt.org">llmstxt.org</a> format)</td></tr>
+</tbody></table>
+</div>
+<p>The site build packs this whole folder into a zip:
+<a href="sortie-agent-skills-0.1.0.zip">sortie-agent-skills-0.1.0.zip</a>.
+Its root holds the three skill folders, <code>AGENTS.md</code>, <code>llms.txt</code> and this file.</p>
+<h2 id="claude-code">Claude Code<a class="anchor" href="#claude-code" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>A skill is a folder with a <code>SKILL.md</code>. Claude Code loads skills from <code>.claude/skills/</code> of the
+project and from <code>~/.claude/skills/</code> of the user, and picks a skill by its description when the
+task fits (writing logic, editing <code>scenario.py</code>, a failure in DCS).</p>
+<p>Below, <code>&lt;skills&gt;</code> is the unzipped zip or the <code>agents</code> folder of the SDK repository.</p>
+<p>Into one mission repository (commit them with it, so everyone working on it gets them):</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">New-Item -ItemType Directory -Force .claude\skills | Out-Null
+Copy-Item -Recurse -Force &lt;skills&gt;\sortie-* .claude\skills\
+</code></pre></div>
+<p>For every project of this user:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">New-Item -ItemType Directory -Force &quot;$HOME\.claude\skills&quot; | Out-Null
+Copy-Item -Recurse -Force &lt;skills&gt;\sortie-* &quot;$HOME\.claude\skills\&quot;
+</code></pre></div>
+<div class="code" data-lang="bash"><pre tabindex="0"><code class="language-bash">mkdir -p .claude/skills &amp;&amp; cp -r &lt;skills&gt;/sortie-* .claude/skills/
+</code></pre></div>
+<p>Copy <code>AGENTS.md</code> to the repository root too, and add a <code>CLAUDE.md</code> with the line
+<code>@AGENTS.md</code> so Claude Code reads it. After an SDK update, replace the folders with the new
+version's.</p>
+<h2 id="codex-cursor-and-other-agents">Codex, Cursor and other agents<a class="anchor" href="#codex-cursor-and-other-agents" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li>Put <code>AGENTS.md</code> at the root of the mission repository. Codex and Cursor read it there; for
+other tools, point their rules file at it.</li>
+<li>Give an agent that reads the web the index <a href="../llms.txt">https://lynxr.github.io/sortie-sdk/llms.txt</a>,
+or the whole text in one file:
+<a href="../llms-full.txt">https://lynxr.github.io/sortie-sdk/llms-full.txt</a>.</li>
+<li>The skills are plain Markdown: an agent without skill support can read
+<code>agents/&lt;skill&gt;/SKILL.md</code> and its <code>references/</code> when the task matches the skill's
+<code>description</code>.</li>
+</ul>
+<h2 id="how-the-examples-are-checked">How the examples are checked<a class="anchor" href="#how-the-examples-are-checked" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Every Rust and Python example in these files is compiled: they come from the <code>frontline</code>
+example scenario (<code>snippets/python/skills_scenario.py</code>) and the code in <code>snippets/src/skills/</code>
+of the SDK repository.</p>
+</article>
+<p class="page-source"><a href="README.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

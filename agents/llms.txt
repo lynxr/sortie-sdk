@@ -1,0 +1,38 @@
+# Sortie SDK
+
+> Sortie is an external mission engine for DCS World. With the SDK you write the mission logic as async Rust (crate `sortie`) against a scenario described in Python (`sortie-gen`, a wrapper over pydcs). A runtime that ships as binaries (the engine `sortied`, the `sortie` CLI, the bridge DLL and the Lua layer for DCS) connects both to the game. Version 0.1.0, source https://github.com/lynxr/sortie-sdk (tag v0.1.0).
+
+The documentation pages are in Russian; this file, AGENTS.md and the skills are in English. Every docs and skill page is also served as Markdown: replace `.html` with `.md` in its URL. [llms-full.txt](https://lynxr.github.io/sortie-sdk/llms-full.txt) holds every page and skill in one file.
+
+Facts to get right when writing code:
+
+- The Rust dependency is `sortie = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.1.0" }`, with `sortie-build` from the same place in `[build-dependencies]`. The generator: `uv add "sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.1.0#subdirectory=python/sortie-gen"`.
+- A mission is `#[sortie::mission] pub async fn run(ctx: Ctx<M>, start: Start) -> sortie::Result<()>`, called once per session; `sortie::main!(my_crate::run)` is the whole `main.rs`; `sortie::include_scenario!(name)` brings in the typed symbols that `build.rs` (`sortie_build::scenario(name, lock).emit()`) generates from `scenario.lock.json`.
+- The mission function runs again after a restart of the logic process: spawns and destroys need `.key(..)` (mandatory under `--dev`), one-time steps go in `ctx.once`, campaign changes in `ctx.once_per_turn`, delays that must survive in `ctx.timer(name, ..)`.
+- SDK 0.1.0 has no tests without DCS: FakeDcs and `#[sortie::test]` arrive in SDK 0.2.
+
+## Docs
+
+- [Overview](https://lynxr.github.io/sortie-sdk/docs/index.html): what Sortie is and how its parts fit together
+- [Installing the runtime](https://lynxr.github.io/sortie-sdk/docs/install-runtime.html): `sortie install`, `sortie doctor`, `sortied`
+- [Quick start](https://lynxr.github.io/sortie-sdk/docs/quickstart.html): the mission template from scenario to a running mission
+- [The SDK dependency](https://lynxr.github.io/sortie-sdk/docs/dependency.html): git dependencies, versions, private repository access
+- [Logic in Rust](https://lynxr.github.io/sortie-sdk/docs/sdk.html): `Ctx`, commands, keys, waits, events, menus, state
+- [Scenario in Python](https://lynxr.github.io/sortie-sdk/docs/generator.html): `Scenario` and the `scenario.py` commands
+- [Testing](https://lynxr.github.io/sortie-sdk/docs/testing.html): what can be tested in this version, and how
+- [Operations](https://lynxr.github.io/sortie-sdk/docs/operations.html): files, tokens, dedicated server
+- [Troubleshooting](https://lynxr.github.io/sortie-sdk/docs/troubleshooting.html): symptoms and fixes
+- [Questions and limits](https://lynxr.github.io/sortie-sdk/docs/faq.html): what this version does not do
+
+## Agent skills
+
+- [sortie-mission-logic](https://lynxr.github.io/sortie-sdk/agents/sortie-mission-logic/SKILL.html): writing mission logic in Rust; with [the API reference](https://lynxr.github.io/sortie-sdk/agents/sortie-mission-logic/references/api.html), [patterns for long multiplayer missions](https://lynxr.github.io/sortie-sdk/agents/sortie-mission-logic/references/patterns.html) and [errors and fixes](https://lynxr.github.io/sortie-sdk/agents/sortie-mission-logic/references/errors.html)
+- [sortie-scenario](https://lynxr.github.io/sortie-sdk/agents/sortie-scenario/SKILL.html): writing `scenario.py` and running its commands; with [the reference](https://lynxr.github.io/sortie-sdk/agents/sortie-scenario/references/reference.html)
+- [sortie-live-debugging](https://lynxr.github.io/sortie-sdk/agents/sortie-live-debugging/SKILL.html): install, logs and failures in a live DCS; with [failure signatures](https://lynxr.github.io/sortie-sdk/agents/sortie-live-debugging/references/failures.html)
+- [AGENTS.md](https://lynxr.github.io/sortie-sdk/agents/AGENTS.html): instructions for a mission repository, for Codex, Cursor and other agents
+- [Installing the skills](https://lynxr.github.io/sortie-sdk/agents/README.html): Claude Code, other agents; [all skills as a zip](https://lynxr.github.io/sortie-sdk/agents/sortie-agent-skills-0.1.0.zip)
+
+## Optional
+
+- [Changelog](https://lynxr.github.io/sortie-sdk/changelog.html)
+- [The SDK repository](https://github.com/lynxr/sortie-sdk/tree/v0.1.0): `crates/sortie` (the API), `examples/op_north` (a complete mission), `python/sortie-gen` (the generator)

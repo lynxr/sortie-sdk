@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Failure signatures (for agents) | Sortie SDK</title>
+<meta name="description" content="Symptom first. Check the links of the chain in this order: DCS screen and dcs.log, then sortie status, then the sortied console, then the logic&#39;s stderr.">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/agents/sortie-live-debugging/references/failures.html">
+<link rel="stylesheet" href="../../../assets/style.css">
+<link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-agent has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../../../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="../../../docs/quickstart.html">Быстрый старт</a><a href="../../../docs/index.html">Документация</a><a href="../../../agents.html" aria-current="true">Для агентов</a><a href="../../../downloads.html">Загрузки</a><a href="../../../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Файлы для агентов">
+<nav class="toc">
+<a class="toc-home" href="../../../agents.html">Для агентов</a>
+<ul>
+<li><a href="../../AGENTS.html">AGENTS.md</a></li>
+<li><a href="../../README.html">README.md</a></li>
+</ul>
+<p class="toc-part">Навыки</p>
+<ul>
+<li><a href="../SKILL.html"><code>sortie-live-debugging</code></a>
+<ul>
+<li><a href="failures.html" aria-current="page">references/failures.md</a></li>
+</ul>
+</li>
+<li><a href="../../sortie-mission-logic/SKILL.html"><code>sortie-mission-logic</code></a>
+<ul>
+<li><a href="../../sortie-mission-logic/references/api.html">references/api.md</a></li>
+<li><a href="../../sortie-mission-logic/references/errors.html">references/errors.md</a></li>
+<li><a href="../../sortie-mission-logic/references/patterns.html">references/patterns.md</a></li>
+</ul>
+</li>
+<li><a href="../../sortie-scenario/SKILL.html"><code>sortie-scenario</code></a>
+<ul>
+<li><a href="../../sortie-scenario/references/reference.html">references/reference.md</a></li>
+</ul>
+</li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<p class="lang-note">Инструкции и навыки для агентов написаны на английском.</p>
+<article class="prose" lang="en">
+<h1 id="failure-signatures-for-agents">Failure signatures (for agents)<a class="anchor" href="#failure-signatures-for-agents" aria-label="Ссылка на этот раздел">#</a></h1>
+<p>Symptom first. Check the links of the chain in this order: DCS screen and <code>dcs.log</code>, then
+<code>sortie status</code>, then the <code>sortied</code> console, then the logic's stderr.</p>
+<h2 id="the-mission-does-not-attach">The mission does not attach<a class="anchor" href="#the-mission-does-not-attach" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td>screen: <code>Sortie bridge is not installed: run sortie doctor</code></td><td>the mission found no <code>SORTIE</code> global: the <code>MissionScripting.lua</code> line is missing (a DCS update rewrites the file) or the Lua boot failed</td><td><code>sortie doctor</code>; <code>sortie doctor --fix</code> as administrator; then read the <code>Sortie:</code> error in <code>dcs.log</code></td></tr>
+<tr><td><code>dcs.log</code>: <code>Sortie: lfs/io/package are not available: the Sortie line must come before the sanitizer in MissionScripting.lua (run `sortie doctor --fix`)</code></td><td>the line sits after the sanitizer</td><td><code>sortie doctor --fix</code> as administrator</td></tr>
+<tr><td><code>dcs.log</code>: <code>Sortie: Scripts/Sortie/active.txt is missing: run `sortie install` </code></td><td>no bridge installed in this Saved Games folder (or another instance)</td><td><code>sortie install</code> with the right <code>--instance</code>, restart DCS</td></tr>
+<tr><td>screen: <code>Sortie: build &lt;id&gt; (&lt;scenario&gt;) is not registered with this engine; register it with `sortie-gen register` ...</code></td><td>the <code>.miz</code> came from an offline <code>build</code>, or the engine's database is another one (<code>--db memory</code> forgets on restart)</td><td><code>scenario.py register</code> and open the registered copy from <code>Missions\Sortie</code>, or start <code>sortied --manifest dist\&lt;id&gt;.manifest.pb</code></td></tr>
+<tr><td>screen: <code>Sortie: the mission's digest ... does not match build ...</code></td><td>the <code>.miz</code> was changed after the build or belongs to another build</td><td>build and register again; edit <code>scenario.py</code>, not the <code>.miz</code></td></tr>
+<tr><td>screen: <code>Sortie: the mission says scenario ...</code> / <code>... schema ...</code></td><td>the bootstrap and the registered build disagree</td><td>rebuild and register</td></tr>
+<tr><td>nothing on screen; <code>sortie status</code>: <code>link mission: down</code>, note <code>no mission link: no Sortie mission is running</code></td><td><code>sortied</code> is not running, the mission has not started, or the link points elsewhere</td><td>start <code>sortied</code>; same <code>--instance</code> for <code>install</code>, <code>doctor</code> and <code>sortied</code>; <code>dcs.log</code>: <code>mission link down: &lt;error&gt;; retrying</code> names the reason</td></tr>
+<tr><td>note <code>the DCS hooks link is not connected (is DCS running with Scripts/Hooks/sortie-hook.lua?)</code></td><td>DCS was not restarted after the install, or the hook is missing</td><td>restart DCS; <code>sortie doctor</code> checks <code>hook</code></td></tr>
+<tr><td>note <code>the Lua layer DCS loaded differs from what `sortie install` put there (...): run `sortie install` again and restart DCS itself</code></td><td>an update of the layer while DCS ran</td><td>as it says (for the mission part: restart the mission)</td></tr>
+<tr><td><code>dcs.log</code>: <code>[string "DictKey_..."]:1: '=' expected near '&lt;eof&gt;'</code></td><td>a DO SCRIPT in pydcs's dictionary form</td><td>rebuild from <code>scenario.py</code>; hooks use <code>sortie_gen.miz.InlineDoScript</code>; never load/save a built <code>.miz</code> with pydcs</td></tr>
+</tbody></table>
+</div>
+<h2 id="the-logic-does-not-run">The logic does not run<a class="anchor" href="#the-logic-does-not-run" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Symptom (logic stderr)</th><th>Cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td><code>cannot reach the engine at http://127.0.0.1:50777: ... (is `sortied` running?); retrying in N s</code></td><td>no engine at that address</td><td>start <code>sortied</code>; <code>--engine</code> / <code>SORTIE_ENGINE</code></td></tr>
+<tr><td><code>attaching</code>, then nothing</td><td>no session of this scenario runs yet; the logic waits for one</td><td>start the mission; the scenario name of the logic and the mission must match</td></tr>
+<tr><td><code>error[sortie::transport]: Logic.Attach at ... failed: ... (set SORTIE_TOKEN to a token with the `logic` role)</code>, exit code 2</td><td><code>sortied</code> without <code>--dev</code> needs a token</td><td><code>SORTIE_TOKEN</code> from <code>Saved Games\DCS\Sortie\tokens.toml</code> (role <code>logic</code>), or <code>sortied --dev</code> on your own machine</td></tr>
+<tr><td><code>error[sortie::rejected]: the engine rejected this logic: logic `x` was built against a different `s` schema: N symbol(s) missing from the running mission</code>, exit code 2</td><td>the mission in DCS lacks symbols the logic was built with</td><td>build the logic and the mission from the same <code>scenario.lock.json</code>; <code>register</code> and load the new build</td></tr>
+<tr><td><code>another PRIMARY logic is attached for `s` </code></td><td>a second copy of the logic</td><td>stop the old process</td></tr>
+<tr><td><code>the engine shut this logic down</code>, exit code 0</td><td>the engine stopped, or the logic stopped reading (a blocked thread: 4096 unread messages)</td><td>restart it; remove the blocking code</td></tr>
+<tr><td><code>session started</code> with <code>kind=AfterCrash</code> after a restart of the logic</td><td>expected: same session, the mission function replays</td><td>nothing; keys, <code>once</code> and timers keep it from repeating</td></tr>
+</tbody></table>
+</div>
+<h2 id="the-mission-runs-but-wrong">The mission runs, but wrong<a class="anchor" href="#the-mission-runs-but-wrong" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td>a player picks a slot and stays a spectator (multiplayer)</td><td>the airfield belongs to another coalition</td><td><code>player_flight</code> sets the owner; for a client group from a hook, set the airfield's coalition in the hook; read the build warnings</td></tr>
+<tr><td><code>sortie status</code> shows the session, but <code>wait_until</code> on units never fires and <code>sortie events</code> stays silent</td><td>the world stays empty: an older runtime reads DCS 2.9.31's string unit ids as numbers</td><td>install the current runtime, restart DCS</td></tr>
+<tr><td><code>sortie::invalid</code>: spawn or destroy without a key</td><td><code>sortied --dev</code> or the logic's <code>--dev</code></td><td><code>.key("step-name")</code></td></tr>
+<tr><td>a spawn twice after a logic restart</td><td>the spawn had no key, or its key changes between runs</td><td>a stable key per step</td></tr>
+<tr><td><code>sortie::timeout</code> on spawns, note <code>N command(s) waiting: spawn rate limit (2 groups / 24 units per second)</code></td><td>too many spawns at once</td><td>spawn in a loop, cap the count, raise <code>.timeout(..)</code></td></tr>
+<tr><td>commands hang, <code>sortie status</code> says <code>PAUSED</code></td><td>DCS is paused: mission commands wait</td><td>unpause, or <code>.on_pause(v1::PausePolicy::Fail)</code></td></tr>
+<tr><td><code>ctx.group(groups::X)</code> → <code>sortie::not_in_world</code></td><td>late activation or the group is dead</td><td>spawn it from a template instead; check <code>alive_count()</code></td></tr>
+<tr><td><code>ctx.group(groups::X)</code> → <code>sortie::unknown_symbol</code></td><td>the mission in DCS was built from another lock</td><td>rebuild both sides from one lock</td></tr>
+<tr><td><code>register</code> stops: <code>DCS on the server does not know N type(s) ...</code></td><td>a misspelled type or a module or mod missing on the server</td><td>fix the type or install it there; <code>--no-validate</code> skips</td></tr>
+<tr><td><code>register</code> warns <code>unit and static types not checked: ...</code></td><td>no mission ran in DCS, or it was paused</td><td>run the lobby (<code>sortie-gen lobby</code>) unpaused</td></tr>
+<tr><td><code>scenario.py restart</code> → <code>FAILED_PRECONDITION</code>: <code>Missions.Restart needs DCS running as a multiplayer server ...</code></td><td>single player</td><td>restart from the DCS menu, or host in multiplayer</td></tr>
+<tr><td><code>restart</code> → <code>DCS did not say whether it runs multiplayer: the Sortie hooks layer DCS loaded predates ...</code></td><td>DCS was not restarted after <code>sortie install</code></td><td>restart DCS itself</td></tr>
+<tr><td><code>scenario.py launch</code> fails on a single-player DCS</td><td><code>launch</code> loads missions through the server API</td><td>open the registered <code>.miz</code> yourself</td></tr>
+</tbody></table>
+</div>
+<h2 id="sortie-doctor-checks"><code>sortie doctor</code> checks<a class="anchor" href="#sortie-doctor-checks" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Check</th><th>When it fails</th><th>Fix</th></tr></thead><tbody>
+<tr><td><code>dcs install</code>, <code>saved games</code>, <code>writedir</code></td><td>wrong folder or instance</td><td><code>--dcs &lt;DCS World folder&gt;</code>, <code>--instance &lt;name&gt;</code>, <code>--saved-games &lt;folder&gt;</code></td></tr>
+<tr><td><code>MissionScripting</code>, <code>sanitizer</code></td><td>the line is missing, misplaced, or the sanitizer was changed</td><td><code>sortie doctor --fix</code> as administrator; restore the stock sanitizer</td></tr>
+<tr><td><code>hook</code>, <code>lua layer</code>, <code>bridge dll</code></td><td>files missing or changed</td><td><code>sortie install</code>, then restart DCS</td></tr>
+<tr><td><code>lua.dll</code></td><td>this DCS build changed <code>lua.dll</code>: the bridge does not match it</td><td>a runtime release built for this DCS version is needed: report it</td></tr>
+<tr><td><code>link secret</code>, <code>api tokens</code></td><td>not created yet</td><td><code>sortie install</code></td></tr>
+<tr><td><code>missionList</code></td><td>an empty mission list on a dedicated server (the server does not start)</td><td>add a mission, e.g. a <code>sortie-gen lobby</code> mission</td></tr>
+<tr><td><code>unsafe api</code> (warning)</td><td><code>autoexec.cfg</code> opens <code>net.allow_unsafe_api</code> to missions</td><td>Sortie does not need it</td></tr>
+</tbody></table>
+</div>
+</article>
+<p class="page-source"><a href="failures.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

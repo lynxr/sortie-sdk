@@ -1,0 +1,339 @@
+{
+  "scenario": "edge",
+  "schema": 1,
+  "build_id": "01K8Y2Q0PH0000000000000000",
+  "theatre": "Caucasus",
+  "groups": [
+    {
+      "ident": "G",
+      "name": "\u041c\u0430\u0439\u043a\u043e\u043f \"\u0421\u0435\u0432\u0435\u0440\" \\ 1\n\t\ud83d\udee9 \u00e9",
+      "category": 77,
+      "coalition": "COALITION_NEUTRAL",
+      "country": "Russia",
+      "country_id": -1,
+      "roles": [
+        "a",
+        "b"
+      ],
+      "units": [
+        {
+          "name": "U0",
+          "type_name": "T",
+          "position": {
+            "north": 0.30000000000000004,
+            "east": -0.30000000000000004
+          },
+          "alt_m": 0.30000000000000004,
+          "unit_id": 1,
+          "latlon": {
+            "lat": 0.30000000000000004
+          }
+        },
+        {
+          "name": "U1",
+          "type_name": "T",
+          "position": {
+            "north": 1e-05,
+            "east": -1e-05
+          },
+          "alt_m": 1e-05,
+          "unit_id": 2,
+          "latlon": {
+            "lat": 1e-05
+          }
+        },
+        {
+          "name": "U2",
+          "type_name": "T",
+          "position": {
+            "north": 1.5e-07,
+            "east": -1.5e-07
+          },
+          "alt_m": 1.5e-07,
+          "unit_id": 3,
+          "latlon": {
+            "lat": 1.5e-07
+          }
+        },
+        {
+          "name": "U3",
+          "type_name": "T",
+          "position": {
+            "north": 0.0001,
+            "east": -0.0001
+          },
+          "alt_m": 0.0001,
+          "unit_id": 4,
+          "latlon": {
+            "lat": 0.0001
+          }
+        },
+        {
+          "name": "U4",
+          "type_name": "T",
+          "position": {
+            "north": 1000000000000000.0,
+            "east": -1000000000000000.0
+          },
+          "alt_m": 1000000000000000.0,
+          "unit_id": 5,
+          "latlon": {
+            "lat": 1000000000000000.0
+          }
+        },
+        {
+          "name": "U5",
+          "type_name": "T",
+          "position": {
+            "north": 1e+16,
+            "east": -1e+16
+          },
+          "alt_m": 1e+16,
+          "unit_id": 6,
+          "latlon": {
+            "lat": 1e+16
+          }
+        },
+        {
+          "name": "U6",
+          "type_name": "T",
+          "position": {
+            "north": 1e+22,
+            "east": -1e+22
+          },
+          "alt_m": 1e+22,
+          "unit_id": 7,
+          "latlon": {
+            "lat": 1e+22
+          }
+        },
+        {
+          "name": "U7",
+          "type_name": "T",
+          "position": {},
+          "unit_id": 8,
+          "latlon": {}
+        },
+        {
+          "name": "U8",
+          "type_name": "T",
+          "position": {
+            "north": 5e-324,
+            "east": -5e-324
+          },
+          "alt_m": 5e-324,
+          "unit_id": 9,
+          "latlon": {
+            "lat": 5e-324
+          }
+        },
+        {
+          "name": "U9",
+          "type_name": "T",
+          "position": {
+            "north": 1.7976931348623157e+308,
+            "east": -1.7976931348623157e+308
+          },
+          "alt_m": 1.7976931348623157e+308,
+          "unit_id": 10,
+          "latlon": {
+            "lat": 1.7976931348623157e+308
+          }
+        },
+        {
+          "name": "U10",
+          "type_name": "T",
+          "position": {
+            "north": 123456.789,
+            "east": -123456.789
+          },
+          "alt_m": 123456.789,
+          "unit_id": 11,
+          "latlon": {
+            "lat": 123456.789
+          }
+        },
+        {
+          "name": "U11",
+          "type_name": "T",
+          "position": {
+            "north": -32798.01604360901,
+            "east": 32798.01604360901
+          },
+          "alt_m": -32798.01604360901,
+          "unit_id": 12,
+          "latlon": {
+            "lat": -32798.01604360901
+          }
+        },
+        {
+          "name": "U12",
+          "type_name": "T",
+          "position": {
+            "north": "NaN",
+            "east": "NaN"
+          },
+          "alt_m": "NaN",
+          "unit_id": 13,
+          "latlon": {
+            "lat": "NaN"
+          }
+        },
+        {
+          "name": "U13",
+          "type_name": "T",
+          "position": {
+            "north": "Infinity",
+            "east": "-Infinity"
+          },
+          "alt_m": "Infinity",
+          "unit_id": 14,
+          "latlon": {
+            "lat": "Infinity"
+          }
+        },
+        {
+          "name": "U14",
+          "type_name": "T",
+          "position": {
+            "north": "-Infinity",
+            "east": "Infinity"
+          },
+          "alt_m": "-Infinity",
+          "unit_id": 15,
+          "latlon": {
+            "lat": "-Infinity"
+          }
+        },
+        {
+          "name": "U15",
+          "type_name": "T",
+          "position": {
+            "north": 2.5,
+            "east": -2.5
+          },
+          "alt_m": 2.5,
+          "unit_id": 16,
+          "latlon": {
+            "lat": 2.5
+          }
+        },
+        {
+          "name": "U16",
+          "type_name": "T",
+          "position": {
+            "north": -1e-300,
+            "east": 1e-300
+          },
+          "alt_m": -1e-300,
+          "unit_id": 17,
+          "latlon": {
+            "lat": -1e-300
+          }
+        },
+        {
+          "name": "U17",
+          "type_name": "T",
+          "position": {
+            "north": 9007199254740992.0,
+            "east": -9007199254740992.0
+          },
+          "alt_m": 9007199254740992.0,
+          "unit_id": 18,
+          "latlon": {
+            "lat": 9007199254740992.0
+          }
+        },
+        {
+          "name": "U18",
+          "type_name": "T",
+          "position": {
+            "north": 0.000123456789,
+            "east": -0.000123456789
+          },
+          "alt_m": 0.000123456789,
+          "unit_id": 19,
+          "latlon": {
+            "lat": 0.000123456789
+          }
+        },
+        {
+          "name": "U19",
+          "type_name": "T",
+          "position": {
+            "north": 33.333333333333336,
+            "east": -33.333333333333336
+          },
+          "alt_m": 33.333333333333336,
+          "unit_id": 20,
+          "latlon": {
+            "lat": 33.333333333333336
+          }
+        }
+      ],
+      "group_id": 4000000000,
+      "late_activation": true
+    }
+  ],
+  "zones": [
+    {
+      "ident": "P",
+      "name": "Poly",
+      "polygon": {
+        "points": [
+          {},
+          {
+            "north": 1.0
+          },
+          {
+            "north": 1.0,
+            "east": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "ident": "E",
+      "name": "Empty circle",
+      "circle": {}
+    },
+    {
+      "ident": "N",
+      "name": "No shape"
+    }
+  ],
+  "templates": [
+    {
+      "ident": "T",
+      "name": "Tmpl",
+      "dcs_group_json": "{\"units\": [{\"name\": \"x\"}], \"task\": \"CAP\"}"
+    }
+  ],
+  "flags": [
+    {
+      "ident": "F",
+      "name": "flag",
+      "initial": -5
+    }
+  ],
+  "airbases": [
+    {}
+  ],
+  "menus": [
+    {
+      "ident": "M",
+      "label": "Label",
+      "path": [
+        "Sortie",
+        "Sub"
+      ]
+    }
+  ],
+  "max_ids": {},
+  "tools": {
+    "generator": "edge",
+    "extra": {
+      "only": "one"
+    }
+  }
+}

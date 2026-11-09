@@ -1,0 +1,221 @@
+// Mission logic programs <-> engine. The SDK speaks only this stream, whether over gRPC
+// (sortie::connect) or in-process (FakeDcs / Engine::attach_logic).
+syntax = "proto3";
+
+package sortie.v1;
+
+import "sortie/manifest/v1/manifest.proto";
+import "sortie/v1/commands.proto";
+import "sortie/v1/common.proto";
+import "sortie/v1/events.proto";
+import "sortie/v1/state.proto";
+import "sortie/v1/world.proto";
+
+service Logic {
+  rpc Attach(stream LogicUp) returns (stream LogicDown);
+}
+
+message LogicUp {
+  oneof msg {
+    // Must be the first message on the stream.
+    Attach attach = 1;
+    TickDone done = 2;
+    Command command = 3;
+    StateOp state = 4;
+    // The replica no longer matches the tick deltas; the engine answers with LogicDown.resync.
+    Resync resync = 5;
+  }
+}
+
+message Resync {
+  // Revision of the replica when it noticed the gap.
+  uint64 have_rev = 1;
+  // Human-readable cause, logged by the engine.
+  string reason = 2;
+}
+
+enum Mode {
+  MODE_UNSPECIFIED = 0;
+  // Owns the session: commands go to DCS.
+  MODE_PRIMARY = 1;
+  // Hot reload candidate: keyed commands with stored results return them, other commands
+  // wait for Promote. (Hot reload lands in M4; until then STANDBY is rejected.)
+  MODE_STANDBY = 2;
+  // Read-only: receives Start/Tick/Event, commands are rejected.
+  MODE_OBSERVER = 3;
+}
+
+message Attach {
+  // Logic program name (crate/binary name).
+  string logic = 1;
+  // Build id of the logic binary (free-form, e.g. git describe + profile).
+  string build_id = 2;
+  // Raw 32 bytes of the scenario schema hash the logic was compiled against
+  // (hex-decoded Scenario::SCHEMA_SHA256 / scenario.lock.json "schema_sha256").
+  bytes scenario_schema_sha256 = 3;
+  // Every symbol the logic was compiled with, as "<kind>:<IDENT>", e.g. "group:SAM_NORTH".
+  repeated string symbols_used = 4;
+  Mode mode = 5;
+  // Scenario name, e.g. "op_north". Sessions of other scenarios are not delivered.
+  string scenario = 6;
+  // Scenario schema number from the lock file.
+  uint32 schema = 7;
+}
+
+message LogicDown {
+  oneof msg {
+    Start start = 1;
+    Tick tick = 2;
+    Event event = 3;
+    CommandResult result = 4;
+    Promote promote = 5;
+    Shutdown shutdown = 6;
+    SessionEnded ended = 7;
+    StateResult state = 8;
+    // Attach refused (schema mismatch, unknown scenario, bad mode, ...). The stream ends.
+    AttachRejected rejected = 9;
+    // A full replica of the running session, sent after LogicUp.resync (or when the engine can
+    // no longer build a delta for this logic). The logic replaces its replica; later ticks
+    // continue from snapshot.rev.
+    WorldSnapshot resync = 10;
+  }
+}
+
+enum StartKind {
+  START_KIND_UNSPECIFIED = 0;
+  START_KIND_FRESH = 1;
+  START_KIND_RESTART = 2;
+  START_KIND_AFTER_CRASH = 3;
+  START_KIND_RESUMED = 4;
+}
+
+// Sent when a session of the attached scenario is ready (the world was reconciled with the
+// manifest). A logic stays attached across sessions: one Start per session.
+message Start {
+  string session = 1;
+  StartKind kind = 2;
+  sortie.manifest.v1.Manifest manifest = 3;
+  WorldSnapshot snapshot = 4;
+  // Campaign turn key (= build_id of the running mission); scopes once_per_turn markers.
+  string turn = 5;
+  double model_time = 6;
+}
+
+// 10 Hz while the session runs (stops while paused, except one Tick with paused = true).
+message Tick {
+  uint64 n = 1;
+  double model_time = 2;
+  WorldDelta delta = 3;
+  bool paused = 4;
+}
+
+message TickDone {
+  uint64 n = 1;
+}
+
+message Promote {}
+
+message Shutdown {
+  string reason = 1;
+}
+
+enum EndReason {
+  END_REASON_UNSPECIFIED = 0;
+  // The logic called ctx.end_session(outcome).
+  END_REASON_LOGIC = 1;
+  // The manifest time limit expired.
+  END_REASON_TIME_LIMIT = 2;
+  // Missions.Restart or a new mission load.
+  END_REASON_RESTART = 3;
+  // DCS unloaded the mission (onSimulationStop) without an outcome.
+  END_REASON_MISSION_UNLOADED = 4;
+  // The engine is shutting down.
+  END_REASON_ENGINE_SHUTDOWN = 5;
+}
+
+message SessionEnded {
+  string session = 1;
+  Outcome outcome = 2;
+  string text = 3;
+  EndReason reason = 4;
+}
+
+message AttachRejected {
+  ErrorCode code = 1;
+  string message = 2;
+  // Symbols the logic needs that the running manifest lacks (or declares with another kind).
+  repeated string missing_symbols = 3;
+}
+
+// State documents, once markers, timers and the session report, multiplexed on the stream.
+message StateOp {
+  // Client-chosen correlation id, unique per stream.
+  uint64 id = 1;
+  oneof op {
+    StateGet get = 2;
+    StatePut put = 3;
+    OnceCheck once_check = 4;
+    OnceMark once_mark = 5;
+    TimerArm timer_arm = 6;
+    ReportSet report_set = 7;
+  }
+}
+
+message StateGet {
+  StateScope scope = 1;
+  string name = 2;
+}
+
+message StatePut {
+  StateScope scope = 1;
+  string name = 2;
+  uint64 expected_revision = 3;
+  bytes json = 4;
+}
+
+// Is the once marker `name` already set? (scope SESSION for ctx.once, TURN for once_per_turn)
+message OnceCheck {
+  StateScope scope = 1;
+  string name = 2;
+}
+
+message OnceMark {
+  StateScope scope = 1;
+  string name = 2;
+}
+
+// Arm (or look up) the named session timer. The first arm stores
+// deadline = model_time + duration_s; later arms with the same name return the stored deadline.
+message TimerArm {
+  string name = 1;
+  double duration_s = 2;
+}
+
+// Put a value into the session report (MissionResults.report_json).
+message ReportSet {
+  string key = 1;
+  string value_json = 2;
+}
+
+message StateResult {
+  uint64 id = 1;
+  oneof result {
+    // StateGet / StatePut (after a put: the stored document with its new revision).
+    StateDoc doc = 2;
+    OnceStatus once = 3;
+    TimerStatus timer = 4;
+    StateAck ack = 5;
+    CommandError err = 9;
+  }
+}
+
+message OnceStatus {
+  bool done = 1;
+}
+
+message TimerStatus {
+  // Model time at which the timer fires.
+  double deadline = 1;
+}
+
+message StateAck {}

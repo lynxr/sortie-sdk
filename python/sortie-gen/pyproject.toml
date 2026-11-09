@@ -1,0 +1,31 @@
+[project]
+name = "sortie-gen"
+version = "0.1.0"
+description = "Sortie mission generator: pydcs scenarios, manifests, scenario locks and the engine client"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+requires-python = ">=3.11"
+authors = [{ name = "Sortie contributors" }]
+dependencies = [
+    "pydcs==1.0.0",
+    "grpcio>=1.85,<2",
+    "protobuf>=7.35.1,<8",
+]
+
+[project.scripts]
+sortie-gen = "sortie_gen.cli:main"
+
+[dependency-groups]
+dev = [
+    "grpcio-tools>=1.85,<2",
+    "lupa>=2.8,<3",
+    "pytest>=9",
+]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

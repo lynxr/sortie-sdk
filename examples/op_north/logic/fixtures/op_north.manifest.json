@@ -1,0 +1,267 @@
+{
+  "scenario": "op_north",
+  "schema": 3,
+  "schema_sha256": "066934cb939700310641d6371b1f6140cfc86c2c3e04757d5a10f8a4664f270b",
+  "build_id": "01M6AWSXJ00HKWWSTHZTHV7MKW",
+  "theatre": "Caucasus",
+  "start_time": "2026-11-01T06:30:00Z",
+  "time_limit_s": 10800,
+  "groups": [
+    {
+      "ident": "SAM_NORTH",
+      "name": "SAM North",
+      "category": "CATEGORY_GROUND_UNIT",
+      "coalition": "COALITION_RED",
+      "country": "Russia",
+      "roles": [
+        "north",
+        "sam"
+      ],
+      "units": [
+        {
+          "name": "SAM North-1",
+          "type_name": "S-300PS 54K6 cp",
+          "position": {
+            "north": -32798.016,
+            "east": 463776.327
+          },
+          "unit_id": 1,
+          "latlon": {
+            "lat": 44.620000001,
+            "lon": 40.099999998
+          },
+          "skill": "Excellent"
+        },
+        {
+          "name": "SAM North-2",
+          "type_name": "S-300PS 40B6M tr",
+          "position": {
+            "north": -32838.016,
+            "east": 463736.327
+          },
+          "unit_id": 2,
+          "latlon": {
+            "lat": 44.619673928,
+            "lon": 40.099455906
+          },
+          "skill": "Excellent"
+        },
+        {
+          "name": "SAM North-3",
+          "type_name": "S-300PS 64H6E sr",
+          "position": {
+            "north": -32838.016,
+            "east": 463776.327
+          },
+          "unit_id": 3,
+          "latlon": {
+            "lat": 44.619642665,
+            "lon": 40.099956225
+          },
+          "skill": "Excellent"
+        },
+        {
+          "name": "SAM North-4",
+          "type_name": "S-300PS 5P85C ln",
+          "position": {
+            "north": -32838.016,
+            "east": 463816.327
+          },
+          "unit_id": 4,
+          "latlon": {
+            "lat": 44.619611401,
+            "lon": 40.100456543
+          },
+          "skill": "Excellent"
+        },
+        {
+          "name": "SAM North-5",
+          "type_name": "S-300PS 5P85C ln",
+          "position": {
+            "north": -32798.016,
+            "east": 463736.327
+          },
+          "unit_id": 5,
+          "latlon": {
+            "lat": 44.620031263,
+            "lon": 40.099499676
+          },
+          "skill": "Excellent"
+        },
+        {
+          "name": "SAM North-6",
+          "type_name": "S-300PS 5P85C ln",
+          "position": {
+            "north": -32798.016,
+            "east": 463816.327
+          },
+          "unit_id": 6,
+          "latlon": {
+            "lat": 44.619968736,
+            "lon": 40.100500319
+          },
+          "skill": "Excellent"
+        },
+        {
+          "name": "SAM North-7",
+          "type_name": "S-300PS 5P85C ln",
+          "position": {
+            "north": -32758.016000000003,
+            "east": 463736.327
+          },
+          "unit_id": 7,
+          "latlon": {
+            "lat": 44.620388599,
+            "lon": 40.099543447
+          },
+          "skill": "Excellent"
+        }
+      ],
+      "group_id": 1
+    }
+  ],
+  "zones": [
+    {
+      "ident": "OBJECTIVE",
+      "name": "Objective",
+      "circle": {
+        "center": {
+          "north": -32798.016,
+          "east": 463776.327
+        },
+        "radius_m": 500.0
+      }
+    },
+    {
+      "ident": "SAM_RING",
+      "name": "SAM Ring",
+      "circle": {
+        "center": {
+          "north": -32798.016,
+          "east": 463776.327
+        },
+        "radius_m": 60000.0
+      }
+    }
+  ],
+  "templates": [
+    {
+      "ident": "RED_CAP",
+      "name": "Red CAP",
+      "category": "CATEGORY_AIRPLANE",
+      "coalition": "COALITION_RED",
+      "country": "Russia",
+      "units": [
+        {
+          "name": "Red CAP-1",
+          "type_name": "Su-27",
+          "position": {
+            "north": -26437.275391,
+            "east": 458048.84375
+          },
+          "alt_m": 6000.0,
+          "latlon": {
+            "lat": 44.681285221,
+            "lon": 40.035254335
+          },
+          "skill": "High"
+        },
+        {
+          "name": "Red CAP-2",
+          "type_name": "Su-27",
+          "position": {
+            "north": -26427.275391,
+            "east": 458048.84375
+          },
+          "alt_m": 6000.0,
+          "latlon": {
+            "lat": 44.681374566,
+            "lon": 40.035265202
+          },
+          "skill": "High"
+        }
+      ],
+      "task": "CAP",
+      "dcs_group_json": "{\"communication\":true,\"frequency\":251,\"hidden\":false,\"hiddenOnMFD\":false,\"hiddenOnPlanner\":false,\"modulation\":0,\"name\":\"Red CAP\",\"radioSet\":false,\"route\":{\"points\":[{\"ETA\":0,\"ETA_locked\":true,\"action\":\"Turning Point\",\"alt\":6000.0,\"alt_type\":\"BARO\",\"formation_template\":\"\",\"name\":\"\",\"properties\":{\"angle\":0,\"scale\":0,\"steer\":2,\"vangle\":0,\"vnav\":0},\"speed\":166.6666666666667,\"speed_locked\":true,\"task\":{\"id\":\"ComboTask\",\"params\":{\"tasks\":[{\"auto\":true,\"enabled\":true,\"id\":\"EngageTargets\",\"key\":\"CAP\",\"number\":1,\"params\":{\"priority\":0,\"targetTypes\":[\"Air\"]}}]}},\"type\":\"Turning Point\",\"x\":-26437.275391,\"y\":458048.84375}]},\"start_time\":0,\"task\":\"CAP\",\"taskSelected\":true,\"tasks\":{},\"uncontrolled\":false,\"units\":[{\"alt\":6000.0,\"alt_type\":\"BARO\",\"hardpoint_racks\":true,\"heading\":0.0,\"name\":\"Red CAP-1\",\"onboard_num\":\"010\",\"payload\":{\"chaff\":96,\"flare\":96,\"fuel\":8460,\"gun\":100,\"pylons\":{}},\"psi\":0,\"skill\":\"High\",\"speed\":166.6666666666667,\"type\":\"Su-27\",\"x\":-26437.275391,\"y\":458048.84375},{\"alt\":6000.0,\"alt_type\":\"BARO\",\"hardpoint_racks\":true,\"heading\":0.0,\"name\":\"Red CAP-2\",\"onboard_num\":\"011\",\"payload\":{\"chaff\":96,\"flare\":96,\"fuel\":8460,\"gun\":100,\"pylons\":{}},\"psi\":0,\"skill\":\"High\",\"speed\":166.6666666666667,\"type\":\"Su-27\",\"x\":-26427.275391,\"y\":458048.84375}],\"x\":-26437.275391,\"y\":458048.84375}"
+    }
+  ],
+  "flags": [
+    {
+      "ident": "SAM_NORTH_DOWN",
+      "name": "SAM_NORTH_DOWN"
+    }
+  ],
+  "airbases": [
+    {
+      "ident": "MAYKOP_KHANSKAYA",
+      "name": "Maykop-Khanskaya",
+      "position": {
+        "north": -26437.275391,
+        "east": 458048.84375
+      },
+      "airbase_id": 16,
+      "coalition": "COALITION_NEUTRAL"
+    }
+  ],
+  "menus": [
+    {
+      "ident": "SMOKE_OBJECTIVE",
+      "label": "Smoke the objective"
+    }
+  ],
+  "player_flights": [
+    {
+      "name": "Blue 1",
+      "type_name": "F-16C_50",
+      "size": 2,
+      "coalition": "COALITION_BLUE",
+      "country": "USA",
+      "country_id": 2,
+      "airbase": "Senaki-Kolkhi",
+      "start": "START_TYPE_COLD",
+      "units": [
+        {
+          "name": "Blue 1-1",
+          "type_name": "F-16C_50",
+          "position": {
+            "north": -281475.84375,
+            "east": 646396.1875
+          },
+          "unit_id": 8,
+          "latlon": {
+            "lat": 42.244416701,
+            "lon": 42.037834149
+          },
+          "skill": "Client"
+        },
+        {
+          "name": "Blue 1-2",
+          "type_name": "F-16C_50",
+          "position": {
+            "north": -281398.75,
+            "east": 646179.875
+          },
+          "unit_id": 9,
+          "latlon": {
+            "lat": 42.245308116,
+            "lon": 42.035343446
+          },
+          "skill": "Client"
+        }
+      ],
+      "group_id": 2
+    }
+  ],
+  "max_ids": {
+    "group_id": 2,
+    "unit_id": 9
+  },
+  "tools": {
+    "generator": "sortie-gen 0.1.0",
+    "pydcs": "1.0.0",
+    "python": "3.13",
+    "extra": {
+      "dcs_data": "hermetic"
+    }
+  }
+}

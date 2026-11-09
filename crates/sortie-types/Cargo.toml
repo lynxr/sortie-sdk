@@ -1,0 +1,20 @@
+[package]
+name = "sortie-types"
+description = "Shared vocabulary of Sortie: typed scenario handles, kinds, geometry, units, Eid"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+sortie-proto = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

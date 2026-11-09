@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sortie-gen reference (for agents) | Sortie SDK</title>
+<meta name="description" content="from sortie_gen import Scenario, StartType, Coalition. Unit and aircraft types are pydcs classes (dcs.vehicles.*, dcs.planes.*, dcs.helicopters.*); countries are pydcs country…">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/agents/sortie-scenario/references/reference.html">
+<link rel="stylesheet" href="../../../assets/style.css">
+<link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-agent has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../../../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="../../../docs/quickstart.html">Быстрый старт</a><a href="../../../docs/index.html">Документация</a><a href="../../../agents.html" aria-current="true">Для агентов</a><a href="../../../downloads.html">Загрузки</a><a href="../../../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Файлы для агентов">
+<nav class="toc">
+<a class="toc-home" href="../../../agents.html">Для агентов</a>
+<ul>
+<li><a href="../../AGENTS.html">AGENTS.md</a></li>
+<li><a href="../../README.html">README.md</a></li>
+</ul>
+<p class="toc-part">Навыки</p>
+<ul>
+<li><a href="../../sortie-live-debugging/SKILL.html"><code>sortie-live-debugging</code></a>
+<ul>
+<li><a href="../../sortie-live-debugging/references/failures.html">references/failures.md</a></li>
+</ul>
+</li>
+<li><a href="../../sortie-mission-logic/SKILL.html"><code>sortie-mission-logic</code></a>
+<ul>
+<li><a href="../../sortie-mission-logic/references/api.html">references/api.md</a></li>
+<li><a href="../../sortie-mission-logic/references/errors.html">references/errors.md</a></li>
+<li><a href="../../sortie-mission-logic/references/patterns.html">references/patterns.md</a></li>
+</ul>
+</li>
+<li><a href="../SKILL.html"><code>sortie-scenario</code></a>
+<ul>
+<li><a href="reference.html" aria-current="page">references/reference.md</a></li>
+</ul>
+</li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<p class="lang-note">Инструкции и навыки для агентов написаны на английском.</p>
+<article class="prose" lang="en">
+<h1 id="sortie-gen-reference-for-agents">sortie-gen reference (for agents)<a class="anchor" href="#sortie-gen-reference-for-agents" aria-label="Ссылка на этот раздел">#</a></h1>
+<p><code>from sortie_gen import Scenario, StartType, Coalition</code>. Unit and aircraft types are pydcs
+classes (<code>dcs.vehicles.*</code>, <code>dcs.planes.*</code>, <code>dcs.helicopters.*</code>); countries are pydcs country
+names (<code>"Russia"</code>, <code>"USA"</code>); airbases are names of the map's airports (<code>"Krymsk"</code>) or
+<code>sc.theatre.airports[..]</code>. Unknown names fail with a "did you mean" hint.</p>
+<h2 id="declarations">Declarations<a class="anchor" href="#declarations" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Declaration</th><th>Parameters (defaults)</th><th>Result</th></tr></thead><tbody>
+<tr><td><code>Scenario(name, *, schema, theatre, start, time_limit=None, description=None)</code></td><td><code>name</code>: <code>[a-z][a-z0-9_]*</code>; <code>schema</code>: int ≥ 1; <code>theatre</code>: a pydcs terrain (<code>caucasus.Caucasus()</code>); <code>start</code>: RFC 3339, without an offset the map's local time; <code>time_limit</code>: <code>"3h"</code>, <code>"1h30m"</code>, <code>"90m"</code>, seconds, <code>None</code> = no limit</td><td>the scenario</td></tr>
+<tr><td><code>sc.zone(name, *, ident=None, at=, radius=)</code> or <code>points=[p1, p2, p3, p4]</code>; <code>hidden=True</code>, <code>color=None</code></td><td>a circle or a quad</td><td><code>ZoneHandle</code> (<code>.center</code>)</td></tr>
+<tr><td><code>sc.ground_group(name, *, ident=None, country, at, units=[..], heading=0.0, formation="star", spacing=40.0, skill="Excellent", roles=None, late_activation=False, hidden=False)</code></td><td><code>formation</code>: <code>line</code>, <code>star</code>, <code>rectangle</code>, <code>vee</code>; the first unit stands at <code>at</code>; units named <code>&lt;name&gt;-&lt;k&gt;</code></td><td><code>GroupHandle</code></td></tr>
+<tr><td><code>sc.air_template(name, unit_type, *, ident, country, size=1, task=None, at=None, airbase=None, altitude=None, speed=None, skill="High", roles=None, payload=None)</code></td><td>kept out of the <code>.miz</code>; <code>task</code> defaults to the type's main task; placement when the logic gives none: <code>at</code>, else <code>airbase</code>, else the first declared airbase, else the coalition's bullseye; <code>altitude</code> 6000 m (2000 m for helicopters); <code>speed</code> in km/h; <code>payload</code>: a pydcs loadout name or a list of pylon tuples</td><td><code>TemplateHandle</code></td></tr>
+<tr><td><code>sc.airbase(name, *, ident, coalition=None)</code></td><td><code>coalition</code>: <code>Coalition.Red/Blue/Neutral</code> or <code>"red"</code>; without it the map's default owner stays (except player airfields)</td><td><code>AirbaseHandle</code> (<code>.position</code>)</td></tr>
+<tr><td><code>sc.player_flight(name, unit_type, *, country, airbase, start=StartType.Cold, size=1, task=None, skill="Client", payload=None, at=None, altitude=3000.0)</code></td><td><code>start</code>: <code>StartType.Cold</code>, <code>Hot</code>, <code>Runway</code>, <code>Air</code> (<code>Air</code> needs <code>at=</code>); the type must be flyable; goes to <code>manifest.player_flights</code>, not to the lock</td><td><code>FlightHandle</code></td></tr>
+<tr><td><code>sc.flag(ident, *, name=None, initial=0)</code></td><td>DCS flag name defaults to the ident; a non-zero <code>initial</code> is set by a MISSION START trigger</td><td><code>FlagHandle</code></td></tr>
+<tr><td><code>sc.menu(ident, label, *, path=())</code></td><td><code>path</code>: sub-menus, e.g. <code>["Support"]</code></td><td><code>MenuHandle</code></td></tr>
+<tr><td><code>@sc.pydcs</code> on <code>def hook(mission)</code></td><td>runs after the declarations on every build; names are checked for uniqueness afterwards</td><td>the function</td></tr>
+<tr><td><code>sc.latlon(lat, lon)</code>, <code>sc.point(north, east)</code></td><td>positions; <code>latlon</code> is rounded to 1 mm</td><td><code>dcs.mapping.Point</code></td></tr>
+<tr><td><code>sc.time_limit = "2h"</code></td><td>changes the limit after construction</td><td></td></tr>
+<tr><td><code>sc.build(build_id=None)</code></td><td>in-memory build: <code>.build_id</code>, <code>.manifest</code>, <code>.miz</code>, <code>.lock</code>, <code>.warnings</code>, <code>.write(out_dir)</code></td><td><code>Build</code></td></tr>
+<tr><td><code>sc.cli()</code></td><td>the command line below</td><td>exits</td></tr>
+</tbody></table>
+</div>
+<p>Idents are optional for zones and ground groups (no ident: no Rust symbol) and required for
+templates, airbases, flags and menus.</p>
+<h2 id="python-scenariopy-flags"><code>python scenario.py</code> flags<a class="anchor" href="#python-scenariopy-flags" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code"><pre tabindex="0"><code>lock      [--out FILE] [--check]
+build     [--out DIR] [--lock FILE] [--locked] [--build-id ULID] [--stem NAME] [--no-miz]
+validate  [--engine ADDR] [--token T] [--timeout S]
+register  [--out DIR] [--lock FILE] [--locked] [--no-validate] [--engine ADDR] [--token T] [--timeout S]
+launch    [--build-id ID] [--out DIR] [--lock FILE] [--locked] [--no-validate] [--engine ADDR] [--token T] [--timeout S]
+restart   [--engine ADDR] [--token T] [--timeout S]
+watch     [--session S] [--kinds birth,dead,...] [--from-seq N] [--engine ADDR] [--token T] [--timeout S]
+results   [--session S] [--json] [--engine ADDR] [--token T] [--timeout S]
+</code></pre></div>
+<ul>
+<li><code>--timeout</code>: seconds per engine call (default 15).</li>
+<li><code>watch --kinds</code>: <code>birth</code>, <code>dead</code>, <code>unit_lost</code>, <code>kill</code>, <code>hit</code>, <code>shot</code>, <code>takeoff</code>, <code>land</code>,
+<code>base_captured</code>, <code>mark</code>, <code>player_entered_unit</code>, <code>unit_gone</code>, <code>menu_pressed</code>,
+<code>player_connected</code>, <code>player_disconnected</code>, <code>player_changed_slot</code>, <code>chat_message</code>,
+<code>simulation_paused</code>, <code>simulation_resumed</code>, <code>gap</code>, <code>unknown</code>.</li>
+<li><code>build --no-miz --stem NAME --out DIR</code> writes only the manifest files.</li>
+<li><code>launch --build-id ID</code> builds and checks nothing: it loads a build registered earlier.</li>
+</ul>
+<h2 id="sortie-gen"><code>sortie-gen</code><a class="anchor" href="#sortie-gen" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code"><pre tabindex="0"><code>sortie-gen lock|build|validate|register|launch &lt;scenario.py&gt; [flags]
+sortie-gen restart|watch|results [flags]                 # no scenario file needed
+sortie-gen lobby [--out missions/sortie-lobby.miz] [--theatre caucasus]
+sortie-gen adopt my.miz [--json]
+</code></pre></div>
+<ul>
+<li><code>lobby</code> writes the idle mission for a dedicated server's <code>missionList</code> (no units, no
+bootstrap; it shows whether the bridge loaded). The engine uses the running lobby to check
+types.</li>
+<li><code>adopt</code> reports an editor mission: groups, units, zones, proposed idents, names that break
+the rules. pydcs may move aircraft to other parking spots when it saves a mission: place
+player slots with <code>player_flight</code>.</li>
+<li><code>worker</code> (the campaign loop) is not available yet: it exits with code 2.</li>
+</ul>
+<h2 id="errors-and-warnings">Errors and warnings<a class="anchor" href="#errors-and-warnings" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>The CLI prints <code>error: ...</code> without a traceback. In code they are <code>sortie_gen</code> exceptions:
+<code>InvalidName</code>, <code>NameConflict</code>, <code>ScenarioError</code>, <code>LockError</code>, <code>UnknownTypes</code>, <code>EngineError</code>,
+<code>EngineUnavailable</code>, <code>EngineNotReady</code>, <code>NotYet</code> (all <code>GeneratorError</code>).</p>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Message (start)</th><th>Fix</th></tr></thead><tbody>
+<tr><td><code>... ident 'x' must match [A-Z][A-Z0-9_]*</code></td><td>idents are Rust constants: <code>SAM_NORTH</code></td></tr>
+<tr><td><code>a group named 'X' already exists in this scenario</code> / <code>two groups are named 'X'</code></td><td>DCS would destroy one of them: rename</td></tr>
+<tr><td><code>... contains '#', which is reserved for spawned groups</code></td><td>drop the <code>#</code></td></tr>
+<tr><td><code>pass a position made with sc.latlon(lat, lon), sc.point(north, east), a zone or an airbase</code></td><td>a bare tuple is ambiguous</td></tr>
+<tr><td><code>player flights 'A' (blue) and 'B' (red) both start at X</code></td><td>one airfield, one coalition: move a flight or use an air start</td></tr>
+<tr><td><code>player flight 'A' (blue) starts at X, which the scenario gives to red</code></td><td>give the airbase to the flight's coalition or start elsewhere</td></tr>
+<tr><td>warning <code>player group 'A' (blue) starts at X, which belongs to red</code></td><td>a hook placed a client group: set the airfield owner in the hook</td></tr>
+<tr><td>warning <code>template 'X' (Su-27) spawns without weapons</code></td><td><code>payload=[..]</code> pylon tuples, or <code>SORTIE_GEN_DCS_DATA=installed</code></td></tr>
+<tr><td><code>pydcs knows no loadout 'X' for Y</code></td><td>a loadout name needs <code>SORTIE_GEN_DCS_DATA=installed</code>; or list the pylons</td></tr>
+<tr><td><code>scenario.lock.json is stale (...); run python scenario.py lock</code></td><td>after <code>--locked</code> / <code>--check</code>: run <code>lock</code>, rebuild the logic</td></tr>
+<tr><td>warning <code>the symbol set changed: rebuild the mission logic (cargo build)</code></td><td>rebuild the logic before running it against the new build</td></tr>
+<tr><td><code>DCS on the server does not know N type(s) this scenario uses:</code></td><td>fix the type name, or install the module or mod on the server; <code>--no-validate</code> skips the check</td></tr>
+<tr><td>warning <code>unit and static types not checked: ... (registering anyway)</code></td><td>no mission ran in DCS, or it was paused; start the lobby to get the check</td></tr>
+<tr><td><code>cannot reach the Sortie engine at 127.0.0.1:50777 (...). Is sortied running?</code></td><td>start <code>sortied --dev</code> locally, or point <code>--engine</code> / <code>SORTIE_ENGINE</code> at it</td></tr>
+<tr><td><code>... FAILED_PRECONDITION ...</code> on <code>restart</code></td><td>single player, or the hooks part of Sortie predates the install: restart DCS itself</td></tr>
+</tbody></table>
+</div>
+</article>
+<p class="page-source"><a href="reference.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

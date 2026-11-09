@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sortie errors and fixes (for agents) | Sortie SDK</title>
+<meta name="description" content="A command error is a sortie::Error with a stable code and the Rust call site that built the command:">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/agents/sortie-mission-logic/references/errors.html">
+<link rel="stylesheet" href="../../../assets/style.css">
+<link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-agent has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../../../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="../../../docs/quickstart.html">Быстрый старт</a><a href="../../../docs/index.html">Документация</a><a href="../../../agents.html" aria-current="true">Для агентов</a><a href="../../../downloads.html">Загрузки</a><a href="../../../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Файлы для агентов">
+<nav class="toc">
+<a class="toc-home" href="../../../agents.html">Для агентов</a>
+<ul>
+<li><a href="../../AGENTS.html">AGENTS.md</a></li>
+<li><a href="../../README.html">README.md</a></li>
+</ul>
+<p class="toc-part">Навыки</p>
+<ul>
+<li><a href="../../sortie-live-debugging/SKILL.html"><code>sortie-live-debugging</code></a>
+<ul>
+<li><a href="../../sortie-live-debugging/references/failures.html">references/failures.md</a></li>
+</ul>
+</li>
+<li><a href="../SKILL.html"><code>sortie-mission-logic</code></a>
+<ul>
+<li><a href="api.html">references/api.md</a></li>
+<li><a href="errors.html" aria-current="page">references/errors.md</a></li>
+<li><a href="patterns.html">references/patterns.md</a></li>
+</ul>
+</li>
+<li><a href="../../sortie-scenario/SKILL.html"><code>sortie-scenario</code></a>
+<ul>
+<li><a href="../../sortie-scenario/references/reference.html">references/reference.md</a></li>
+</ul>
+</li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<p class="lang-note">Инструкции и навыки для агентов написаны на английском.</p>
+<article class="prose" lang="en">
+<h1 id="sortie-errors-and-fixes-for-agents">Sortie errors and fixes (for agents)<a class="anchor" href="#sortie-errors-and-fixes-for-agents" aria-label="Ссылка на этот раздел">#</a></h1>
+<p>A command error is a <code>sortie::Error</code> with a stable code and the Rust call site that built the
+command:</p>
+<div class="code"><pre tabindex="0"><code>error[sortie::gone]: `push_task` on group &quot;Red CAP 1&quot;: Unit doesn&#39;t exist (at logic/src/lib.rs:48:9)
+</code></pre></div>
+<p><code>e.report()</code> is the long form the runtime logs: the call site, the Lua traceback, the session
+and command ids and a <code>help:</code> line. <code>e.code()</code>, <code>e.origin()</code>, <code>e.lua_traceback()</code>,
+<code>e.failure()</code> (op, target, message) give the parts; <code>e.is_session_ended()</code> tells the normal
+end of a session from a failure.</p>
+<h2 id="handling-errors-in-a-mission">Handling errors in a mission<a class="anchor" href="#handling-errors-in-a-mission" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let sam = match ctx.group(groups::SAM_NORTH) {
+    Ok(g) =&gt; g,
+    // In the manifest, but no live unit now (late activation, already destroyed).
+    Err(sortie::Error::NotInWorld { .. }) =&gt; return Ok(()),
+    // UnknownSymbol: the running mission was built from another scenario lock.
+    Err(e) =&gt; return Err(e),
+};
+match sam.set_option(Alarm::Red).key(&quot;sam-hot&quot;).await {
+    Ok(()) =&gt; {}
+    // The group died between the check and the command: expected in a live mission.
+    Err(sortie::Error::Gone(f)) =&gt; eprintln!(&quot;SAM North is gone: {}&quot;, f.message),
+    // The session ended while the command was in flight: not a logic error.
+    Err(e) if e.is_session_ended() =&gt; return Ok(()),
+    // Anything else: the runtime records it with `e.report()` (code, call site, hint).
+    Err(e) =&gt; return Err(e),
+}
+</code></pre></div>
+<p>An <code>Err</code> that leaves the mission function or a task spawned with <code>ctx.spawn</code> is recorded as a
+logic error (stderr of the logic, with its call site) and ends that task only. <code>SessionEnded</code>
+is never recorded. A panic is recorded the same way, with its location.</p>
+<h2 id="command-errors">Command errors<a class="anchor" href="#command-errors" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Code</th><th>Meaning</th><th>Usual cause → fix</th></tr></thead><tbody>
+<tr><td><code>sortie::gone</code></td><td>the target no longer exists in DCS</td><td>it died or was despawned before the command ran → match <code>Error::Gone</code> where a target can die (always in a live mission)</td></tr>
+<tr><td><code>sortie::timeout</code></td><td>DCS did not answer in time (10 s, 30 s for spawns and destroys)</td><td>a big spawn wave queued behind the spawn pacing, or a busy server → <code>.timeout(..)</code>, spawn in smaller steps, check <code>sortie status</code> / <code>sortie top</code></td></tr>
+<tr><td><code>sortie::lua_error</code></td><td>the Lua layer raised an error</td><td>a bad <code>Task::raw</code> table, a wrong option for the unit type → read <code>e.lua_traceback()</code></td></tr>
+<tr><td><code>sortie::invalid</code></td><td>the command does not fit</td><td>a spawn or destroy without <code>.key(..)</code> under <code>--dev</code>; a key reused for another command ("key <code>k</code> was already used for a different command in session ..."); a manifest without the template</td></tr>
+<tr><td><code>sortie::name_conflict</code></td><td>a live group already has this name</td><td><code>.named("..")</code> twice → drop <code>.named</code> (default names are unique) or add a counter</td></tr>
+<tr><td><code>sortie::session_ended</code></td><td>the session ended before the command completed</td><td>normal at the end of a turn → return <code>Ok(())</code></td></tr>
+<tr><td><code>sortie::unavailable</code></td><td>the engine cannot run it now</td><td>no mission session is running; or a keyed command was in flight when the DCS link dropped ("whether it ran is not known": check the world, then use a new key)</td></tr>
+<tr><td><code>sortie::paused</code></td><td>the simulation is paused</td><td>the command was sent with <code>.on_pause(v1::PausePolicy::Fail)</code></td></tr>
+<tr><td><code>sortie::rejected</code></td><td>the engine refused the command</td><td>read the message</td></tr>
+<tr><td><code>sortie::quarantined</code></td><td>this command kind is disabled after it faulted the bridge</td><td>run <code>sortie doctor</code>, report it with <code>Logs/sortie-bridge.log</code></td></tr>
+<tr><td><code>sortie::bridge_fault</code></td><td>the bridge caught a fault</td><td>report it with <code>Logs/sortie-bridge.log</code></td></tr>
+<tr><td><code>sortie::conflict</code></td><td>a state write lost against another writer</td><td><code>StateDoc::update</code> retries by itself; seen only after 8 conflicts in a row</td></tr>
+</tbody></table>
+</div>
+<h2 id="lookup-and-state-errors">Lookup and state errors<a class="anchor" href="#lookup-and-state-errors" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Code</th><th>Message</th><th>Fix</th></tr></thead><tbody>
+<tr><td><code>sortie::unknown_symbol</code></td><td>"the running mission has no group <code>X</code>; regenerate the scenario lock"</td><td>the mission in DCS was built from another lock: <code>python scenario.py lock</code>, <code>cargo build</code>, register and launch the mission again</td></tr>
+<tr><td><code>sortie::not_in_world</code></td><td>"group <code>X</code> is not in the world right now"</td><td>late activation, or all its units are dead → check <code>w.group(&amp;groups::X).alive_count()</code> first, or match the error</td></tr>
+<tr><td><code>sortie::state</code></td><td>"state <code>name</code>: ..."</td><td>the engine's store refused: read the message; a <code>T</code> that no longer deserializes the stored JSON (changed field types) also lands here: add <code>#[serde(default)]</code> to new fields</td></tr>
+<tr><td><code>sortie::transport</code></td><td>"engine connection: ..."</td><td>the engine is unreachable: start <code>sortied</code>, check <code>--engine</code> / <code>SORTIE_ENGINE</code></td></tr>
+</tbody></table>
+</div>
+<h2 id="build-errors">Build errors<a class="anchor" href="#build-errors" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Where</th><th>Message (start)</th><th>Fix</th></tr></thead><tbody>
+<tr><td><code>build.rs</code></td><td><code>error: sortie-build failed for scenario "x": &lt;path&gt;: ...</code> + <code>help: the path is relative to the logic crate's Cargo.toml; ...</code></td><td>the lock path is wrong or the lock is missing: <code>python scenario.py lock</code></td></tr>
+<tr><td><code>build.rs</code></td><td><code>... is for scenario "a", but build.rs asked for "b"</code></td><td>the first argument of <code>sortie_build::scenario(..)</code> must be the lock's scenario name</td></tr>
+<tr><td><code>build.rs</code></td><td><code>help: the lock was edited by hand or is corrupt; ...</code></td><td>regenerate the lock; never edit it</td></tr>
+<tr><td><code>include_scenario!</code></td><td><code>OUT_DIR is not set, so there is no generated scenario module to include</code></td><td>add <code>sortie-build</code> to <code>[build-dependencies]</code> and the one-line <code>build.rs</code></td></tr>
+<tr><td><code>include_scenario!</code></td><td><code>no generated module for scenario `x` (...); build.rs generated: ...</code></td><td>use the same name in <code>include_scenario!</code> and <code>sortie_build::scenario</code></td></tr>
+<tr><td><code>#[sortie::mission]</code></td><td><code>a mission must be an `async fn` ...</code>, <code>the arguments are swapped ...</code>, <code>a mission must return `sortie::Result&lt;()&gt;` ...</code></td><td>the signature is <code>async fn run(ctx: Ctx&lt;M&gt;, start: Start) -&gt; sortie::Result&lt;()&gt;</code></td></tr>
+<tr><td><code>#[sortie::mission]</code></td><td><code>`X` is not a scenario marker</code></td><td><code>Ctx&lt;M&gt;</code> takes the marker from the generated module, e.g. <code>Ctx&lt;frontline::Frontline&gt;</code></td></tr>
+<tr><td><code>#[sortie::test]</code></td><td>a compile error: tests without DCS arrive in SDK 0.2</td><td>test decisions in plain functions with <code>#[test]</code>; test the mission in DCS</td></tr>
+<tr><td>any <code>.await</code> on a borrow</td><td>clippy <code>await_holding_refcell_ref</code></td><td>end the <code>ctx.world()</code> / <code>StateDoc::get()</code> borrow before the <code>.await</code></td></tr>
+</tbody></table>
+</div>
+<h2 id="attach-and-runtime-messages-the-logics-stderr">Attach and runtime messages (the logic's stderr)<a class="anchor" href="#attach-and-runtime-messages-the-logics-stderr" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Message</th><th>Meaning → fix</th></tr></thead><tbody>
+<tr><td><code>cannot reach the engine at http://127.0.0.1:50777: ... (is `sortied` running?); retrying in N s</code></td><td>start <code>sortied</code>; the logic keeps retrying (1 to 30 s)</td></tr>
+<tr><td><code>error[sortie::transport]: Logic.Attach at ... failed: ... (set SORTIE_TOKEN to a token with the `logic` role)</code></td><td>exit code 2: set <code>SORTIE_TOKEN</code> (from <code>Saved Games\DCS\Sortie\tokens.toml</code>), or run <code>sortied --dev</code> locally</td></tr>
+<tr><td><code>error[sortie::rejected]: the engine rejected this logic: logic `x` was built against a different `s` schema: N symbol(s) missing from the running mission</code> + <code>missing symbols: ...</code></td><td>exit code 2: the mission in DCS lacks symbols this logic was built with; build the logic and the mission from the same lock</td></tr>
+<tr><td><code>another PRIMARY logic is attached for `s` </code></td><td>a second copy of the logic is running: stop the old process</td></tr>
+<tr><td><code>a `observer` token cannot attach a logic (needs `logic` or `admin`)</code></td><td>use a <code>logic</code> token</td></tr>
+<tr><td><code>`spawn_group` without `.key(..)` in dev mode: a hot reload would run it again; add a key such as `.key("spawn-group-1")`</code></td><td>the logic runs with <code>--dev</code>: add a key</td></tr>
+<tr><td><code>in dev mode spawn_group and destroy need `.key(..)` (hot reload replays commands by key)</code></td><td><code>sortied --dev</code> refused it: add a key</td></tr>
+<tr><td><code>tick N: the world replica is borrowed across an `.await` ...</code></td><td>a <code>ctx.world()</code> guard lives across <code>.await</code>: shorten the borrow</td></tr>
+<tr><td><code>event stream lagged</code> (warning, <code>skipped = N</code>)</td><td>an event loop is too slow: keep it short, move slow work to another task</td></tr>
+<tr><td><code>task spawned at src/lib.rs:L:C returned</code> + report, or <code>... panicked at ...</code></td><td>that task ended with an error; the others keep running</td></tr>
+</tbody></table>
+</div>
+</article>
+<p class="page-source"><a href="errors.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

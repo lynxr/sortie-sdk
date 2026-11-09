@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Вопросы и ограничения | Sortie SDK</title>
+<meta name="description" content="Нужен ли сервер? Нет. Sortie работает в одиночной игре, в сетевой игре с хостом-клиентом и (ещё не проверено) на dedicated server. sortied и логика запускаются на той же машине,…">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/docs/faq.html">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-doc has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Страницы документации">
+<nav class="toc">
+<a class="toc-home" href="index.html">Документация</a>
+<ul>
+<li><a href="index.html">Обзор</a></li>
+<li><a href="install-runtime.html">Установка рантайма</a></li>
+<li><a href="quickstart.html">Быстрый старт</a></li>
+<li><a href="dependency.html">Подключение SDK</a></li>
+<li><a href="sdk.html">Логика на Rust</a></li>
+<li><a href="generator.html">Сценарий на Python</a></li>
+<li><a href="testing.html">Тестирование</a></li>
+<li><a href="operations.html">Эксплуатация</a></li>
+<li><a href="troubleshooting.html">Диагностика</a></li>
+<li><a href="faq.html" aria-current="page">Вопросы и ограничения</a></li>
+<li><a href="changelog.html">Что нового</a></li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="вопросы-и-ограничения">Вопросы и ограничения<a class="anchor" href="#вопросы-и-ограничения" aria-label="Ссылка на этот раздел">#</a></h1>
+<h2 id="вопросы">Вопросы<a class="anchor" href="#вопросы" aria-label="Ссылка на этот раздел">#</a></h2>
+<p><strong>Нужен ли сервер?</strong> Нет. Sortie работает в одиночной игре, в сетевой игре с хостом-клиентом и
+(ещё не проверено) на dedicated server. <code>sortied</code> и логика запускаются на той же машине, что и
+DCS.</p>
+<p><strong>Можно ли пользоваться редактором миссий?</strong> Собранную миссию можно открыть, посмотреть,
+пересохранить и запустить из редактора. Группы, юниты и зоны меняйте в сценарии: правки в
+редакторе разойдутся с manifest. Готовую миссию из редактора можно разобрать командой
+<code>sortie-gen adopt</code> и перенести в сценарий.</p>
+<p><strong>Работают ли в миссии другие скрипты?</strong> Sortie добавляет в миссию триггер с bootstrap (и, если
+у флагов есть начальные значения, триггер, который их ставит) и ничего не удаляет. Свои DO SCRIPT можно добавить хуком <code>@sc.pydcs</code> (см.
+<a href="generator.html#%D1%81%D1%82%D0%B0%D1%82%D0%B8%D0%BA%D0%B0-%D0%BF%D0%BE%D0%B3%D0%BE%D0%B4%D0%B0-%D0%B8-%D0%B1%D1%80%D0%B8%D1%84%D0%B8%D0%BD%D0%B3">Сценарий на Python</a>). Совместная работа с MOOSE, MIST и
+подобными библиотеками не проверялась.</p>
+<p><strong>Как обратиться к группе, у которой нет <code>ident</code>?</strong> Через мир и события по имени DCS:
+<code>w.group("Имя группы")</code>, <code>w.units().in_group("Имя группы")</code>, <code>events.in_group("Имя группы")</code>.
+Типизированного символа у такой группы нет.</p>
+<p><strong>Что делать с тем, чего нет в API?</strong> Задачи авиации, которых нет в <code>Task</code>, можно отдать сырой
+таблицей задачи DCS: <code>Task::raw(..)</code>. Её содержимое не проверяется. Статику, погоду и брифинг
+задаёт хук <code>@sc.pydcs</code> в сценарии.</p>
+<p><strong>Можно ли собирать на Linux?</strong> Логику и сценарий — да. Рантайм работает только на Windows, рядом
+с DCS. API движка по умолчанию слушает только <code>127.0.0.1</code>, и так его и оставляйте: API управляет
+сервером. Поэтому логику запускайте на той же машине, что и <code>sortied</code>.</p>
+<p><strong>Под какой лицензией SDK?</strong> Крейты SDK, <code>sortie-gen</code>, шаблон и примеры — MIT OR Apache-2.0, на
+ваш выбор. Рантайм (<code>sortied</code>, <code>sortie</code>, мост) распространяется под своей лицензией: файл
+<code>LICENSE</code> в архиве рантайма.</p>
+<h2 id="ограничения-версии-010">Ограничения версии 0.1.0<a class="anchor" href="#ограничения-версии-010" aria-label="Ссылка на этот раздел">#</a></h2>
+<p><strong>Проверка в игре.</strong> Проверены одиночная игра и сетевая игра с хостом-клиентом в DCS 2.9.31.
+Dedicated server, <code>restart</code>, <code>launch</code> и проверка типов в живой игре ещё не проверялись.</p>
+<p><strong>Ещё нет:</strong></p>
+<ul>
+<li>тестов без DCS (<code>#[sortie::test]</code>, FakeDcs) — SDK 0.2;</li>
+<li>горячей замены логики (<code>--standby</code>) и команд <code>sortie dev</code>, <code>sortie trace</code>, <code>sortie record</code>;</li>
+<li>цикла кампании: <code>sortie-gen worker</code> выходит с кодом 2, автоматической сборки следующего хода
+нет;</li>
+<li>восстановления сессии после перезапуска движка (<code>Start::Resumed</code>);</li>
+<li>перезапуска DCS после краша и зависания (это может делать DCSServerBot);</li>
+<li>замеров производительности DCS (<code>sortie probe</code>).</li>
+</ul>
+<p>Вызовы того, чего ещё нет, возвращают ошибку «... lands in Mx» или код выхода 2, а не падают.</p>
+<p><strong>Сценарий.</strong> Размещённые группы — наземные (<code>ground_group</code>). Самолёты и вертолёты — шаблоны для
+спавна и слоты игроков. Корабли и прочее — через хук <code>@sc.pydcs</code>, без символов для логики.</p>
+<p><strong>Движок:</strong></p>
+<ul>
+<li>не больше 2 групп и 24 юнитов спавна в секунду;</li>
+<li>задачу только что созданной группе движок отдаёт не раньше чем через 2 кадра и 0,5 с;</li>
+<li>логику, которая перестала читать поток (например, остановлена в отладчике), движок отключает
+после 4096 непрочитанных сообщений; перезапуск подключает её снова;</li>
+<li>подписчик событий, отставший больше чем на 1024 события, пропускает самые старые.</li>
+</ul>
+</article>
+<nav class="pager" aria-label="Соседние страницы">
+<a class="pager-prev" rel="prev" href="troubleshooting.html"><span class="pager-dir">Назад</span><span class="pager-title">Диагностика</span></a>
+<a class="pager-next" rel="next" href="changelog.html"><span class="pager-dir">Дальше</span><span class="pager-title">Что нового</span></a>
+</nav>
+<p class="page-source"><a href="faq.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

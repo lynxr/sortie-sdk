@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Логика на Rust | Sortie SDK</title>
+<meta name="description" content="Логика миссии — обычная программа на Rust с крейтом sortie. Она подключается к движку sortied, получает сессию, когда в DCS стартует миссия, и выполняет вашу функцию миссии. Мир…">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/docs/sdk.html">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-doc has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Страницы документации">
+<nav class="toc">
+<a class="toc-home" href="index.html">Документация</a>
+<ul>
+<li><a href="index.html">Обзор</a></li>
+<li><a href="install-runtime.html">Установка рантайма</a></li>
+<li><a href="quickstart.html">Быстрый старт</a></li>
+<li><a href="dependency.html">Подключение SDK</a></li>
+<li><a href="sdk.html" aria-current="page">Логика на Rust</a></li>
+<li><a href="generator.html">Сценарий на Python</a></li>
+<li><a href="testing.html">Тестирование</a></li>
+<li><a href="operations.html">Эксплуатация</a></li>
+<li><a href="troubleshooting.html">Диагностика</a></li>
+<li><a href="faq.html">Вопросы и ограничения</a></li>
+<li><a href="changelog.html">Что нового</a></li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="логика-на-rust">Логика на Rust<a class="anchor" href="#логика-на-rust" aria-label="Ссылка на этот раздел">#</a></h1>
+<p>Логика миссии — обычная программа на Rust с крейтом <code>sortie</code>. Она подключается к движку
+<code>sortied</code>, получает сессию, когда в DCS стартует миссия, и выполняет вашу функцию миссии. Мир
+логика читает синхронно, из локальной копии. Команды в DCS — это <code>async</code>-вызовы, которые
+возвращают результат из игры.</p>
+<p>Готовый проект — шаблон из <a href="quickstart.html">быстрого старта</a>. Большой пример —
+<a href="https://github.com/lynxr/sortie-sdk/tree/v0.1.0/examples/op_north">examples/op_north</a>
+в репозитории SDK.</p>
+<h2 id="крейт-логики">Крейт логики<a class="anchor" href="#крейт-логики" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Зависимости — <code>sortie</code> и, для <code>build.rs</code>, <code>sortie-build</code> (см. <a href="dependency.html">Подключение SDK</a>).
+<code>build.rs</code> делает из <code>scenario.lock.json</code> модуль с символами сценария. Путь к lock-файлу —
+относительно <code>Cargo.toml</code>:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">fn main() {
+    sortie_build::scenario(&quot;my_mission&quot;, &quot;scenario.lock.json&quot;).emit();
+}
+</code></pre></div>
+<p><code>src/main.rs</code> — одна строка. Макрос разбирает аргументы командной строки, подключается к движку,
+обслуживает сессии и переподключается при обрыве связи:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">sortie::main!(my_mission_logic::run);
+</code></pre></div>
+<p>Вся логика живёт в <code>src/lib.rs</code>:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">use sortie::prelude::*;
+
+sortie::include_scenario!(my_mission); // pub mod my_mission из scenario.lock.json
+use my_mission::{MyMission, groups};
+
+#[sortie::mission]
+pub async fn run(ctx: Ctx&lt;MyMission&gt;, start: Start) -&gt; sortie::Result&lt;()&gt; {
+    if start == Start::Restart {
+        ctx.message(Coalition::Blue)
+            .text(&quot;Миссия перезапущена&quot;)
+            .key(&quot;restarted&quot;)
+            .await?;
+    }
+    let sam = ctx.group(groups::SAM)?; // Group&lt;Ground&gt;
+    sam.set_option(Alarm::Red).key(&quot;sam-red&quot;).await?;
+    ctx.until_session_end().await; // держать сессию до конца
+    Ok(())
+}
+</code></pre></div>
+<ul>
+<li><code>sortie::prelude::*</code> даёт всё, что обычно нужно: <code>Ctx</code>, <code>Start</code>, <code>Coalition</code>, <code>Alarm</code>, <code>Roe</code>,
+<code>Outcome</code>, единицы <code>secs</code>, <code>mins</code>, <code>km</code>, <code>ft</code>, <code>kts</code> и другие.</li>
+<li><code>sortie::include_scenario!(my_mission)</code> подключает модуль, который сгенерировал <code>build.rs</code>.
+Имя должно совпадать с первым аргументом <code>sortie_build::scenario(..)</code>.</li>
+<li><code>#[sortie::mission]</code> проверяет сигнатуру функции миссии. Ошибка в ней видна при компиляции, в
+месте определения функции.</li>
+</ul>
+<h2 id="символы-сценария">Символы сценария<a class="anchor" href="#символы-сценария" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Модуль сценария содержит маркер сценария (<code>MyMission</code> для <code>my_mission</code>) и модули <code>groups</code>,
+<code>zones</code>, <code>templates</code>, <code>flags</code>, <code>airbases</code>, <code>menus</code>. Каждый символ — константа своего типа:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">use my_mission::{airbases, flags, menus, templates, zones};
+use sortie::types::{AirbaseRef, FlagRef, GroupRef, MenuRef, TemplateRef, ZoneRef};
+
+pub const SAM: GroupRef&lt;MyMission, Ground&gt; = groups::SAM;
+pub const RED_CAP: TemplateRef&lt;MyMission, Air&gt; = templates::RED_CAP;
+pub const TARGET: ZoneRef&lt;MyMission&gt; = zones::TARGET;
+pub const NALCHIK: AirbaseRef&lt;MyMission&gt; = airbases::NALCHIK;
+pub const TARGET_DOWN: FlagRef&lt;MyMission&gt; = flags::TARGET_DOWN;
+pub const SMOKE_TARGET: MenuRef&lt;MyMission&gt; = menus::SMOKE_TARGET;
+</code></pre></div>
+<ul>
+<li>Вид группы входит в тип: <code>Group&lt;Ground&gt;</code> нельзя отправить в воздушный патруль, такой код не
+скомпилируется. Символ другого сценария тоже не подойдёт.</li>
+<li>Символ появляется, только если в сценарии у объекта есть <code>ident</code>. Группы без <code>ident</code> доступны
+по имени через мир и события.</li>
+<li>У зон в константе есть геометрия: <code>zones::TARGET.center()</code> и <code>zones::TARGET.contains(point)</code>
+работают без движка.</li>
+<li><code>scenario.lock.json</code> меняется, только когда меняется набор символов. Сдвиг зоны или группы
+в сценарии пересборки логики не требует.</li>
+</ul>
+<h2 id="функция-миссии-и-сессии">Функция миссии и сессии<a class="anchor" href="#функция-миссии-и-сессии" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Сессия — один запуск миссии в DCS. Функция миссии вызывается на каждую сессию, и аргумент
+<code>Start</code> говорит почему:</p>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th><code>Start</code></th><th>Когда</th></tr></thead><tbody>
+<tr><td><code>Fresh</code></td><td>миссию загрузили в DCS: новая сессия</td></tr>
+<tr><td><code>Restart</code></td><td>миссию перезапустили (<code>scenario.py restart</code>): новая сессия того же хода</td></tr>
+<tr><td><code>AfterCrash</code></td><td>процесс логики перезапустился, а сессия та же</td></tr>
+<tr><td><code>Resumed</code></td><td>движок восстановил сессию после своего перезапуска (появится в следующих версиях)</td></tr>
+</tbody></table>
+</div>
+<p>Ход — это одна сборка миссии (build id). Рестарт той же сборки — новая сессия того же хода;
+новая сборка (<code>register</code>) — новый ход.</p>
+<p>Функция может закончиться раньше сессии: фоновые задачи и меню продолжат работать. Когда сессия
+кончается, все задачи сессии останавливаются, а незавершённые команды получают
+<code>Error::SessionEnded</code>. Это не считается ошибкой логики.</p>
+<p>Факты о сессии: <code>ctx.session_id()</code>, <code>ctx.scenario()</code>, <code>ctx.turn()</code> (build id хода),
+<code>ctx.is_session_ended()</code> и часы:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let now = ctx.model_time(); // секунды модельного времени
+let paused = ctx.paused(); // DCS на паузе
+</code></pre></div>
+<h2 id="команды">Команды<a class="anchor" href="#команды" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Каждая команда — построитель. Ничего не происходит, пока команду не дождались через <code>.await</code>;
+<code>.await</code> возвращает результат из DCS.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">ctx.message(Coalition::Blue)
+    .text(&quot;Цель в 35 км к востоку от Кутаиси&quot;)
+    .secs(20) // сколько секунд показывать (по умолчанию 10)
+    .key(&quot;brief&quot;)
+    .await?;
+ctx.smoke(zones::TARGET.center(), SmokeColor::Red).await?;
+</code></pre></div>
+<p>Общие настройки любой команды:</p>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Метод</th><th>Что делает</th></tr></thead><tbody>
+<tr><td><code>.key("имя")</code></td><td>ключ идемпотентности: команда с ключом, который уже выполнился в этой сессии, сразу возвращает сохранённый результат и до DCS не доходит</td></tr>
+<tr><td><code>.timeout(secs(5))</code></td><td><code>Error::Timeout</code>, если DCS не ответила вовремя</td></tr>
+<tr><td><code>.after(&amp;other)</code></td><td>выполнить только после команды <code>other</code>; если она упала, упадёт и эта</td></tr>
+<tr><td><code>.on_pause(PausePolicy::Fail)</code></td><td>на паузе сразу <code>Error::Paused</code>; по умолчанию команда ждёт конца паузы</td></tr>
+</tbody></table>
+</div>
+<p><code>PausePolicy</code> лежит в <code>sortie::proto::v1</code>.</p>
+<h3 id="ключи-и-идемпотентность">Ключи и идемпотентность<a class="anchor" href="#ключи-и-идемпотентность" aria-label="Ссылка на этот раздел">#</a></h3>
+<p>Функция миссии выполняется заново после перезапуска процесса логики (<code>Start::AfterCrash</code>). Ключ
+не даёт повторить то, что уже сделано: второй спавн с тем же ключом вернёт ту же группу, а не
+создаст новую.</p>
+<ul>
+<li>Ключ действует в пределах сессии. После рестарта миссии ключи снова свободны.</li>
+<li>Если команда с ключом получила <code>Timeout</code>, уже уйдя в DCS, повтор с тем же ключом не отправит её
+второй раз, а дождётся её позднего результата.</li>
+<li>Если связь с миссией оборвалась, пока команда была в пути, повтор с тем же ключом получит
+<code>Error::Unavailable</code>: неизвестно, выполнилась ли она. Для спавна движок проверяет это по
+снимку мира после переподключения: если группы нет, ключ снова свободен.</li>
+<li>С <code>sortied --dev</code> спавн и уничтожение без ключа отклоняются (<code>Error::Invalid</code>). Давайте ключи
+всем командам, которые нельзя повторять.</li>
+</ul>
+<h3 id="сообщения-дым-флаги">Сообщения, дым, флаги<a class="anchor" href="#сообщения-дым-флаги" aria-label="Ссылка на этот раздел">#</a></h3>
+<ul>
+<li><code>ctx.message(кому)</code>: кому — <code>Coalition::Blue</code>, группа (<code>&amp;group</code> или нажавшая меню группа) или
+<code>sortie::MessageTarget::All</code>. Дальше <code>.text(..)</code>, <code>.secs(..)</code> (по умолчанию 10 с),
+<code>.clear_view()</code>.</li>
+<li><code>ctx.smoke(точка, цвет)</code>: точка на земле (<code>MapPoint</code>, например <code>zones::TARGET.center()</code>) или в
+воздухе (<code>Vec3</code>).</li>
+<li>Флаги миссии объявляются в сценарии (<code>sc.flag(..)</code>):</li>
+</ul>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">ctx.flag(flags::TARGET_DOWN).set(true).await?; // bool или i32
+let value: i32 = ctx.flag(flags::TARGET_DOWN).get().await?;
+</code></pre></div>
+<h3 id="группы-и-опции-ии">Группы и опции ИИ<a class="anchor" href="#группы-и-опции-ии" aria-label="Ссылка на этот раздел">#</a></h3>
+<p><code>ctx.group(groups::X)</code> возвращает живую группу, сверенную с миссией. Ошибки:
+<code>Error::UnknownSymbol</code>, если в запущенной миссии такого символа нет (логика собрана с другим
+lock), и <code>Error::NotInWorld</code>, если символ есть, а живых юнитов сейчас нет.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let sam = ctx.group(groups::SAM)?;
+sam.set_option(Alarm::Red).key(&quot;sam-red&quot;).await?;
+sam.set_option(Roe::WeaponFree)
+    .key(&quot;sam-free&quot;)
+    .timeout(secs(5)) // Error::Timeout, если DCS не ответила за 5 с
+    .await?;
+</code></pre></div>
+<ul>
+<li><code>Alarm</code>: <code>Auto</code>, <code>Green</code>, <code>Red</code>. <code>Roe</code>: <code>WeaponFree</code>, <code>OpenFireWeaponFree</code>, <code>OpenFire</code>,
+<code>ReturnFire</code>, <code>WeaponHold</code>.</li>
+<li>У группы есть <code>name()</code>, <code>alive_count()</code>, <code>is_alive()</code>. Группа привязана к одной «жизни»:
+группа, заново созданная под тем же именем, — это другой объект.</li>
+</ul>
+<p>Уничтожить группу:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let aaa = ctx.group(groups::AAA)?;
+aaa.destroy().key(&quot;aaa-removed&quot;).await?;
+</code></pre></div>
+<h3 id="спавн-и-задачи-авиации">Спавн и задачи авиации<a class="anchor" href="#спавн-и-задачи-авиации" aria-label="Ссылка на этот раздел">#</a></h3>
+<p>Воздушные группы для спавна объявляются в сценарии шаблонами (<code>sc.air_template(..)</code>). Спавн
+возвращает <code>Group&lt;Air&gt;</code> (или <code>Group&lt;Helo&gt;</code>), когда группа уже появилась в DCS:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let cap = ctx
+    .spawn_group(templates::RED_CAP.named(&quot;Red CAP 1&quot;))
+    .from_airbase(airbases::NALCHIK, StartType::Runway)
+    .key(&quot;red-cap-1&quot;)
+    .await?; // Group&lt;Air&gt;: группа уже в DCS
+let patrol = Task::cap(zones::PATROL)
+    .altitude(ft(25_000))
+    .speed(kts(420));
+cap.push_task(patrol).timeout(secs(5)).await?;
+</code></pre></div>
+<ul>
+<li>Без <code>.named(..)</code> группа получает имя <code>&lt;имя шаблона&gt;#&lt;4 знака сессии&gt;-&lt;номер&gt;</code>. Занятое имя —
+<code>Error::NameConflict</code>.</li>
+<li>Без <code>.from_airbase(..)</code> и <code>.at(..)</code> группа появляется там, где указал сценарий.</li>
+<li>Движок спавнит не больше 2 групп и 24 юнитов в секунду. Задачу только что созданной группе он
+отдаёт не раньше чем через 2 кадра и 0,5 с модельного времени.</li>
+</ul>
+<p>Спавн в воздухе и другие задачи:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let point = zones::PATROL.center().alt(m(6_000)); // Vec3 над центром зоны
+let cap = ctx
+    .spawn_group(templates::RED_CAP)
+    .at(point, 0.0) // курс в радианах
+    .key(&quot;red-cap-air&quot;)
+    .await?;
+let orbit = Task::orbit(zones::PATROL.center())
+    .race_track(zones::TARGET.center())
+    .altitude(ft(20_000));
+cap.set_task(orbit).key(&quot;red-cap-orbit&quot;).await?;
+// ...
+cap.push_task(Task::rtb(airbases::NALCHIK)).await?;
+</code></pre></div>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Задача</th><th>Что делает</th></tr></thead><tbody>
+<tr><td><code>Task::cap(зона)</code></td><td>патруль над зоной; по умолчанию 6000 м и 420 узлов, меняется <code>.altitude(..)</code> и <code>.speed(..)</code></td></tr>
+<tr><td><code>Task::orbit(точка)</code></td><td>круг над точкой; <code>.race_track(вторая)</code> — «ипподром»; по умолчанию 6000 м и 350 узлов</td></tr>
+<tr><td><code>Task::rtb(аэродром)</code></td><td>возврат на аэродром</td></tr>
+<tr><td><code>Task::raw(таблица)</code></td><td>сырая таблица задачи DCS, без проверок</td></tr>
+</tbody></table>
+</div>
+<p><code>push_task</code> кладёт задачу поверх текущих (<code>Controller.pushTask</code>), <code>set_task</code> заменяет их
+(<code>Controller.setTask</code>). Обе есть только у воздушных групп.</p>
+<h2 id="ожидание">Ожидание<a class="anchor" href="#ожидание" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">ctx.sleep(secs(30)).await; // 30 с модельного времени, пауза DCS его останавливает
+ctx.timer(&quot;red-cap-delay&quot;, mins(15)).await; // дедлайн хранится в движке
+</code></pre></div>
+<ul>
+<li><code>ctx.sleep(..)</code> считает модельное время DCS: пауза его останавливает, ускорение времени
+ускоряет.</li>
+<li><code>ctx.timer("имя", ..)</code> при первом вызове сохраняет дедлайн в движке. Повторный вызов после
+перезапуска логики ждёт тот же дедлайн, а не начинает отсчёт заново. Таймеры действуют в
+пределах сессии.</li>
+</ul>
+<p><code>ctx.wait_until(..)</code> ждёт условия на мире. Условие проверяется сразу, после каждого тика и после
+каждого события, без запросов к движку:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">// Синий самолёт в зоне Target.
+ctx.wait_until(|w| {
+    w.units()
+        .coalition(Coalition::Blue)
+        .air()
+        .any_inside(zones::TARGET)
+})
+.await;
+// От бронегруппы осталось не больше двух машин.
+ctx.wait_until(|w| w.group(&amp;groups::ARMOR).alive_count() &lt;= 2)
+    .await;
+</code></pre></div>
+<p>Ждите состояния, а не события: «живых не осталось» верно и после перезапуска логики, а событие
+гибели к тому времени уже прошло.</p>
+<p><code>ctx.until_session_end()</code> ждёт конца сессии по любой причине и возвращает исход, текст и
+причину (<code>EndReason</code>: <code>Logic</code>, <code>TimeLimit</code>, <code>Restart</code>, <code>MissionUnloaded</code> и другие):</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let end = ctx.until_session_end().await;
+eprintln!(&quot;сессия закончилась: {:?}, {:?}&quot;, end.outcome, end.reason);
+</code></pre></div>
+<h2 id="чтение-мира">Чтение мира<a class="anchor" href="#чтение-мира" aria-label="Ссылка на этот раздел">#</a></h2>
+<p><code>ctx.world()</code> — локальная копия мира. Её обновляет движок на каждом тике; запросов к DCS чтение
+не делает.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let world = ctx.world(); // не держите его через .await
+let blue_players = world.players().coalition(Coalition::Blue).count();
+let nearest_red = world
+    .units()
+    .coalition(Coalition::Red)
+    .ground()
+    .nearest_to(zones::TARGET.center())
+    .map(|unit| unit.name.clone());
+let blue_in_front = world
+    .units()
+    .coalition(Coalition::Blue)
+    .count_inside(zones::FRONT);
+let armor = world.group(&amp;groups::ARMOR);
+let armor_center = armor.center(); // Option&lt;MapPoint&gt;: середина живых машин
+</code></pre></div>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Запрос</th><th>Что выбирает</th></tr></thead><tbody>
+<tr><td><code>w.units()</code></td><td>живые юниты; дальше фильтры</td></tr>
+<tr><td><code>.coalition(..)</code>, <code>.air()</code>, <code>.planes()</code>, <code>.helos()</code>, <code>.ground()</code>, <code>.ships()</code></td><td>коалиция и категория</td></tr>
+<tr><td><code>.players()</code>, <code>.in_group(..)</code>, <code>.of_type("T-72B")</code></td><td>игроки, группа, тип</td></tr>
+<tr><td><code>.in_zone(..)</code>, <code>.within(точка, km(10))</code></td><td>зона или круг</td></tr>
+<tr><td><code>.including_dead()</code>, <code>.dead()</code></td><td>вместе с погибшими или только погибшие</td></tr>
+<tr><td><code>.count()</code>, <code>.any()</code>, <code>.first()</code>, <code>.iter()</code>, <code>.nearest_to(точка)</code></td><td>результат</td></tr>
+<tr><td><code>.any_inside(зона)</code>, <code>.count_inside(зона)</code>, <code>.inside(&amp;зона)</code></td><td>сразу с зоной</td></tr>
+<tr><td><code>w.players()</code>, <code>w.statics()</code></td><td>юниты игроков, статические объекты</td></tr>
+<tr><td><code>w.group(&amp;g)</code></td><td>группа по символу, по <code>Group</code> или по имени: <code>alive_count()</code>, <code>size()</code>, <code>is_dead()</code>, <code>center()</code>, <code>any_inside(..)</code>, <code>all_inside(..)</code></td></tr>
+</tbody></table>
+</div>
+<p>У юнита есть имя, тип, коалиция, категория, группа, позиция, курс, скорость, игрок и <code>dead</code>.</p>
+<p>Не держите <code>ctx.world()</code> через <code>.await</code>: пока ссылка жива, движок не может обновить мир. Clippy
+ловит это правилом <code>await_holding_refcell_ref</code>.</p>
+<h2 id="события">События<a class="anchor" href="#события" aria-label="Ссылка на этот раздел">#</a></h2>
+<p><code>ctx.events()</code> — события сессии с момента подписки. Когда вы видите событие, мир уже обновлён:
+в обработчике гибели погибший юнит уже не считается живым.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let armor = ctx.group(groups::ARMOR)?;
+let mut deaths = ctx.events().of::&lt;v1::Dead&gt;().in_group(&amp;armor);
+while let Some(dead) = deaths.next().await {
+    let name = dead.initiator.map(|unit| unit.name).unwrap_or_default();
+    ctx.message(Coalition::Blue)
+        .text(format!(&quot;Уничтожен {name}&quot;))
+        .await?;
+}
+</code></pre></div>
+<p><code>.of::&lt;T&gt;()</code> выбирает один тип события; фильтры: <code>.in_group(..)</code>, <code>.coalition(..)</code>,
+<code>.filter(..)</code>. Типы событий лежат в <code>sortie::proto::v1</code>: <code>Birth</code>, <code>Dead</code>, <code>UnitLost</code>, <code>Kill</code>,
+<code>Hit</code>, <code>Shot</code>, <code>Takeoff</code>, <code>Land</code>, <code>BaseCaptured</code>, <code>Mark</code>, <code>PlayerEnteredUnit</code>, <code>UnitGone</code>,
+<code>PlayerConnected</code>, <code>PlayerDisconnected</code>, <code>PlayerChangedSlot</code>, <code>ChatMessage</code>,
+<code>SimulationPaused</code>, <code>SimulationResumed</code>, <code>Gap</code>.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let mut entered = ctx
+    .events()
+    .of::&lt;v1::PlayerEnteredUnit&gt;()
+    .coalition(Coalition::Blue);
+while let Some(e) = entered.next().await {
+    ctx.message(Coalition::Blue)
+        .text(format!(&quot;{} занял слот&quot;, e.player))
+        .await?;
+}
+</code></pre></div>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let mut hits = ctx.events().of::&lt;v1::Hit&gt;().filter(|hit| {
+    hit.target
+        .as_ref()
+        .is_some_and(|target| target.type_name == &quot;T-72B&quot;)
+});
+while let Some(hit) = hits.next().await {
+    let weapon = hit.weapon.map(|w| w.type_name).unwrap_or_default();
+    eprintln!(&quot;попадание в танк: {weapon}&quot;);
+}
+</code></pre></div>
+<p>Все события подряд:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let mut events = ctx.events();
+while let Some(event) = events.next().await {
+    match event.kind {
+        Some(v1::event::Kind::Takeoff(t)) =&gt; {
+            eprintln!(&quot;взлёт: {:?}&quot;, t.initiator.map(|u| u.name));
+        }
+        Some(v1::event::Kind::Gap(_)) =&gt; eprintln!(&quot;часть событий потеряна&quot;),
+        _ =&gt; {}
+    }
+}
+</code></pre></div>
+<p><code>Gap</code> значит, что часть событий потеряна; мир при этом остаётся точным. Подписчик, который
+отстал больше чем на 1024 события, пропускает самые старые и пишет предупреждение в лог.</p>
+<h2 id="меню-f10">Меню F10<a class="anchor" href="#меню-f10" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Команды меню объявляются в сценарии: <code>sc.menu(ident, надпись, path=[...])</code>. Логика добавляет их
+в игру и читает нажатия. Меню для всей коалиции не знает, кто нажал:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let info = ctx
+    .menu(Coalition::Blue)
+    .command(menus::TARGET_INFO)
+    .key(&quot;menu-info&quot;)
+    .await?;
+let mut presses = info.presses();
+while presses.next().await.is_some() {
+    ctx.message(Coalition::Blue)
+        .text(&quot;Цель: зона Target, 35 км восточнее Кутаиси&quot;)
+        .await?;
+}
+</code></pre></div>
+<p><code>.per_group()</code> ставит команду каждой группе коалиции отдельно, и нажатие несёт группу. Ответ
+можно отправить только ей:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let smoke = ctx
+    .menu(Coalition::Blue)
+    .per_group()
+    .command(menus::SMOKE_TARGET)
+    .key(&quot;menu-smoke&quot;)
+    .await?;
+ctx.spawn(async move |ctx| {
+    let mut presses = smoke.presses();
+    while let Some(press) = presses.next().await {
+        ctx.smoke(zones::TARGET.center(), SmokeColor::Red).await?;
+        ctx.message(press.group) // ответ только той группе, что нажала
+            .text(&quot;Красный дым на цели&quot;)
+            .await?;
+    }
+    Ok(())
+});
+</code></pre></div>
+<p>Нажатия копятся с момента, когда движок подтвердил команду меню, поэтому ранние нажатия не
+теряются. Убрать команду:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">info.remove().await?;
+</code></pre></div>
+<h2 id="фоновые-задачи">Фоновые задачи<a class="anchor" href="#фоновые-задачи" aria-label="Ссылка на этот раздел">#</a></h2>
+<p><code>ctx.spawn(..)</code> запускает задачу, которая живёт до конца сессии:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let watcher = ctx.spawn(async |ctx| {
+    loop {
+        ctx.sleep(mins(5)).await;
+        let left = ctx.world().group(&amp;groups::ARMOR).alive_count();
+        ctx.message(Coalition::Blue)
+            .text(format!(&quot;Осталось машин: {left}&quot;))
+            .await?;
+    }
+});
+// ...
+watcher.abort(); // необязательно: задачи и так заканчиваются вместе с сессией
+</code></pre></div>
+<p>Ошибка (кроме <code>SessionEnded</code>) или паника в задаче записывается в лог логики с местом в коде.
+Остальные задачи продолжают работать.</p>
+<h2 id="состояние">Состояние<a class="anchor" href="#состояние" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Движок хранит JSON-документы. Они переживают перезапуск логики, а документы кампании — и новые
+сборки миссии:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">#[derive(Default, Serialize, Deserialize)]
+pub struct Campaign {
+    pub targets_destroyed: u32,
+}
+
+pub async fn count_kill(ctx: &amp;Ctx&lt;MyMission&gt;) -&gt; sortie::Result&lt;()&gt; {
+    let campaign = ctx.state::&lt;Campaign&gt;(&quot;campaign&quot;).await?; // область: кампания
+    campaign.update(|c| c.targets_destroyed += 1).await?; // запись со сверкой ревизии
+    let total = campaign.get().targets_destroyed;
+    ctx.report().set(&quot;targets_destroyed&quot;, total);
+    Ok(())
+}
+</code></pre></div>
+<p>Тип документа должен реализовать <code>Serialize</code>, <code>Deserialize</code> и <code>Default</code>; для derive добавьте
+<code>serde</code> в зависимости. <code>update</code> пишет со сверкой ревизии: если документ успел поменять кто-то
+другой, <code>update</code> перечитает его и применит изменение снова. Ещё есть <code>get()</code>, <code>set(..)</code>,
+<code>reload()</code>, <code>revision()</code>.</p>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Область</th><th>Сколько живёт</th><th>Как открыть</th></tr></thead><tbody>
+<tr><td>сессия</td><td>одну сессию; рестарт миссии начинает с нуля</td><td><code>ctx.state_in(StateScope::Session, ..)</code></td></tr>
+<tr><td>ход</td><td>одну сборку миссии; переживает её рестарты</td><td><code>ctx.state_in(StateScope::Turn, ..)</code></td></tr>
+<tr><td>кампания</td><td>все ходы сценария</td><td><code>ctx.state(..)</code></td></tr>
+</tbody></table>
+</div>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let seen = ctx
+    .state_in::&lt;Vec&lt;String&gt;&gt;(StateScope::Session, &quot;seen&quot;)
+    .await?;
+seen.update(|names| names.push(&quot;Blue 1&quot;.into())).await?;
+let attempts = ctx.state_in::&lt;u32&gt;(StateScope::Turn, &quot;attempts&quot;).await?;
+attempts.update(|n| *n += 1).await?;
+</code></pre></div>
+<p>Выполнить блок один раз:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">// Один раз за сессию: перезапуск процесса логики не повторит.
+ctx.once(&quot;intro&quot;, async |ctx| {
+    ctx.message(Coalition::Blue).text(&quot;Удачной охоты!&quot;).await
+})
+.await?;
+// Один раз за ход: не повторит и рестарт миссии.
+ctx.once_per_turn(&quot;target-down&quot;, async |ctx| {
+    ctx.flag(flags::TARGET_DOWN).set(true).await
+})
+.await?;
+</code></pre></div>
+<p><code>once</code> возвращает <code>Ok(None)</code>, если блок уже выполнялся.</p>
+<h2 id="конец-сессии-и-итоги">Конец сессии и итоги<a class="anchor" href="#конец-сессии-и-итоги" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">ctx.report().set(&quot;armor_left&quot;, 0);
+ctx.end_session(Outcome::BlueWin)
+    .text(&quot;Бронегруппа уничтожена&quot;)
+    .await
+</code></pre></div>
+<ul>
+<li><code>ctx.report().set(ключ, значение)</code> пишет значение в итоги сессии. Запись не ждёт ответа;
+ошибка попадёт в лог логики.</li>
+<li><code>ctx.end_session(..)</code> заканчивает сессию с исходом <code>BlueWin</code>, <code>RedWin</code>, <code>Draw</code> или <code>Aborted</code>.
+Текст сохраняется в итогах, в DCS он не показывается. Сама миссия в DCS продолжается.</li>
+<li>Если логика не закончила сессию, её закроет лимит времени из сценария (<code>time_limit</code>) с
+исходом <code>TimeLimit</code>.</li>
+<li>Итоги смотрит <code>python scenario.py results</code>.</li>
+</ul>
+<h2 id="ошибки">Ошибки<a class="anchor" href="#ошибки" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Всё, что может пойти не так, — <code>sortie::Error</code>. Ошибка команды несёт место в вашем коде, где
+команду создали, и, если она пришла из Lua, — Lua traceback.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">match cap.push_task(Task::rtb(airbases::NALCHIK)).await {
+    Ok(()) =&gt; {}
+    Err(sortie::Error::Gone(_)) =&gt; {} // группы уже нет: её сбили
+    Err(e) =&gt; {
+        eprintln!(&quot;{}&quot;, e.report()); // место в коде, Lua traceback, подсказка
+        return Err(e);
+    }
+}
+</code></pre></div>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Ошибка</th><th>Что значит</th></tr></thead><tbody>
+<tr><td><code>Gone</code></td><td>объекта уже нет в DCS: погиб или исчез</td></tr>
+<tr><td><code>Timeout</code></td><td>DCS не ответила вовремя</td></tr>
+<tr><td><code>Lua</code></td><td>ошибка в Lua-слое; смотрите traceback</td></tr>
+<tr><td><code>Rejected</code></td><td>движок отклонил команду; причина в сообщении</td></tr>
+<tr><td><code>SessionEnded</code></td><td>сессия кончилась раньше команды; нормальный исход для работы в конце сессии</td></tr>
+<tr><td><code>Invalid</code></td><td>команда не подходит цели, не хватает аргумента, или в dev-режиме нет <code>.key(..)</code></td></tr>
+<tr><td><code>Unavailable</code></td><td>движок не может выполнить команду сейчас</td></tr>
+<tr><td><code>NameConflict</code></td><td>живая группа с таким именем уже есть</td></tr>
+<tr><td><code>Paused</code></td><td>DCS на паузе, а у команды <code>.on_pause(Fail)</code></td></tr>
+<tr><td><code>Conflict</code></td><td>документ состояния поменял кто-то другой</td></tr>
+<tr><td><code>UnknownSymbol</code></td><td>в запущенной миссии нет символа: логика собрана с другим lock</td></tr>
+<tr><td><code>NotInWorld</code></td><td>символ есть, а живого объекта нет</td></tr>
+<tr><td><code>State</code></td><td>хранилище движка отказало</td></tr>
+<tr><td><code>Transport</code></td><td>нет связи с движком</td></tr>
+<tr><td><code>NotYet</code></td><td>возможность появится в следующей версии</td></tr>
+</tbody></table>
+</div>
+<p><code>e.code()</code> даёт стабильный код вида <code>sortie::gone</code>, <code>e.help()</code> — подсказку, <code>e.report()</code> —
+многострочный отчёт: место в коде, Lua traceback, id сессии и команды, подсказка.</p>
+<h2 id="запуск-программы-логики">Запуск программы логики<a class="anchor" href="#запуск-программы-логики" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code"><pre tabindex="0"><code>my_mission_logic [--engine &lt;url&gt;] [--build-id &lt;id&gt;] [--logic &lt;name&gt;] [--dev]
+
+  --engine &lt;url&gt;    адрес движка (SORTIE_ENGINE, по умолчанию http://127.0.0.1:50777)
+  --build-id &lt;id&gt;   build id программы, который она сообщает движку (SORTIE_BUILD_ID)
+  --logic &lt;name&gt;    имя логики (по умолчанию имя программы)
+  --dev             dev-режим: спавн и уничтожение только с .key() (SORTIE_DEV=1)
+</code></pre></div>
+<ul>
+<li>Токен роли <code>logic</code> берётся из <code>SORTIE_TOKEN</code>; с <code>sortied --dev</code> он не нужен.</li>
+<li>Фильтр логов — <code>SORTIE_LOG</code> (по умолчанию <code>info</code>), например <code>SORTIE_LOG=debug</code>.</li>
+<li>При обрыве связи логика переподключается с паузой от 1 до 30 с.</li>
+<li>Код выхода 0 — движок остановил логику; 2 — неверные аргументы, неверный токен или движок
+отклонил логику (её надо пересобрать с lock запущенной миссии).</li>
+<li>Рантайм однопоточный: <code>Ctx</code> дёшево клонируется, но не <code>Send</code>.</li>
+</ul>
+<p>Флаг <code>--standby</code> (горячая замена логики) зарезервирован: движок этой версии такую логику
+отклоняет.</p>
+<h2 id="карта-api">Карта API<a class="anchor" href="#карта-api" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Нужно</th><th>Где</th></tr></thead><tbody>
+<tr><td>функция миссии</td><td><code>#[sortie::mission] async fn run(ctx: Ctx&lt;M&gt;, start: Start) -&gt; sortie::Result&lt;()&gt;</code></td></tr>
+<tr><td>программа</td><td><code>sortie::main!(crate_name::run)</code></td></tr>
+<tr><td>символы</td><td><code>sortie::include_scenario!(name)</code>, <code>build.rs</code> с <code>sortie_build::scenario(..)</code></td></tr>
+<tr><td>группы</td><td><code>ctx.group(..)</code>, <code>group.set_option(..)</code>, <code>push_task</code>, <code>set_task</code>, <code>destroy</code></td></tr>
+<tr><td>спавн</td><td><code>ctx.spawn_group(templates::X)</code>, <code>.named</code>, <code>.from_airbase</code>, <code>.at</code></td></tr>
+<tr><td>сообщения, дым, флаги</td><td><code>ctx.message(..)</code>, <code>ctx.smoke(..)</code>, <code>ctx.flag(..).set(..)</code> / <code>.get()</code></td></tr>
+<tr><td>меню</td><td><code>ctx.menu(coalition)</code>, <code>.per_group()</code>, <code>.command(menus::X)</code>, <code>presses()</code>, <code>remove()</code></td></tr>
+<tr><td>время</td><td><code>ctx.sleep</code>, <code>ctx.timer</code>, <code>ctx.model_time</code>, <code>ctx.paused</code></td></tr>
+<tr><td>мир</td><td><code>ctx.world()</code>, <code>ctx.wait_until(..)</code></td></tr>
+<tr><td>события</td><td><code>ctx.events()</code>, <code>.of::&lt;v1::Dead&gt;()</code>, <code>.in_group</code>, <code>.coalition</code>, <code>.filter</code></td></tr>
+<tr><td>задачи</td><td><code>ctx.spawn(..)</code></td></tr>
+<tr><td>состояние</td><td><code>ctx.state</code>, <code>ctx.state_in</code>, <code>ctx.once</code>, <code>ctx.once_per_turn</code></td></tr>
+<tr><td>итоги</td><td><code>ctx.report().set(..)</code>, <code>ctx.end_session(..)</code>, <code>ctx.until_session_end()</code></td></tr>
+<tr><td>ошибки</td><td><code>sortie::Error</code>, <code>code()</code>, <code>help()</code>, <code>report()</code></td></tr>
+</tbody></table>
+</div>
+</article>
+<nav class="pager" aria-label="Соседние страницы">
+<a class="pager-prev" rel="prev" href="dependency.html"><span class="pager-dir">Назад</span><span class="pager-title">Подключение SDK</span></a>
+<a class="pager-next" rel="next" href="generator.html"><span class="pager-dir">Дальше</span><span class="pager-title">Сценарий на Python</span></a>
+</nav>
+<p class="page-source"><a href="sdk.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

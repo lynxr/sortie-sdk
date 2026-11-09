@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sortie-mission-logic | Sortie SDK</title>
+<meta name="description" content="The mission logic is an ordinary async Rust program next to DCS. The engine sortied owns the link to DCS; the logic attaches to it over gRPC and gets one call of its mission…">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/agents/sortie-mission-logic/SKILL.html">
+<link rel="stylesheet" href="../../assets/style.css">
+<link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-agent has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="../../docs/quickstart.html">Быстрый старт</a><a href="../../docs/index.html">Документация</a><a href="../../agents.html" aria-current="true">Для агентов</a><a href="../../downloads.html">Загрузки</a><a href="../../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Файлы для агентов">
+<nav class="toc">
+<a class="toc-home" href="../../agents.html">Для агентов</a>
+<ul>
+<li><a href="../AGENTS.html">AGENTS.md</a></li>
+<li><a href="../README.html">README.md</a></li>
+</ul>
+<p class="toc-part">Навыки</p>
+<ul>
+<li><a href="../sortie-live-debugging/SKILL.html"><code>sortie-live-debugging</code></a>
+<ul>
+<li><a href="../sortie-live-debugging/references/failures.html">references/failures.md</a></li>
+</ul>
+</li>
+<li><a href="SKILL.html" aria-current="page"><code>sortie-mission-logic</code></a>
+<ul>
+<li><a href="references/api.html">references/api.md</a></li>
+<li><a href="references/errors.html">references/errors.md</a></li>
+<li><a href="references/patterns.html">references/patterns.md</a></li>
+</ul>
+</li>
+<li><a href="../sortie-scenario/SKILL.html"><code>sortie-scenario</code></a>
+<ul>
+<li><a href="../sortie-scenario/references/reference.html">references/reference.md</a></li>
+</ul>
+</li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<p class="lang-note">Инструкции и навыки для агентов написаны на английском.</p>
+<article class="prose" lang="en">
+<div class="skill-head"><p class="skill-name"><span>Навык</span> <code>sortie-mission-logic</code></p><p class="skill-desc">Sortie mission logic in Rust (crate `sortie`, DCS World). Use when writing or changing a `#[sortie::mission]` or code that uses `Ctx` (commands, `.key()`, `ctx.once`, waits, events, F10 menus, flags, state, timers, `end_session`), when handling `Start` kinds, when a `sortie::*` error code appears (`sortie::gone`, `sortie::invalid`, `sortie::unknown_symbol`, ...), or when designing a long multiplayer mission. Applies to any crate that depends on `sortie` or calls `sortie::include_scenario!`.</p></div>
+<h1 id="sortie-mission-logic">Sortie mission logic<a class="anchor" href="#sortie-mission-logic" aria-label="Ссылка на этот раздел">#</a></h1>
+<p>The mission logic is an ordinary async Rust program next to DCS. The engine <code>sortied</code> owns
+the link to DCS; the logic attaches to it over gRPC and gets one call of its mission function
+per session.</p>
+<ul>
+<li><strong>Reads are local and synchronous.</strong> <code>ctx.world()</code> is a replica of the DCS world, updated
+10 times a second and by every event. No RPC.</li>
+<li><strong>Writes are commands.</strong> Every write is a <code>Cmd</code> builder; <code>.await</code> sends it and resolves when
+DCS has executed it (or with a <code>sortie::Error</code>).</li>
+<li><strong>The mission function is a replayable script.</strong> It runs again from the top when the logic
+process restarts inside a running session (<code>Start::AfterCrash</code>). Every step must be safe to
+run twice: keyed commands, <code>ctx.once</code>, named timers, waits on world state.</li>
+<li><strong>One thread.</strong> <code>Ctx</code> is cheap to clone and not <code>Send</code>; background work is <code>ctx.spawn</code>.</li>
+<li><strong>Typed scenario.</strong> <code>groups::X</code>, <code>zones::X</code>, <code>templates::X</code>, <code>flags::X</code>, <code>airbases::X</code>,
+<code>menus::X</code> come from the scenario lock; a symbol of another scenario does not compile.</li>
+</ul>
+<h2 id="project-layout">Project layout<a class="anchor" href="#project-layout" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>A mission repository starts as a copy of the SDK's <code>template/</code> folder:</p>
+<div class="code"><pre tabindex="0"><code>my-mission/
+  Cargo.toml             # the logic crate (package my_mission_logic)
+  build.rs               # turns the lock into typed symbols
+  src/lib.rs             # include_scenario! and the #[sortie::mission]
+  src/main.rs            # one line: sortie::main!(my_mission_logic::run);
+  scenario.py            # the scenario (sortie-gen); see the sortie-scenario skill
+  scenario.lock.json     # written by `python scenario.py lock`; commit it, never edit it
+  pyproject.toml         # uv project with the sortie-gen dependency
+</code></pre></div>
+<p><code>examples/op_north</code> keeps the crate in a <code>logic/</code> subfolder instead; both work.</p>
+<div class="code" data-lang="toml"><pre tabindex="0"><code class="language-toml"># Cargo.toml
+[package]
+name = &quot;my_mission_logic&quot;
+version = &quot;0.1.0&quot;
+edition = &quot;2024&quot;
+rust-version = &quot;1.89&quot;
+
+[dependencies]
+sortie = { git = &quot;https://github.com/lynxr/sortie-sdk&quot;, tag = &quot;v0.1.0&quot; }
+serde = { version = &quot;1&quot;, features = [&quot;derive&quot;] }   # only for state documents
+
+[build-dependencies]
+sortie-build = { git = &quot;https://github.com/lynxr/sortie-sdk&quot;, tag = &quot;v0.1.0&quot; }
+
+[lints.clippy]
+await_holding_refcell_ref = &quot;deny&quot;   # catches a world borrow held across .await
+</code></pre></div>
+<ul>
+<li><code>build.rs</code>: <code>fn main() { sortie_build::scenario("my_mission", "scenario.lock.json").emit(); }</code>.
+The first argument is the scenario name; the path is relative to the crate's <code>Cargo.toml</code>.</li>
+<li><code>src/lib.rs</code> starts with <code>sortie::include_scenario!(my_mission);</code>, which defines
+<code>pub mod my_mission</code> with the marker type <code>MyMission</code> and the symbol modules.</li>
+<li><code>src/main.rs</code> is <code>sortie::main!(my_mission_logic::run);</code>: arguments, attach, reconnects.</li>
+<li>A private SDK repository needs credentials for cargo (<code>net.git-fetch-with-cli = true</code> in
+<code>.cargo/config.toml</code>, plus your git credential helper) and for uv: see the docs.</li>
+</ul>
+<h2 id="the-mission-function">The mission function<a class="anchor" href="#the-mission-function" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>The examples in this skill use the <code>frontline</code> scenario of the sortie-scenario skill.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">use sortie::prelude::*;
+
+// lib.rs of the logic crate also has `sortie::include_scenario!(frontline);`
+use frontline::{Frontline, groups, zones};
+
+#[sortie::mission] // runs once per session of `frontline`
+pub async fn run(ctx: Ctx&lt;Frontline&gt;, start: Start) -&gt; sortie::Result&lt;()&gt; {
+    let sam = ctx.group(groups::SAM_NORTH)?; // Group&lt;Ground&gt;, checked against the manifest
+    sam.set_option(Alarm::Green).key(&quot;sam-dark&quot;).await?;
+
+    if start.is_fresh() {
+        ctx.message(Coalition::Blue)
+            .text(&quot;SAM North is cold. Push when ready.&quot;)
+            .secs(20)
+            .key(&quot;intro&quot;)
+            .await?;
+    }
+
+    // Evaluated on the local replica after every tick and every event: no RPC.
+    ctx.wait_until(|w| {
+        w.units()
+            .coalition(Coalition::Blue)
+            .air()
+            .any_inside(zones::SAM_RING)
+    })
+    .await;
+    sam.set_option(Alarm::Red).key(&quot;sam-hot&quot;).await?;
+
+    // A state, not an event: still correct when the function runs again after a crash.
+    ctx.wait_until(|w| w.group(&amp;sam).alive_count() == 0).await;
+    ctx.end_session(Outcome::BlueWin)
+        .text(&quot;SAM North is down&quot;)
+        .await
+}
+</code></pre></div>
+<p><code>#[sortie::mission]</code> checks the signature: <code>async fn</code>, <code>ctx: Ctx&lt;M&gt;</code> first, <code>start: Start</code>
+second, return type <code>sortie::Result&lt;()&gt;</code>. Returning <code>Err</code> records a logic error with the call
+site; the session goes on.</p>
+<h2 id="workflow">Workflow<a class="anchor" href="#workflow" aria-label="Ссылка на этот раздел">#</a></h2>
+<ol>
+<li><strong>Symbols first.</strong> Everything the logic names (a group, zone, template, flag, airbase or
+menu) needs an <code>ident=</code> in <code>scenario.py</code>. Add it there, run <code>python scenario.py lock</code>, then
+build the logic. Groups added only by a <code>@sc.pydcs</code> hook have no symbol: reach them by DCS
+name in world queries (<code>w.group("Name")</code>, <code>.in_group("Name")</code>).</li>
+<li><strong>Write the step replay-safe</strong> (rules below), then <code>cargo build</code> and <code>cargo clippy</code>.
+Done when both pass and every <code>spawn_group</code> and <code>destroy</code> in the diff carries <code>.key(..)</code>.</li>
+<li><strong>Run it in DCS</strong> with <code>sortied --dev</code> and the logic's <code>--dev</code> (see the
+sortie-live-debugging skill). SDK 0.1.0 has no tests without DCS: FakeDcs
+arrives in SDK 0.2, and <code>#[sortie::test]</code> is a compile error until then. Put pure decisions
+(which wave, which target) in plain functions and test them with ordinary <code>#[test]</code>.</li>
+</ol>
+<h2 id="rules">Rules<a class="anchor" href="#rules" aria-label="Ссылка на этот раздел">#</a></h2>
+<ol>
+<li><strong>Key every command whose repetition matters.</strong> <code>spawn_group</code> and <code>destroy</code> always: they
+are refused without a key when <code>sortied</code> runs with <code>--dev</code> and when the logic runs with
+<code>--dev</code>. Key messages, smoke, flags and menu commands that a replay must not repeat. Key
+semantics:
+<ul>
+<li>the scope is the session: within it, a key that already ran returns the stored result
+without reaching DCS (a replayed spawn returns the same <code>Group</code>);</li>
+<li>a key names a step, so it is the same on every run: a literal (<code>"red-cap-1"</code>) or built
+from a deterministic counter (<code>format!("wave-{n}")</code>), never from model time, a random
+number or an Eid;</li>
+<li>one key, one command: reusing a key for a different body (other text, other target) fails
+with <code>sortie::invalid</code> ("key <code>k</code> was already used for a different command in session ...");</li>
+<li>a keyed command that timed out after reaching DCS is not sent again on retry with the
+same key: the retry waits for the late result;</li>
+<li>a mission restart is a new session: keys start empty again.</li>
+</ul>
+</li>
+<li><strong>Wait on states, not events,</strong> when the condition is visible in the world:
+<code>ctx.wait_until(|w| w.group(&amp;sam).alive_count() == 0)</code>. A replay sees the state; it never
+sees an event that happened before it subscribed.</li>
+<li><strong>Delays that must survive a logic restart are named timers:</strong>
+<code>ctx.timer("cap-delay", mins(10))</code>. <code>ctx.sleep</code> starts over after a restart.</li>
+<li><strong>Campaign changes go inside <code>ctx.once_per_turn</code>.</strong> After a mission restart the turn is
+played again in a new session; <code>once_per_turn</code> keeps a kill from being counted twice in one
+turn. <code>ctx.once</code> is per session.</li>
+<li><strong>Short borrows.</strong> Take <code>ctx.world()</code> and <code>StateDoc::get()</code> in a statement or a block that
+ends before the next <code>.await</code>. A borrow held across <code>.await</code> stops the replica from updating
+(the runtime records "the world replica is borrowed across an <code>.await</code>").</li>
+<li><strong>Never block the thread.</strong> No <code>std::thread::sleep</code>, blocking I/O or long CPU loops: ticks
+stop, and after 4096 unread messages the engine detaches the logic (it exits with code 0).
+Wait with <code>ctx.sleep</code>, <code>ctx.timer</code>, <code>ctx.wait_until</code>.</li>
+<li><strong>Background work is <code>ctx.spawn</code>.</strong> Its tasks end with the session; an <code>Err</code> or a panic in
+one is recorded with its call site and the other tasks keep running. No <code>std::thread</code>, no
+runtime of your own.</li>
+</ol>
+<h2 id="start-kinds">Start kinds<a class="anchor" href="#start-kinds" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">match start {
+    // First session of this build: the world is as the manifest describes it.
+    Start::Fresh =&gt; {}
+    // The mission was reloaded (same turn): a fresh world, fresh keys and `once`s;
+    // `once_per_turn` and the campaign state remember the earlier session.
+    Start::Restart =&gt; {
+        ctx.message(Coalition::Blue)
+            .text(&quot;Mission restarted&quot;)
+            .key(&quot;restarted&quot;)
+            .await?;
+    }
+    // The logic process restarted inside a running session (crash, or you restarted it
+    // after a rebuild): the world is as it is now; keys, `once` and timers remember.
+    // `Resumed` (the engine resumed the session after its own restart) is not sent yet;
+    // treat it the same way.
+    Start::AfterCrash | Start::Resumed =&gt; {}
+}
+</code></pre></div>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th><code>Start</code></th><th>When</th><th>The world</th><th>Keys, <code>once</code>, timers</th><th><code>once_per_turn</code>, campaign state</th></tr></thead><tbody>
+<tr><td><code>Fresh</code></td><td>first session of this build (turn)</td><td>as in the manifest</td><td>empty</td><td>as stored</td></tr>
+<tr><td><code>Restart</code></td><td>the mission was reloaded (<code>scenario.py restart</code>, or the same build loaded again)</td><td>as in the manifest</td><td>empty (new session)</td><td>remembered</td></tr>
+<tr><td><code>AfterCrash</code></td><td>the logic process restarted in the running session (crash, or restarted after a rebuild)</td><td>as it is now</td><td>remembered</td><td>remembered</td></tr>
+<tr><td><code>Resumed</code></td><td>the engine resumed a session after its own restart (not sent yet)</td><td>as it is now</td><td>remembered</td><td>remembered</td></tr>
+</tbody></table>
+</div>
+<p>A replay-safe mission needs no branch on <code>Start</code> except for player-facing extras (a briefing on
+<code>Fresh</code>, a notice on <code>Restart</code>).</p>
+<h2 id="api-map">API map<a class="anchor" href="#api-map" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Need</th><th>Use</th></tr></thead><tbody>
+<tr><td>a scenario group</td><td><code>ctx.group(groups::X)?</code> → <code>Group&lt;Ground/Air/Helo/Ship&gt;</code>; <code>set_option(Alarm::Red / Roe::..)</code>, <code>destroy()</code>, <code>push_task</code>/<code>set_task</code> (air and helicopters)</td></tr>
+<tr><td>spawn</td><td><code>ctx.spawn_group(templates::X)</code> or <code>templates::X.named("..")</code>, then <code>.from_airbase(airbases::Y, StartType::..)</code> or <code>.at(Vec3, heading_rad)</code>, <code>.key(..)</code> → <code>Group&lt;K&gt;</code></td></tr>
+<tr><td>tell players</td><td><code>ctx.message(Coalition::Blue / &amp;group / press.group / sortie::MessageTarget::All).text(..).secs(..)</code></td></tr>
+<tr><td>read the world</td><td><code>ctx.world()</code>, <code>w.units().coalition(..).air().in_zone(zones::X).count()</code>, <code>w.players()</code>, <code>w.group(&amp;g).alive_count()</code></td></tr>
+<tr><td>wait</td><td><code>ctx.wait_until(pred)</code>, <code>ctx.timer(name, dur)</code>, <code>ctx.sleep(dur)</code>, <code>ctx.until_session_end()</code></td></tr>
+<tr><td>react</td><td><code>ctx.events().of::&lt;v1::Dead&gt;().in_group(&amp;g)</code>; <code>use sortie::proto::v1;</code></td></tr>
+<tr><td>F10 menu</td><td><code>ctx.menu(Coalition::Blue).per_group().command(menus::X).key(..).await?</code>, then <code>.presses()</code></td></tr>
+<tr><td>flags</td><td><code>ctx.flag(flags::X).set(true)</code>, <code>.get()</code> → <code>i32</code></td></tr>
+<tr><td>remember</td><td><code>ctx.state::&lt;T&gt;("name")</code> (campaign), <code>ctx.state_in::&lt;T&gt;(v1::StateScope::Turn, ..)</code>, <code>ctx.once</code>, <code>ctx.once_per_turn</code></td></tr>
+<tr><td>results</td><td><code>ctx.report().set("key", value)</code>, <code>ctx.end_session(Outcome::BlueWin).text(..)</code></td></tr>
+</tbody></table>
+</div>
+<p>Signatures, defaults and an example for each: <a href="references/api.html">references/api.md</a>.</p>
+<h2 id="more">More<a class="anchor" href="#more" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li><a href="references/patterns.html">references/patterns.md</a>: a long multiplayer mission (thousands of
+units, players joining and leaving, AI waves, polling, scores) and the anti-patterns.</li>
+<li><a href="references/errors.html">references/errors.md</a>: every <code>sortie::*</code> error code, the build and
+attach errors, and their fixes.</li>
+<li>Docs (Russian): https://lynxr.github.io/sortie-sdk/. Scenario side: the sortie-scenario skill. Running in DCS:
+the sortie-live-debugging skill.</li>
+</ul>
+</article>
+<p class="page-source"><a href="SKILL.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

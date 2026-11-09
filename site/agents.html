@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Для агентов | Sortie SDK</title>
+<meta name="description" content="Навыки и инструкции для ИИ-агентов, которые пишут логику и сценарии на Sortie SDK.">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/agents.html">
+<link rel="stylesheet" href="assets/style.css">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-agents">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="docs/quickstart.html">Быстрый старт</a><a href="docs/index.html">Документация</a><a href="agents.html" aria-current="page">Для агентов</a><a href="downloads.html">Загрузки</a><a href="changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="для-агентов">Для агентов<a class="anchor" href="#для-агентов" aria-label="Ссылка на этот раздел">#</a></h1>
+<p>ИИ-агенты (Claude Code и другие) пишут логику и сценарии Sortie лучше, когда знают API и
+правила SDK. Для этого в SDK есть навыки (skills) и файл <code>AGENTS.md</code>. Они написаны на
+английском: так их лучше понимают агенты.</p>
+<h2 id="навыки">Навыки<a class="anchor" href="#навыки" aria-label="Ссылка на этот раздел">#</a></h2>
+<p><a href="agents/sortie-agent-skills-0.1.0.zip">Скачать архив навыков</a> (<code>sortie-agent-skills-0.1.0.zip</code>).
+Те же файлы лежат в репозитории SDK, в папке <code>agents/</code>.</p>
+<ul class="skills">
+<li><a href="agents/sortie-live-debugging/SKILL.html"><code>sortie-live-debugging</code></a> <span class="skill-path">sortie-live-debugging/</span><span class="skill-desc" lang="en">Sortie in a live DCS World: install and `sortie doctor`, `sortied --dev`, attaching the mission and the logic, reading dcs.log, the sortied log, sortie-bridge.log and the logic&#39;s stderr. Use when a Sortie mission does not attach or misbehaves in DCS, when the DCS screen shows a &quot;Sortie ...&quot; message, after installing or updating Sortie or DCS, when players cannot take multiplayer slots, after a Mission Editor round trip, or when an error mentions the bridge, the engine, a session or a token.</span></li>
+<li><a href="agents/sortie-mission-logic/SKILL.html"><code>sortie-mission-logic</code></a> <span class="skill-path">sortie-mission-logic/</span><span class="skill-desc" lang="en">Sortie mission logic in Rust (crate `sortie`, DCS World). Use when writing or changing a `#[sortie::mission]` or code that uses `Ctx` (commands, `.key()`, `ctx.once`, waits, events, F10 menus, flags, state, timers, `end_session`), when handling `Start` kinds, when a `sortie::*` error code appears (`sortie::gone`, `sortie::invalid`, `sortie::unknown_symbol`, ...), or when designing a long multiplayer mission. Applies to any crate that depends on `sortie` or calls `sortie::include_scenario!`.</span></li>
+<li><a href="agents/sortie-scenario/SKILL.html"><code>sortie-scenario</code></a> <span class="skill-path">sortie-scenario/</span><span class="skill-desc" lang="en">Sortie scenarios in Python (`scenario.py` with sortie-gen over pydcs, DCS World). Use when writing or changing a scenario (zones, ground groups, air templates, statics or other pydcs content, airbases, player flights and their airfield coalition, flags, F10 menus), when running `lock`, `build`, `validate`, `register`, `launch`, `restart`, `watch` or `results`, when a sortie-gen error or warning appears, or when the Rust logic needs a new symbol.</span></li>
+</ul>
+<h2 id="как-подключить-к-claude-code">Как подключить к Claude Code<a class="anchor" href="#как-подключить-к-claude-code" aria-label="Ссылка на этот раздел">#</a></h2>
+<ol>
+<li>Распакуйте архив.</li>
+<li>Скопируйте папки навыков (в каждой есть <code>SKILL.md</code>, пути указаны в списке выше) в папку
+<code>.claude/skills/</code> вашего проекта. Чтобы навыки работали во всех проектах, положите их в
+<code>~/.claude/skills/</code>.</li>
+<li>Положите <code>AGENTS.md</code> в корень проекта. Claude Code читает <code>CLAUDE.md</code>, поэтому добавьте в
+него строку <code>@AGENTS.md</code>: так он подключит и этот файл.</li>
+<li>Начните новую сессию Claude Code. Навык подключается сам, когда задача подходит под его
+описание.</li>
+</ol>
+<h2 id="другие-агенты">Другие агенты<a class="anchor" href="#другие-агенты" aria-label="Ссылка на этот раздел">#</a></h2>
+<p><code>AGENTS.md</code> в корне проекта читают многие агенты. Навыки — обычные файлы Markdown: их можно
+передать любому агенту как контекст.</p>
+<h2 id="файлы">Файлы<a class="anchor" href="#файлы" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Файл</th><th>Что в нём</th></tr></thead><tbody>
+<tr><td><a href="agents/AGENTS.html">AGENTS.md</a> (<a href="agents/AGENTS.md">Markdown</a>)</td><td>правила для агента в проекте на Sortie SDK</td></tr>
+<tr><td><a href="llms.txt">llms.txt</a></td><td>краткая карта документации для языковых моделей</td></tr>
+<tr><td><a href="llms-full.txt">llms-full.txt</a></td><td>вся документация и все навыки одним файлом Markdown</td></tr>
+</tbody></table>
+</div>
+</article>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,118 @@
+// World mirror: snapshots, deltas and the World service.
+syntax = "proto3";
+
+package sortie.v1;
+
+import "google/protobuf/field_mask.proto";
+import "sortie/v1/common.proto";
+
+service World {
+  // Full snapshot of the current (or named) session's world.
+  rpc GetSnapshot(GetSnapshotRequest) returns (WorldSnapshot);
+  // Deltas from `from_revision` (0 = start with one delta carrying everything).
+  rpc Subscribe(SubscribeWorldRequest) returns (stream WorldDelta);
+}
+
+// One object (unit, static, weapon, ...) as known by the engine at a point in time.
+// Participants of events are EntitySnaps, so nobody needs to ask DCS about a dead object.
+message EntitySnap {
+  uint64 eid = 1;
+  string name = 2;
+  string type_name = 3;
+  Coalition coalition = 4;
+  Category category = 5;
+  optional Vec3 pos = 6;
+  optional string player = 7;
+  optional uint64 group_eid = 8;
+  // DCS country key as in the country.id table, e.g. "RUSSIA", "USA".
+  string country = 9;
+  optional Vec3 velocity = 10;
+  optional double heading_rad = 11;
+  // false while the object is alive (proto3 default), true after DEAD/UNIT_LOST/KILL/gone.
+  bool dead = 12;
+  // DCS object handle (`id_`) at the time of the snapshot; 0 if unknown. Informational:
+  // DCS reuses these, clients must key on eid.
+  uint32 runtime_id = 13;
+  // Unit:getID() for units, 0 otherwise.
+  uint32 unit_id = 14;
+  string group_name = 15;
+  // Unit:getLife() if sampled, 0 if unknown.
+  double life = 16;
+}
+
+message GroupSnap {
+  uint64 eid = 1;
+  string name = 2;
+  // Manifest symbol (e.g. "SAM_NORTH") when the group comes from the manifest, else empty.
+  string ident = 3;
+  Coalition coalition = 4;
+  Category category = 5;
+  // Unit eids in DCS order.
+  repeated uint64 units = 6;
+  // Group:getID(), 0 if unknown.
+  uint32 group_id = 7;
+  string country = 8;
+}
+
+message AirbaseSnap {
+  uint64 eid = 1;
+  string name = 2;
+  // Manifest symbol (e.g. "MAYKOP_KHANSKAYA") when declared in the manifest, else empty.
+  string ident = 3;
+  Coalition coalition = 4;
+  Vec3 pos = 5;
+  // Airbase:getID() (airdromeId for airfields).
+  uint32 airbase_id = 6;
+}
+
+message WeaponSnap {
+  uint64 eid = 1;
+  string type_name = 2;
+  string name = 3;
+  optional Vec3 pos = 4;
+}
+
+message WorldSnapshot {
+  string session = 1;
+  // Revision the snapshot corresponds to; deltas continue from here.
+  uint64 rev = 2;
+  double model_time = 3;
+  repeated GroupSnap groups = 4;
+  repeated EntitySnap entities = 5;
+  repeated AirbaseSnap airbases = 6;
+}
+
+// Changes between two revisions. Upserts carry the full current EntitySnap.
+message WorldDelta {
+  uint64 from_rev = 1;
+  uint64 rev = 2;
+  double model_time = 3;
+  repeated EntitySnap upserts = 4;
+  // Eids removed from the world (no longer tracked at all).
+  repeated uint64 removals = 5;
+  repeated GroupSnap group_upserts = 6;
+  repeated uint64 group_removals = 7;
+  repeated AirbaseSnap airbase_upserts = 8;
+}
+
+message GetSnapshotRequest {
+  // Empty = current session.
+  string session = 1;
+}
+
+message WorldQuery {
+  repeated Coalition coalitions = 1;
+  repeated Category categories = 2;
+  repeated string group_names = 3;
+  // Manifest zone idents; an entity matches if it is inside any of them.
+  repeated string zones = 4;
+  bool players_only = 5;
+}
+
+message SubscribeWorldRequest {
+  string session = 1;
+  uint64 from_revision = 2;
+  WorldQuery query = 3;
+  // EntitySnap fields to fill; empty = all.
+  google.protobuf.FieldMask field_mask = 4;
+}

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Загрузки | Sortie SDK</title>
+<meta name="description" content="Репозиторий SDK, рантайм для Windows и генератор миссий Sortie 0.1.0.">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/downloads.html">
+<link rel="stylesheet" href="assets/style.css">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-downloads">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="docs/quickstart.html">Быстрый старт</a><a href="docs/index.html">Документация</a><a href="agents.html">Для агентов</a><a href="downloads.html" aria-current="page">Загрузки</a><a href="changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="загрузки">Загрузки<a class="anchor" href="#загрузки" aria-label="Ссылка на этот раздел">#</a></h1>
+<p>Версия 0.1.0, тег <code>v0.1.0</code>. Все файлы выпуска есть на
+<a href="https://github.com/lynxr/sortie-sdk/releases/tag/v0.1.0">странице релиза</a>.</p>
+<h2 id="sdk-для-логики-на-rust">SDK для логики на Rust<a class="anchor" href="#sdk-для-логики-на-rust" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Исходники SDK, документация, шаблон миссии и пример op_north лежат в репозитории
+<a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a>. Скачивать SDK отдельно не
+нужно: cargo возьмёт его из git по тегу.</p>
+<div class="code" data-lang="toml"><pre tabindex="0"><code class="language-toml">[dependencies]
+sortie = { git = &quot;https://github.com/lynxr/sortie-sdk&quot;, tag = &quot;v0.1.0&quot; }
+
+[build-dependencies]
+sortie-build = { git = &quot;https://github.com/lynxr/sortie-sdk&quot;, tag = &quot;v0.1.0&quot; }
+</code></pre></div>
+<h2 id="генератор-миссий-на-python">Генератор миссий на Python<a class="anchor" href="#генератор-миссий-на-python" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Добавьте генератор в свой uv-проект прямо из репозитория:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">uv add &quot;sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.1.0#subdirectory=python/sortie-gen&quot;
+</code></pre></div>
+<p>Или скачайте колесо <code>sortie_gen-0.1.0-py3-none-any.whl</code> из таблицы ниже и
+установите его из файла:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">uv add ./sortie_gen-0.1.0-py3-none-any.whl
+</code></pre></div>
+<h2 id="рантайм-для-windows">Рантайм для Windows<a class="anchor" href="#рантайм-для-windows" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Архив рантайма содержит движок <code>sortied.exe</code>, CLI <code>sortie.exe</code>, DLL моста и Lua-слой. Как
+установить его в DCS, написано в <a href="docs/quickstart.html">быстром старте</a> и в README внутри
+архива.</p>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Файл</th><th>Что в нём</th></tr></thead><tbody>
+<tr><td><a href="https://github.com/lynxr/sortie-sdk/releases/download/v0.1.0/sortie-runtime-0.1.0-win64.zip">sortie-runtime-0.1.0-win64.zip</a></td><td>рантайм: движок, CLI, мост и Lua-слой</td></tr>
+<tr><td><a href="https://github.com/lynxr/sortie-sdk/releases/download/v0.1.0/sortie_gen-0.1.0-py3-none-any.whl">sortie_gen-0.1.0-py3-none-any.whl</a></td><td>генератор миссий, колесо Python</td></tr>
+<tr><td><a href="https://github.com/lynxr/sortie-sdk/releases/download/v0.1.0/SHA256SUMS">SHA256SUMS</a></td><td>контрольные суммы файлов выпуска</td></tr>
+</tbody></table>
+</div>
+<p>Проверить скачанный архив в PowerShell:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">Get-FileHash .\sortie-runtime-0.1.0-win64.zip -Algorithm SHA256
+</code></pre></div>
+<p>Хэш должен совпасть со строкой этого файла в <code>SHA256SUMS</code> (регистр букв не важен).</p>
+<h2 id="закрытый-репозиторий">Закрытый репозиторий<a class="anchor" href="#закрытый-репозиторий" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Если репозиторий SDK закрыт, cargo и uv скачивают его через git с вашими учётными данными
+GitHub. Cargo для этого должен звать git из командной строки:</p>
+<div class="code" data-lang="toml"><pre tabindex="0"><code class="language-toml"># %USERPROFILE%\.cargo\config.toml
+[net]
+git-fetch-with-cli = true
+</code></pre></div>
+<p>Сам git должен уметь читать репозиторий, например через Git Credential Manager из Git for
+Windows. Файлы релиза закрытого репозитория скачивайте со страницы релиза, войдя в GitHub.
+Подробности — в <a href="docs/index.html">документации</a>.</p>
+<h2 id="локальная-сборка">Локальная сборка<a class="anchor" href="#локальная-сборка" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Если вы открыли сайт из папки <code>dist/</code> локальной сборки, архивы лежат рядом с ним:
+<a href="../sortie-sdk-0.1.0.zip">SDK</a> и
+<a href="../sortie-runtime-0.1.0-win64.zip">рантайм</a>.</p>
+</article>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

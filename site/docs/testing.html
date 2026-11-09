@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тестирование | Sortie SDK</title>
+<meta name="description" content="В этой версии SDK нет тестов без DCS: фальшивая DCS (FakeDcs) содержит движок, а движок в SDK не входит. Атрибут #[sortie::test] в SDK 0.1.0 не компилируется и говорит об этом…">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/docs/testing.html">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-doc has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Страницы документации">
+<nav class="toc">
+<a class="toc-home" href="index.html">Документация</a>
+<ul>
+<li><a href="index.html">Обзор</a></li>
+<li><a href="install-runtime.html">Установка рантайма</a></li>
+<li><a href="quickstart.html">Быстрый старт</a></li>
+<li><a href="dependency.html">Подключение SDK</a></li>
+<li><a href="sdk.html">Логика на Rust</a></li>
+<li><a href="generator.html">Сценарий на Python</a></li>
+<li><a href="testing.html" aria-current="page">Тестирование</a></li>
+<li><a href="operations.html">Эксплуатация</a></li>
+<li><a href="troubleshooting.html">Диагностика</a></li>
+<li><a href="faq.html">Вопросы и ограничения</a></li>
+<li><a href="changelog.html">Что нового</a></li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="тестирование">Тестирование<a class="anchor" href="#тестирование" aria-label="Ссылка на этот раздел">#</a></h1>
+<h2 id="что-есть-в-010">Что есть в 0.1.0<a class="anchor" href="#что-есть-в-010" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>В этой версии SDK нет тестов без DCS: фальшивая DCS (FakeDcs) содержит движок, а движок в SDK
+не входит. Атрибут <code>#[sortie::test]</code> в SDK 0.1.0 не компилируется и говорит об этом
+прямо:</p>
+<div class="code"><pre tabindex="0"><code>error: #[sortie::test] runs the logic against FakeDcs, which is not part of Sortie SDK 0.1; tests without DCS arrive in SDK 0.2. Test against a live DCS with `sortied --dev` for now.
+</code></pre></div>
+<p>Что можно проверить уже сейчас:</p>
+<ul>
+<li><strong>Компиляция.</strong> Символы сценария типизированы: опечатка в имени группы, приказ авиации
+наземной группе, символ другого сценария — это ошибки <code>cargo build</code>, а не сюрпризы в игре.
+<code>#[sortie::mission]</code> проверяет сигнатуру функции миссии.</li>
+<li><strong>Обычные тесты Rust.</strong> Свои функции и геометрию зон можно проверять <code>cargo test</code>: константы
+зон несут координаты из <code>scenario.lock.json</code>.</li>
+</ul>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">#[test]
+fn the_target_lies_on_the_front_line() {
+    assert!(zones::FRONT.contains(zones::TARGET.center()));
+    let gap = zones::TARGET.center().distance(zones::PATROL.center());
+    assert!(gap &lt; km(1).meters(), &quot;the patrol is centred on the target&quot;);
+}
+</code></pre></div>
+<ul>
+<li><strong>Сценарий.</strong> <code>python scenario.py build</code> собирает миссию без движка и ловит ошибки имён,
+стран, аэродромов, типов pydcs и правило аэродрома игроков. В CI добавьте
+<code>python scenario.py lock --check</code> и <code>build --locked</code>: они падают, если <code>scenario.lock.json</code>
+устарел.</li>
+<li><strong>Типы юнитов.</strong> <code>python scenario.py validate</code> спрашивает запущенную DCS, знает ли она каждый
+тип сценария.</li>
+</ul>
+<h2 id="проверка-в-живой-dcs">Проверка в живой DCS<a class="anchor" href="#проверка-в-живой-dcs" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Удобный цикл на одной машине:</p>
+<ol>
+<li>Запустите <code>sortied --dev</code> и логику (<code>cargo run</code>).</li>
+<li>Зарегистрируйте сборку (<code>python scenario.py register</code>) и откройте миссию в одиночной игре.</li>
+<li>Меняйте логику и перезапускайте только её процесс. DCS и миссию перезапускать не нужно:
+новый процесс подключится к той же сессии и получит <code>Start::AfterCrash</code>. Команды с ключами,
+которые уже выполнились, второй раз в DCS не уйдут, а <code>ctx.timer</code> продолжит ждать тот же
+дедлайн.</li>
+<li>Смотрите события в <code>python scenario.py watch</code> или <code>sortie events</code>, итоги — в
+<code>python scenario.py results</code>, состояние движка — в <code>sortie status</code> и <code>sortie top</code>.</li>
+<li>Ускорение времени в DCS ускоряет и логику: <code>ctx.sleep</code> и <code>ctx.timer</code> считают модельное время.</li>
+</ol>
+<p>Чтобы проверить сценарий целиком с начала, перезапустите миссию: в одиночной игре из меню DCS,
+у хоста сетевой игры — <code>python scenario.py restart</code>. Логика получит новую сессию.</p>
+<p>Что проверять вручную перед выпуском миссии:</p>
+<ul>
+<li>миссия стартует, логика получает сессию (<code>sortie status</code> показывает её);</li>
+<li>условия срабатывают, когда должны: войдите в зону, уничтожьте цель;</li>
+<li>перезапуск процесса логики в середине миссии ничего не повторяет;</li>
+<li>в сетевой игре игроки занимают все слоты.</li>
+</ul>
+<h2 id="что-будет-в-02">Что будет в 0.2<a class="anchor" href="#что-будет-в-02" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>В SDK 0.2 появятся тесты без DCS:</p>
+<ul>
+<li><code>#[sortie::test(manifest = "...")]</code> запускает настоящий движок в процессе теста и фальшивую
+DCS, которая говорит с ним по настоящему протоколу;</li>
+<li>мир строится из того же manifest, что и миссия; время виртуальное, поэтому десять минут
+миссии проходят за миллисекунды и прогоны воспроизводимы;</li>
+<li>тест управляет фальшивой DCS: ставит юниты, убивает группы, двигает время и проверяет флаги,
+опции ИИ и точный поток команд в DCS;</li>
+<li>известные странности DCS (потерянные события гибели, двойное рождение, пустой инициатор
+попадания) включаются в тесте одной строкой.</li>
+</ul>
+</article>
+<nav class="pager" aria-label="Соседние страницы">
+<a class="pager-prev" rel="prev" href="generator.html"><span class="pager-dir">Назад</span><span class="pager-title">Сценарий на Python</span></a>
+<a class="pager-next" rel="next" href="operations.html"><span class="pager-dir">Дальше</span><span class="pager-title">Эксплуатация</span></a>
+</nav>
+<p class="page-source"><a href="testing.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

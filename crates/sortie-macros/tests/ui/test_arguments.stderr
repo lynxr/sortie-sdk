@@ -1,0 +1,23 @@
+error: unknown #[sortie::test] argument; the only one is `manifest = "path/relative/to/Cargo.toml/dir"`
+ --> tests/ui/test_arguments.rs:3:16
+  |
+3 | #[sortie::test(path = "fixtures/op_north.manifest.pb")]
+  |                ^^^^
+
+error: `manifest` takes a string literal, e.g. `manifest = "fixtures/op_north.manifest.pb"`
+ --> tests/ui/test_arguments.rs:6:27
+  |
+6 | #[sortie::test(manifest = 42)]
+  |                           ^^
+
+error: manifest `fixtures/missing.manifest.pb` does not exist; the path is relative to the directory that holds this crate's Cargo.toml
+ --> tests/ui/test_arguments.rs:9:27
+  |
+9 | #[sortie::test(manifest = "fixtures/missing.manifest.pb")]
+  |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: `scenario.miz` is not a manifest: expected a `.pb` (protobuf) or `.json` file such as `fixtures/op_north.manifest.pb`
+  --> tests/ui/test_arguments.rs:12:27
+   |
+12 | #[sortie::test(manifest = "scenario.miz")]
+   |                           ^^^^^^^^^^^^^^

@@ -1,0 +1,3435 @@
+# Sortie SDK 0.1.0: the full documentation
+
+> Every page of the Sortie SDK documentation (written in Russian), then the instructions and skills for agents (English), in one Markdown file. Site: https://lynxr.github.io/sortie-sdk/. Repository: https://github.com/lynxr/sortie-sdk (tag v0.1.0).
+
+<!-- source: docs/index.md -->
+
+# Sortie SDK
+
+Sortie — внешний движок миссий для DCS World. Поведение миссии пишется на Rust и работает в
+отдельном процессе рядом с DCS. Статическая часть миссии описывается на Python и собирается в
+обычный `.miz`.
+
+Это SDK версии 0.1.0: библиотеки для логики на Rust, генератор миссий на Python,
+шаблон проекта и документация. Движок и мост для DCS поставляются отдельно, готовым архивом
+рантайма.
+
+## Как это устроено
+
+```text
+ DCS World ── мост (DLL + Lua) ──▶ sortied ◀── логика миссии (Rust, крейт sortie)
+                                      ▲
+                                      └─────── генератор sortie-gen (Python): сборка и запуск миссий
+```
+
+| Часть | Что делает | Откуда |
+| --- | --- | --- |
+| мост | DLL и Lua-слой внутри DCS. Передаёт движку события и состояние мира, выполняет команды | архив рантайма |
+| `sortied` | движок. Держит зеркало мира, планирует команды в DCS, хранит состояние и итоги | архив рантайма |
+| `sortie` | утилита: установка в DCS, проверка установки, наблюдение за движком | архив рантайма |
+| логика | ваша программа на Rust с крейтом `sortie`: что происходит в миссии | этот SDK |
+| сценарий | ваш файл на Python с пакетом `sortie-gen`: карта, группы, зоны, слоты игроков | этот SDK |
+
+Сценарий описывает, что стоит на карте. Генератор собирает из него `.miz` и файл
+`scenario.lock.json` с именами групп, зон и других объектов. Из этого файла логика получает
+типизированные константы: опечатка в имени группы ломает сборку логики, а не миссию в игре.
+
+При старте миссии DCS вызывает мост, мост подключается к `sortied`, и движок начинает сессию.
+Логика получает сессию и работает с миром. Чтение мира синхронное и локальное, без задержек.
+Каждая команда в DCS — это `async`-вызов, который завершается, когда DCS её выполнила.
+
+## Что можно делать
+
+* ждать условий: «синие в зоне», «от группы никого не осталось», таймер модельного времени;
+* читать мир: юниты, группы, игроки, зоны, расстояния;
+* отдавать команды: сообщения, дым, флаги, опции ИИ, задачи авиации, спавн групп из шаблонов,
+  уничтожение групп;
+* добавлять команды в меню F10, общие для коалиции или свои у каждой группы;
+* обрабатывать события: гибель, попадания, взлёты, вход игроков в слоты;
+* хранить состояние миссии и кампании в движке;
+* собирать миссии воспроизводимо: офлайн-сборка одного и того же сценария даёт побайтно тот же
+  `.miz`;
+* проверять имена, типы юнитов и правила DCS до запуска миссии;
+* перезапускать миссию и смотреть итоги сессии.
+
+## Требования
+
+* Windows 10 или 11, x64.
+* DCS World. Проверена версия 2.9.31. Для сервера — DCS World Server.
+* Rust stable не ниже 1.89 ([rustup](https://rustup.rs)). На Windows Rust нужен линкер MSVC:
+  Visual Studio Build Tools с компонентом «Desktop development with C++».
+* [uv](https://docs.astral.sh/uv/) для генератора. Python 3.11 или новее uv поставит сам.
+* Git: cargo и uv берут SDK из Git-репозитория.
+* Права администратора один раз, при установке рантайма.
+
+Логику и сценарий можно собирать и на Linux. Рантайм (`sortied`, мост) работает только на
+Windows рядом с DCS.
+
+## Состояние версии 0.1.0
+
+* В живом DCS 2.9.31 проверены одиночная игра и сетевая игра, где хост — обычный клиент DCS.
+* На dedicated server Sortie ещё не запускался. Перезапуск миссии (`restart`), запуск сборки
+  движком (`launch`) и проверка типов (`validate`) покрыты тестами, но в живой игре не
+  проверялись.
+* Тестов без DCS в этой версии нет: они появятся в SDK 0.2. Подробнее — в
+  [Тестировании](https://lynxr.github.io/sortie-sdk/docs/testing.md).
+
+Полный список ограничений — в разделе [Вопросы и ограничения](https://lynxr.github.io/sortie-sdk/docs/faq.md).
+
+## С чего начать
+
+1. [Установите рантайм](https://lynxr.github.io/sortie-sdk/docs/install-runtime.md) в DCS.
+2. Пройдите [быстрый старт](https://lynxr.github.io/sortie-sdk/docs/quickstart.md): от шаблона до первой миссии в игре.
+3. Читайте по мере надобности: [логика на Rust](https://lynxr.github.io/sortie-sdk/docs/sdk.md), [сценарий на Python](https://lynxr.github.io/sortie-sdk/docs/generator.md),
+   [эксплуатация](https://lynxr.github.io/sortie-sdk/docs/operations.md), [диагностика](https://lynxr.github.io/sortie-sdk/docs/troubleshooting.md).
+
+Исходники SDK, шаблон и пример `op_north` лежат в репозитории
+[lynxr/sortie-sdk](https://github.com/lynxr/sortie-sdk). Инструкции для ИИ-агентов, которые
+пишут миссии на этом SDK, — в папке
+[agents](https://github.com/lynxr/sortie-sdk/tree/v0.1.0/agents) репозитория.
+
+<!-- source: docs/install-runtime.md -->
+
+# Установка рантайма
+
+Рантайм — это движок `sortied`, утилита `sortie` и мост для DCS. Он ставится один раз на
+машину с DCS. Логику и сценарий вы пишете отдельно, с этим SDK.
+
+## Архив
+
+Скачайте `sortie-runtime-0.1.0-win64.zip` со страницы выпуска
+[v0.1.0](https://github.com/lynxr/sortie-sdk/releases/tag/v0.1.0). Всё содержимое
+архива лежит в одной папке `sortie-runtime-0.1.0-win64`. Распакуйте архив и
+перенесите эту папку в постоянное место, например в `C:\Sortie`:
+
+```powershell
+Expand-Archive .\sortie-runtime-0.1.0-win64.zip -DestinationPath .
+Move-Item .\sortie-runtime-0.1.0-win64 C:\Sortie
+```
+
+Внутри папки:
+
+| Файл | Что это |
+| --- | --- |
+| `bin\sortied.exe` | движок |
+| `bin\sortie.exe` | установка в DCS, проверка установки, наблюдение за движком |
+| `Scripts\` | мост: DLL `sortie_bridge` и Lua-слой, разложенные так же, как в Saved Games |
+| `install\MissionScripting.snippet.lua` | строка, которую `install` добавляет в `MissionScripting.lua` |
+| `README.md` | краткая инструкция |
+| `LICENSE.txt`, `THIRD-PARTY-NOTICES.txt` | лицензия рантайма и сторонних компонентов |
+| `SHA256SUMS` | контрольные суммы файлов внутри папки |
+
+Сам архив сверяется с файлом `SHA256SUMS` на странице выпуска (контрольные суммы архива рантайма
+и колеса генератора).
+
+Windows помечает файлы из интернета. Чтобы SmartScreen не спрашивал при каждом запуске, снимите
+пометку:
+
+```powershell
+Get-ChildItem C:\Sortie -Recurse | Unblock-File
+```
+
+Сверить файл с `SHA256SUMS` можно так:
+
+```powershell
+Get-FileHash C:\Sortie\bin\sortied.exe -Algorithm SHA256
+```
+
+## Установка в DCS
+
+Откройте PowerShell от имени администратора и выполните:
+
+```powershell
+cd C:\Sortie
+.\bin\sortie.exe install
+.\bin\sortie.exe doctor
+```
+
+`install` находит DCS и папку Saved Games сам и:
+
+* копирует Lua-слой в `Saved Games\DCS\Scripts\Sortie\` и хук в
+  `Saved Games\DCS\Scripts\Hooks\sortie-hook.lua`;
+* кладёт DLL моста в `Scripts\Sortie\bin\` с версией в имени. DLL начинает работать при
+  следующем запуске DCS;
+* создаёт секрет связи `Saved Games\DCS\Sortie\link.secret` и файл токенов
+  `Saved Games\DCS\Sortie\tokens.toml` с токенами ролей `admin` и `logic`;
+* добавляет одну строку в `<папка DCS>\Scripts\MissionScripting.lua`, перед санитайзером. Через
+  неё среда миссии загружает мост. Это единственная правка в папке DCS, и ради неё нужны права
+  администратора. Прежний файл сохраняется рядом.
+
+Если запускать от имени администратора нельзя, поставьте всё остальное без правки, а строку
+добавьте позже из консоли администратора:
+
+```powershell
+.\bin\sortie.exe install --no-patch
+.\bin\sortie.exe doctor --fix
+```
+
+### Флаги
+
+| Флаг | Что делает |
+| --- | --- |
+| `--instance <имя>` | экземпляр DCS: папка `Saved Games\DCS.<имя>` (например, `server` для dedicated server) |
+| `--saved-games <папка>` | папка Saved Games экземпляра, если её не удаётся найти |
+| `--dcs <папка>` | папка установки DCS, если их несколько или DCS не находится |
+| `--dll <файл>` | поставить другую DLL моста |
+| `--from <папка>` | взять файлы из другой распакованной копии рантайма |
+| `--dry-run` | только показать, что изменится |
+| `--no-patch` | не трогать `MissionScripting.lua` |
+
+У флагов `--instance`, `--saved-games` и `--dcs` есть переменные окружения: `SORTIE_INSTANCE`,
+`SORTIE_SAVED_GAMES`, `SORTIE_DCS`.
+
+DCS ищется в реестре (ключи `Software\Eagle Dynamics\DCS World`, `DCS World OpenBeta`,
+`DCS World Server`), затем в `Program Files` и в библиотеках Steam. Поэтому DCS, поставленная
+на другой диск, находится без флагов. Если установок несколько, команда печатает, какую взяла;
+другую выберите флагом `--dcs`.
+
+## Перезапустите DCS
+
+Если DCS была запущена во время установки, закройте её и запустите снова. Перезапуска миссии
+мало: часть моста, которая работает в среде hooks, загружается только при старте самой DCS.
+Новая DLL тоже начинает работать со следующего запуска DCS.
+
+## Проверка: `sortie doctor`
+
+`doctor` печатает таблицу проверок:
+
+* строка в `MissionScripting.lua` на месте и стоит перед санитайзером;
+* хук, Lua-слой и DLL моста установлены и совпадают с тем, что ставил `install`;
+* DLL моста подходит к `lua.dll` установленной DCS;
+* есть секрет связи и токены;
+* у dedicated server непустой `missionList`.
+
+Код выхода 1 значит, что что-то требует внимания; строка с проблемой подсказывает, что делать.
+Обновление DCS перезаписывает `MissionScripting.lua` и стирает строку Sortie. После каждого
+обновления DCS запускайте `doctor`, а если строка пропала — `doctor --fix` от имени
+администратора.
+
+## Запуск движка
+
+Для работы на своей машине запускайте движок в режиме разработки:
+
+```powershell
+C:\Sortie\bin\sortied.exe --dev
+```
+
+* `sortied` слушает API на `127.0.0.1:50777`. Логика и генератор подключаются к этому адресу по
+  умолчанию.
+* Мост находит движок сам. DCS и `sortied` можно запускать в любом порядке.
+* При старте `sortied` сам выполняет проверки `doctor` и пишет в лог, что требует внимания.
+* `--dev` разрешает локальным программам работать без токена. Взамен он требует ключ `.key(..)`
+  у каждого спавна и уничтожения группы в логике (см. [Логику на Rust](https://lynxr.github.io/sortie-sdk/docs/sdk.md)).
+
+Без `--dev` каждая программа предъявляет токен из `Saved Games\DCS\Sortie\tokens.toml`:
+
+* логика — токен роли `logic` в переменной окружения `SORTIE_TOKEN`;
+* генератор (`validate`, `register`, `launch`, `restart`) — токен роли `admin` или
+  `generator` во флаге `--token` или в `SORTIE_TOKEN`;
+* `sortie status` и другие команды утилиты читают `tokens.toml` сами.
+
+Роли и формат файла — в [Эксплуатации](https://lynxr.github.io/sortie-sdk/docs/operations.md).
+
+Убедиться, что движок работает и видит мост:
+
+```powershell
+C:\Sortie\bin\sortie.exe status
+```
+
+## Удаление
+
+Удалите из папки Saved Games экземпляра `Scripts\Sortie\`, `Scripts\Hooks\sortie-hook.lua` и
+`Sortie\` (там же токены, хранилище движка и логи). В `<папка DCS>\Scripts\MissionScripting.lua`
+удалите блок между строками `-- >>> sortie` и `-- <<< sortie` или верните файл через
+восстановление DCS (repair). Зарегистрированные миссии лежат в `Missions\Sortie\`.
+
+<!-- source: docs/quickstart.md -->
+
+# Быстрый старт
+
+От двух архивов до первой миссии в игре. Понадобятся DCS, Rust, uv и Git (см.
+[требования](https://lynxr.github.io/sortie-sdk/docs/index.html#требования)).
+
+## 1. Рантайм
+
+Скачайте и установите рантайм по [инструкции](https://lynxr.github.io/sortie-sdk/docs/install-runtime.md): `sortie install`,
+`sortie doctor`, перезапуск DCS. Дальше считается, что он распакован в `C:\Sortie`.
+
+## 2. Шаблон миссии
+
+На странице выпуска [v0.1.0](https://github.com/lynxr/sortie-sdk/releases/tag/v0.1.0)
+скачайте исходники SDK («Source code (zip)») и распакуйте. Скопируйте из них папку `template`
+туда, где будет жить ваша миссия, например в `C:\Missions\my_mission`. Или возьмите шаблон через
+Git:
+
+```powershell
+git clone --branch v0.1.0 https://github.com/lynxr/sortie-sdk sortie-sdk
+Copy-Item -Recurse sortie-sdk\template C:\Missions\my_mission
+```
+
+В шаблоне:
+
+| Файл | Что это |
+| --- | --- |
+| `scenario.py` | сценарий: карта, зона цели, три группы противника, слоты игроков |
+| `scenario.lock.json` | символы сценария для логики; его пишет генератор |
+| `pyproject.toml` | Python-проект с зависимостью `sortie-gen` |
+| `Cargo.toml` | крейт логики с зависимостями `sortie` и `sortie-build` |
+| `build.rs` | превращает `scenario.lock.json` в типизированные константы |
+| `src/lib.rs` | логика миссии |
+| `src/main.rs` | `main` программы логики |
+| `AGENTS.md` | инструкции для ИИ-агентов (Codex, Cursor, Claude Code); навыки — в папке `agents/` SDK |
+
+Зависимости в `Cargo.toml` и `pyproject.toml` уже указывают на этот выпуск SDK. Если репозиторий
+SDK закрытый, сначала настройте [доступ к нему](https://lynxr.github.io/sortie-sdk/docs/dependency.html#закрытый-репозиторий).
+
+## 3. Сценарий
+
+```python
+from dcs import planes, vehicles
+from dcs.terrain import caucasus
+from sortie_gen import Scenario, StartType
+
+sc = Scenario("my_mission", schema=1, theatre=caucasus.Caucasus(),
+              start="2026-06-01T08:00:00Z", time_limit="2h")
+
+# Зона цели: круг радиусом 3 км. ident делает её символом zones::TARGET в Rust.
+target = sc.zone("Target", ident="TARGET", at=sc.latlon(42.27, 42.90), radius=3_000)
+
+# Противник в зоне цели: три наземные группы.
+sc.ground_group("Armor", ident="ARMOR", country="Russia", at=target.center,
+                units=[vehicles.Armor.T_72B] * 3 + [vehicles.Armor.BMP_2] * 2)
+sc.ground_group("SAM", ident="SAM", country="Russia", at=sc.latlon(42.285, 42.915),
+                units=[vehicles.AirDefence.Osa_9A33_ln])
+sc.ground_group("AAA", ident="AAA", country="Russia", at=sc.latlon(42.26, 42.885),
+                units=[vehicles.AirDefence.ZSU_23_4_Shilka] * 2)
+
+# Слоты игроков: два Су-25Т на стоянке Кутаиси. Холодный старт отдаёт аэродром
+# коалиции полёта (синим), иначе в сетевой игре слот не занять.
+sc.player_flight("Blue 1", planes.Su_25T, country="Georgia",
+                 airbase="Kutaisi", start=StartType.Cold, size=2)
+
+if __name__ == "__main__":
+    sc.cli()   # lock | build | validate | register | launch | restart | watch | results
+```
+
+Су-25Т бесплатный, он есть в любой DCS. Проверьте, что сценарий собирается:
+
+```powershell
+cd C:\Missions\my_mission
+uv run python scenario.py lock
+uv run python scenario.py build
+```
+
+Первый запуск `uv` создаёт `.venv` и ставит `sortie-gen` с pydcs. `lock` переписывает
+`scenario.lock.json`, только если изменился набор символов, и говорит, что изменилось. `build`
+собирает `dist\<build_id>.miz` и manifest без движка: так видно, что сценарий корректен.
+
+## 4. Логика
+
+```rust
+#[sortie::mission]
+pub async fn run(ctx: Ctx<MyMission>, start: Start) -> sortie::Result<()> {
+    let armor = ctx.group(groups::ARMOR)?; // Group<Ground>: группа есть в мире
+    let sam = ctx.group(groups::SAM)?;
+
+    if start.is_fresh() {
+        ctx.message(Coalition::Blue)
+            .text("Цель: бронегруппа в зоне Target. Её прикрывают «Оса» и «Шилки».")
+            .secs(20)
+            .key("intro")
+            .await?;
+    }
+
+    // ЗРК молчит, пока синие самолёты не подойдут к цели ближе 15 км.
+    sam.set_option(Alarm::Green).key("sam-green").await?;
+    ctx.wait_until(|w| {
+        w.units()
+            .coalition(Coalition::Blue)
+            .air()
+            .within(zones::TARGET.center(), km(15))
+            .any()
+    })
+    .await;
+    if sam.is_alive() {
+        sam.set_option(Alarm::Red).key("sam-red").await?;
+        ctx.message(Coalition::Blue)
+            .text("«Оса» включила радар!")
+            .key("sam-alert")
+            .await?;
+    }
+
+    // Победа, когда от бронегруппы ничего не осталось.
+    ctx.wait_until(|w| w.group(&armor).alive_count() == 0).await;
+    ctx.message(Coalition::Blue)
+        .text("Цель уничтожена. Миссия выполнена!")
+        .secs(30)
+        .key("win")
+        .await?;
+    ctx.end_session(Outcome::BlueWin)
+        .text("бронегруппа уничтожена")
+        .await
+}
+```
+
+`groups::ARMOR`, `groups::SAM` и `zones::TARGET` сгенерированы из `scenario.lock.json`. Их
+подключают `build.rs` и одна строка в начале `src/lib.rs`:
+
+```rust
+fn main() {
+    sortie_build::scenario("my_mission", "scenario.lock.json").emit();
+}
+```
+
+`src/main.rs` — одна строка:
+
+```rust
+sortie::main!(my_mission_logic::run);
+```
+
+Соберите логику:
+
+```powershell
+cargo build --release
+```
+
+Первая сборка скачивает зависимости и занимает несколько минут.
+
+## 5. Движок и логика
+
+В отдельном окне запустите движок:
+
+```powershell
+C:\Sortie\bin\sortied.exe --dev
+```
+
+В другом окне — логику:
+
+```powershell
+cd C:\Missions\my_mission
+cargo run --release
+```
+
+Логика подключается к `sortied` и ждёт сессию `my_mission`. Если движок ещё не запущен, она
+повторяет попытки сама.
+
+## 6. Регистрация миссии
+
+```powershell
+uv run python scenario.py register
+```
+
+`register` берёт у движка новый build id, собирает миссию, проверяет типы юнитов и отдаёт сборку
+движку. Движок кладёт её в `Saved Games\DCS\Missions\Sortie\my_mission-<build_id>.miz`. Если в
+DCS сейчас не идёт ни одна миссия, проверить типы нельзя: команда предупредит и зарегистрирует
+сборку без проверки.
+
+## 7. Запуск в DCS
+
+* **Одиночная игра.** В DCS откройте «Миссия» и выберите файл из
+  `Saved Games\DCS\Missions\Sortie\`. Займите слот Blue 1.
+* **Сетевая игра, хост — ваш клиент DCS.** «Мультиплеер» → «Новый сервер», добавьте ту же миссию
+  в список и запустите. Игроки занимают слоты Blue 1.
+* **Dedicated server.** Нужна установка с `--instance` и миссия-заглушка в списке миссий сервера
+  (см. [Эксплуатацию](https://lynxr.github.io/sortie-sdk/docs/operations.html#dedicated-server)). Сборку загружает сам движок:
+
+  ```powershell
+  uv run python scenario.py launch
+  ```
+
+При старте миссии мост сообщает движку build id сборки. Движок сверяет его с зарегистрированной
+сборкой и начинает сессию, а логика получает вызов `run`. Если мост не установлен, на экране
+появится «Sortie bridge is not installed: run sortie doctor».
+
+## 8. Что вы увидите
+
+* Сразу после старта миссии синим придёт сообщение о цели.
+* Когда синий самолёт подойдёт к цели ближе 15 км, «Оса» включит радар и придёт сообщение.
+* Когда бронегруппа будет уничтожена, придёт «Цель уничтожена», и сессия закончится с победой
+  синих. Миссия в DCS при этом продолжается.
+
+Наблюдать за сессией:
+
+```powershell
+uv run python scenario.py watch     # события сессии до Ctrl-C
+uv run python scenario.py results   # итоги последней сессии
+C:\Sortie\bin\sortie.exe status     # движок, мост, сессия
+```
+
+## 9. Дальше
+
+* Изменили логику — пересоберите и перезапустите её, DCS перезапускать не нужно. Новый процесс
+  подключится к той же сессии и получит `Start::AfterCrash`. Команды с тем же `.key(..)` второй
+  раз в DCS не уйдут.
+* Изменили сценарий — выполните `lock`. Если изменился набор символов, пересоберите логику и
+  зарегистрируйте новую сборку. Сдвиг зоны или группы логику пересобирать не заставляет.
+* Переименовать шаблон: имя сценария стоит в `scenario.py` (`Scenario("my_mission", ...)`), в
+  `build.rs`, в `src/lib.rs` (`include_scenario!(my_mission)` и `use my_mission::...`); имя
+  крейта — в `Cargo.toml` и в `src/main.rs`. После переименования выполните `lock`.
+
+Подробно об API — в разделах [Логика на Rust](https://lynxr.github.io/sortie-sdk/docs/sdk.md) и [Сценарий на Python](https://lynxr.github.io/sortie-sdk/docs/generator.md).
+
+<!-- source: docs/dependency.md -->
+
+# Подключение SDK
+
+SDK не публикуется на crates.io и PyPI. Cargo и uv берут его прямо из Git-репозитория
+[lynxr/sortie-sdk](https://github.com/lynxr/sortie-sdk) по тегу выпуска `v0.1.0`.
+В шаблоне миссии это уже настроено; ниже — как подключить SDK к своему проекту.
+
+## Логика на Rust
+
+```toml
+[dependencies]
+sortie = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.1.0" }
+# Только если логика хранит свои структуры через ctx.state (derive Serialize/Deserialize):
+serde = { version = "1", features = ["derive"] }
+
+[build-dependencies]
+sortie-build = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.1.0" }
+```
+
+* `sortie` — сам SDK: контекст миссии, команды, мир, события, макросы.
+* `sortie-build` — помощник для `build.rs`: делает из `scenario.lock.json` модуль с
+  типизированными символами сценария.
+* Остальные крейты SDK (`sortie-macros`, `sortie-types`, `sortie-world`, `sortie-manifest`,
+  `sortie-proto`) cargo подтянет сам; отдельно их подключать не нужно.
+
+Тег закреплён: `cargo update` не переводит проект на новую версию SDK. Чтобы обновиться,
+поменяйте тег в обеих строках.
+
+## Генератор на Python
+
+Добавьте `sortie-gen` в свой uv-проект из того же репозитория:
+
+```powershell
+uv add "sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.1.0#subdirectory=python/sortie-gen"
+```
+
+Или из wheel со страницы выпуска [v0.1.0](https://github.com/lynxr/sortie-sdk/releases/tag/v0.1.0),
+если Git недоступен:
+
+```powershell
+uv add .\sortie_gen-0.1.0-py3-none-any.whl
+```
+
+`sortie-gen` требует Python 3.11 или новее и ставит pydcs 1.0.0, grpcio и protobuf. Сценарий
+запускается через uv: `uv run python scenario.py build`.
+
+## Закрытый репозиторий
+
+Если репозиторий SDK закрытый, cargo и uv должны уметь в него войти. Проще всего отдать это
+Git: в Git для Windows уже есть Git Credential Manager.
+
+1. Проверьте, что Git сам открывает репозиторий:
+
+   ```powershell
+   git ls-remote https://github.com/lynxr/sortie-sdk
+   ```
+
+   В первый раз откроется окно входа GitHub. После входа Git запомнит учётные данные.
+
+2. Скажите cargo ходить в Git через командную строку Git. Добавьте в `.cargo\config.toml`
+   проекта или в `%USERPROFILE%\.cargo\config.toml`:
+
+   ```toml
+   [net]
+   git-fetch-with-cli = true
+   ```
+
+   То же можно задать переменной окружения `CARGO_NET_GIT_FETCH_WITH_CLI=true`.
+
+3. uv и так вызывает Git, поэтому ему хватает шага 1.
+
+Без окна входа (CI, сервер) используйте personal access token GitHub с доступом только на
+чтение содержимого репозитория. Git Credential Manager примет его вместо пароля. Не вписывайте
+токен в `Cargo.toml`, `pyproject.toml` или URL: эти файлы попадают в Git.
+
+## Версии
+
+Версия SDK, генератора и рантайма одна: 0.1.0. Обновляйте их вместе: новый тег в
+`Cargo.toml` и `pyproject.toml` и новый архив рантайма (см.
+[Эксплуатацию](https://lynxr.github.io/sortie-sdk/docs/operations.html#обновление)).
+
+<!-- source: docs/sdk.md -->
+
+# Логика на Rust
+
+Логика миссии — обычная программа на Rust с крейтом `sortie`. Она подключается к движку
+`sortied`, получает сессию, когда в DCS стартует миссия, и выполняет вашу функцию миссии. Мир
+логика читает синхронно, из локальной копии. Команды в DCS — это `async`-вызовы, которые
+возвращают результат из игры.
+
+Готовый проект — шаблон из [быстрого старта](https://lynxr.github.io/sortie-sdk/docs/quickstart.md). Большой пример —
+[examples/op_north](https://github.com/lynxr/sortie-sdk/tree/v0.1.0/examples/op_north)
+в репозитории SDK.
+
+## Крейт логики
+
+Зависимости — `sortie` и, для `build.rs`, `sortie-build` (см. [Подключение SDK](https://lynxr.github.io/sortie-sdk/docs/dependency.md)).
+`build.rs` делает из `scenario.lock.json` модуль с символами сценария. Путь к lock-файлу —
+относительно `Cargo.toml`:
+
+```rust
+fn main() {
+    sortie_build::scenario("my_mission", "scenario.lock.json").emit();
+}
+```
+
+`src/main.rs` — одна строка. Макрос разбирает аргументы командной строки, подключается к движку,
+обслуживает сессии и переподключается при обрыве связи:
+
+```rust
+sortie::main!(my_mission_logic::run);
+```
+
+Вся логика живёт в `src/lib.rs`:
+
+```rust
+use sortie::prelude::*;
+
+sortie::include_scenario!(my_mission); // pub mod my_mission из scenario.lock.json
+use my_mission::{MyMission, groups};
+
+#[sortie::mission]
+pub async fn run(ctx: Ctx<MyMission>, start: Start) -> sortie::Result<()> {
+    if start == Start::Restart {
+        ctx.message(Coalition::Blue)
+            .text("Миссия перезапущена")
+            .key("restarted")
+            .await?;
+    }
+    let sam = ctx.group(groups::SAM)?; // Group<Ground>
+    sam.set_option(Alarm::Red).key("sam-red").await?;
+    ctx.until_session_end().await; // держать сессию до конца
+    Ok(())
+}
+```
+
+* `sortie::prelude::*` даёт всё, что обычно нужно: `Ctx`, `Start`, `Coalition`, `Alarm`, `Roe`,
+  `Outcome`, единицы `secs`, `mins`, `km`, `ft`, `kts` и другие.
+* `sortie::include_scenario!(my_mission)` подключает модуль, который сгенерировал `build.rs`.
+  Имя должно совпадать с первым аргументом `sortie_build::scenario(..)`.
+* `#[sortie::mission]` проверяет сигнатуру функции миссии. Ошибка в ней видна при компиляции, в
+  месте определения функции.
+
+## Символы сценария
+
+Модуль сценария содержит маркер сценария (`MyMission` для `my_mission`) и модули `groups`,
+`zones`, `templates`, `flags`, `airbases`, `menus`. Каждый символ — константа своего типа:
+
+```rust
+use my_mission::{airbases, flags, menus, templates, zones};
+use sortie::types::{AirbaseRef, FlagRef, GroupRef, MenuRef, TemplateRef, ZoneRef};
+
+pub const SAM: GroupRef<MyMission, Ground> = groups::SAM;
+pub const RED_CAP: TemplateRef<MyMission, Air> = templates::RED_CAP;
+pub const TARGET: ZoneRef<MyMission> = zones::TARGET;
+pub const NALCHIK: AirbaseRef<MyMission> = airbases::NALCHIK;
+pub const TARGET_DOWN: FlagRef<MyMission> = flags::TARGET_DOWN;
+pub const SMOKE_TARGET: MenuRef<MyMission> = menus::SMOKE_TARGET;
+```
+
+* Вид группы входит в тип: `Group<Ground>` нельзя отправить в воздушный патруль, такой код не
+  скомпилируется. Символ другого сценария тоже не подойдёт.
+* Символ появляется, только если в сценарии у объекта есть `ident`. Группы без `ident` доступны
+  по имени через мир и события.
+* У зон в константе есть геометрия: `zones::TARGET.center()` и `zones::TARGET.contains(point)`
+  работают без движка.
+* `scenario.lock.json` меняется, только когда меняется набор символов. Сдвиг зоны или группы
+  в сценарии пересборки логики не требует.
+
+## Функция миссии и сессии
+
+Сессия — один запуск миссии в DCS. Функция миссии вызывается на каждую сессию, и аргумент
+`Start` говорит почему:
+
+| `Start` | Когда |
+| --- | --- |
+| `Fresh` | миссию загрузили в DCS: новая сессия |
+| `Restart` | миссию перезапустили (`scenario.py restart`): новая сессия того же хода |
+| `AfterCrash` | процесс логики перезапустился, а сессия та же |
+| `Resumed` | движок восстановил сессию после своего перезапуска (появится в следующих версиях) |
+
+Ход — это одна сборка миссии (build id). Рестарт той же сборки — новая сессия того же хода;
+новая сборка (`register`) — новый ход.
+
+Функция может закончиться раньше сессии: фоновые задачи и меню продолжат работать. Когда сессия
+кончается, все задачи сессии останавливаются, а незавершённые команды получают
+`Error::SessionEnded`. Это не считается ошибкой логики.
+
+Факты о сессии: `ctx.session_id()`, `ctx.scenario()`, `ctx.turn()` (build id хода),
+`ctx.is_session_ended()` и часы:
+
+```rust
+let now = ctx.model_time(); // секунды модельного времени
+let paused = ctx.paused(); // DCS на паузе
+```
+
+## Команды
+
+Каждая команда — построитель. Ничего не происходит, пока команду не дождались через `.await`;
+`.await` возвращает результат из DCS.
+
+```rust
+ctx.message(Coalition::Blue)
+    .text("Цель в 35 км к востоку от Кутаиси")
+    .secs(20) // сколько секунд показывать (по умолчанию 10)
+    .key("brief")
+    .await?;
+ctx.smoke(zones::TARGET.center(), SmokeColor::Red).await?;
+```
+
+Общие настройки любой команды:
+
+| Метод | Что делает |
+| --- | --- |
+| `.key("имя")` | ключ идемпотентности: команда с ключом, который уже выполнился в этой сессии, сразу возвращает сохранённый результат и до DCS не доходит |
+| `.timeout(secs(5))` | `Error::Timeout`, если DCS не ответила вовремя |
+| `.after(&other)` | выполнить только после команды `other`; если она упала, упадёт и эта |
+| `.on_pause(PausePolicy::Fail)` | на паузе сразу `Error::Paused`; по умолчанию команда ждёт конца паузы |
+
+`PausePolicy` лежит в `sortie::proto::v1`.
+
+### Ключи и идемпотентность
+
+Функция миссии выполняется заново после перезапуска процесса логики (`Start::AfterCrash`). Ключ
+не даёт повторить то, что уже сделано: второй спавн с тем же ключом вернёт ту же группу, а не
+создаст новую.
+
+* Ключ действует в пределах сессии. После рестарта миссии ключи снова свободны.
+* Если команда с ключом получила `Timeout`, уже уйдя в DCS, повтор с тем же ключом не отправит её
+  второй раз, а дождётся её позднего результата.
+* Если связь с миссией оборвалась, пока команда была в пути, повтор с тем же ключом получит
+  `Error::Unavailable`: неизвестно, выполнилась ли она. Для спавна движок проверяет это по
+  снимку мира после переподключения: если группы нет, ключ снова свободен.
+* С `sortied --dev` спавн и уничтожение без ключа отклоняются (`Error::Invalid`). Давайте ключи
+  всем командам, которые нельзя повторять.
+
+### Сообщения, дым, флаги
+
+* `ctx.message(кому)`: кому — `Coalition::Blue`, группа (`&group` или нажавшая меню группа) или
+  `sortie::MessageTarget::All`. Дальше `.text(..)`, `.secs(..)` (по умолчанию 10 с),
+  `.clear_view()`.
+* `ctx.smoke(точка, цвет)`: точка на земле (`MapPoint`, например `zones::TARGET.center()`) или в
+  воздухе (`Vec3`).
+* Флаги миссии объявляются в сценарии (`sc.flag(..)`):
+
+```rust
+ctx.flag(flags::TARGET_DOWN).set(true).await?; // bool или i32
+let value: i32 = ctx.flag(flags::TARGET_DOWN).get().await?;
+```
+
+### Группы и опции ИИ
+
+`ctx.group(groups::X)` возвращает живую группу, сверенную с миссией. Ошибки:
+`Error::UnknownSymbol`, если в запущенной миссии такого символа нет (логика собрана с другим
+lock), и `Error::NotInWorld`, если символ есть, а живых юнитов сейчас нет.
+
+```rust
+let sam = ctx.group(groups::SAM)?;
+sam.set_option(Alarm::Red).key("sam-red").await?;
+sam.set_option(Roe::WeaponFree)
+    .key("sam-free")
+    .timeout(secs(5)) // Error::Timeout, если DCS не ответила за 5 с
+    .await?;
+```
+
+* `Alarm`: `Auto`, `Green`, `Red`. `Roe`: `WeaponFree`, `OpenFireWeaponFree`, `OpenFire`,
+  `ReturnFire`, `WeaponHold`.
+* У группы есть `name()`, `alive_count()`, `is_alive()`. Группа привязана к одной «жизни»:
+  группа, заново созданная под тем же именем, — это другой объект.
+
+Уничтожить группу:
+
+```rust
+let aaa = ctx.group(groups::AAA)?;
+aaa.destroy().key("aaa-removed").await?;
+```
+
+### Спавн и задачи авиации
+
+Воздушные группы для спавна объявляются в сценарии шаблонами (`sc.air_template(..)`). Спавн
+возвращает `Group<Air>` (или `Group<Helo>`), когда группа уже появилась в DCS:
+
+```rust
+let cap = ctx
+    .spawn_group(templates::RED_CAP.named("Red CAP 1"))
+    .from_airbase(airbases::NALCHIK, StartType::Runway)
+    .key("red-cap-1")
+    .await?; // Group<Air>: группа уже в DCS
+let patrol = Task::cap(zones::PATROL)
+    .altitude(ft(25_000))
+    .speed(kts(420));
+cap.push_task(patrol).timeout(secs(5)).await?;
+```
+
+* Без `.named(..)` группа получает имя `<имя шаблона>#<4 знака сессии>-<номер>`. Занятое имя —
+  `Error::NameConflict`.
+* Без `.from_airbase(..)` и `.at(..)` группа появляется там, где указал сценарий.
+* Движок спавнит не больше 2 групп и 24 юнитов в секунду. Задачу только что созданной группе он
+  отдаёт не раньше чем через 2 кадра и 0,5 с модельного времени.
+
+Спавн в воздухе и другие задачи:
+
+```rust
+let point = zones::PATROL.center().alt(m(6_000)); // Vec3 над центром зоны
+let cap = ctx
+    .spawn_group(templates::RED_CAP)
+    .at(point, 0.0) // курс в радианах
+    .key("red-cap-air")
+    .await?;
+let orbit = Task::orbit(zones::PATROL.center())
+    .race_track(zones::TARGET.center())
+    .altitude(ft(20_000));
+cap.set_task(orbit).key("red-cap-orbit").await?;
+// ...
+cap.push_task(Task::rtb(airbases::NALCHIK)).await?;
+```
+
+| Задача | Что делает |
+| --- | --- |
+| `Task::cap(зона)` | патруль над зоной; по умолчанию 6000 м и 420 узлов, меняется `.altitude(..)` и `.speed(..)` |
+| `Task::orbit(точка)` | круг над точкой; `.race_track(вторая)` — «ипподром»; по умолчанию 6000 м и 350 узлов |
+| `Task::rtb(аэродром)` | возврат на аэродром |
+| `Task::raw(таблица)` | сырая таблица задачи DCS, без проверок |
+
+`push_task` кладёт задачу поверх текущих (`Controller.pushTask`), `set_task` заменяет их
+(`Controller.setTask`). Обе есть только у воздушных групп.
+
+## Ожидание
+
+```rust
+ctx.sleep(secs(30)).await; // 30 с модельного времени, пауза DCS его останавливает
+ctx.timer("red-cap-delay", mins(15)).await; // дедлайн хранится в движке
+```
+
+* `ctx.sleep(..)` считает модельное время DCS: пауза его останавливает, ускорение времени
+  ускоряет.
+* `ctx.timer("имя", ..)` при первом вызове сохраняет дедлайн в движке. Повторный вызов после
+  перезапуска логики ждёт тот же дедлайн, а не начинает отсчёт заново. Таймеры действуют в
+  пределах сессии.
+
+`ctx.wait_until(..)` ждёт условия на мире. Условие проверяется сразу, после каждого тика и после
+каждого события, без запросов к движку:
+
+```rust
+// Синий самолёт в зоне Target.
+ctx.wait_until(|w| {
+    w.units()
+        .coalition(Coalition::Blue)
+        .air()
+        .any_inside(zones::TARGET)
+})
+.await;
+// От бронегруппы осталось не больше двух машин.
+ctx.wait_until(|w| w.group(&groups::ARMOR).alive_count() <= 2)
+    .await;
+```
+
+Ждите состояния, а не события: «живых не осталось» верно и после перезапуска логики, а событие
+гибели к тому времени уже прошло.
+
+`ctx.until_session_end()` ждёт конца сессии по любой причине и возвращает исход, текст и
+причину (`EndReason`: `Logic`, `TimeLimit`, `Restart`, `MissionUnloaded` и другие):
+
+```rust
+let end = ctx.until_session_end().await;
+eprintln!("сессия закончилась: {:?}, {:?}", end.outcome, end.reason);
+```
+
+## Чтение мира
+
+`ctx.world()` — локальная копия мира. Её обновляет движок на каждом тике; запросов к DCS чтение
+не делает.
+
+```rust
+let world = ctx.world(); // не держите его через .await
+let blue_players = world.players().coalition(Coalition::Blue).count();
+let nearest_red = world
+    .units()
+    .coalition(Coalition::Red)
+    .ground()
+    .nearest_to(zones::TARGET.center())
+    .map(|unit| unit.name.clone());
+let blue_in_front = world
+    .units()
+    .coalition(Coalition::Blue)
+    .count_inside(zones::FRONT);
+let armor = world.group(&groups::ARMOR);
+let armor_center = armor.center(); // Option<MapPoint>: середина живых машин
+```
+
+| Запрос | Что выбирает |
+| --- | --- |
+| `w.units()` | живые юниты; дальше фильтры |
+| `.coalition(..)`, `.air()`, `.planes()`, `.helos()`, `.ground()`, `.ships()` | коалиция и категория |
+| `.players()`, `.in_group(..)`, `.of_type("T-72B")` | игроки, группа, тип |
+| `.in_zone(..)`, `.within(точка, km(10))` | зона или круг |
+| `.including_dead()`, `.dead()` | вместе с погибшими или только погибшие |
+| `.count()`, `.any()`, `.first()`, `.iter()`, `.nearest_to(точка)` | результат |
+| `.any_inside(зона)`, `.count_inside(зона)`, `.inside(&зона)` | сразу с зоной |
+| `w.players()`, `w.statics()` | юниты игроков, статические объекты |
+| `w.group(&g)` | группа по символу, по `Group` или по имени: `alive_count()`, `size()`, `is_dead()`, `center()`, `any_inside(..)`, `all_inside(..)` |
+
+У юнита есть имя, тип, коалиция, категория, группа, позиция, курс, скорость, игрок и `dead`.
+
+Не держите `ctx.world()` через `.await`: пока ссылка жива, движок не может обновить мир. Clippy
+ловит это правилом `await_holding_refcell_ref`.
+
+## События
+
+`ctx.events()` — события сессии с момента подписки. Когда вы видите событие, мир уже обновлён:
+в обработчике гибели погибший юнит уже не считается живым.
+
+```rust
+let armor = ctx.group(groups::ARMOR)?;
+let mut deaths = ctx.events().of::<v1::Dead>().in_group(&armor);
+while let Some(dead) = deaths.next().await {
+    let name = dead.initiator.map(|unit| unit.name).unwrap_or_default();
+    ctx.message(Coalition::Blue)
+        .text(format!("Уничтожен {name}"))
+        .await?;
+}
+```
+
+`.of::<T>()` выбирает один тип события; фильтры: `.in_group(..)`, `.coalition(..)`,
+`.filter(..)`. Типы событий лежат в `sortie::proto::v1`: `Birth`, `Dead`, `UnitLost`, `Kill`,
+`Hit`, `Shot`, `Takeoff`, `Land`, `BaseCaptured`, `Mark`, `PlayerEnteredUnit`, `UnitGone`,
+`PlayerConnected`, `PlayerDisconnected`, `PlayerChangedSlot`, `ChatMessage`,
+`SimulationPaused`, `SimulationResumed`, `Gap`.
+
+```rust
+let mut entered = ctx
+    .events()
+    .of::<v1::PlayerEnteredUnit>()
+    .coalition(Coalition::Blue);
+while let Some(e) = entered.next().await {
+    ctx.message(Coalition::Blue)
+        .text(format!("{} занял слот", e.player))
+        .await?;
+}
+```
+
+```rust
+let mut hits = ctx.events().of::<v1::Hit>().filter(|hit| {
+    hit.target
+        .as_ref()
+        .is_some_and(|target| target.type_name == "T-72B")
+});
+while let Some(hit) = hits.next().await {
+    let weapon = hit.weapon.map(|w| w.type_name).unwrap_or_default();
+    eprintln!("попадание в танк: {weapon}");
+}
+```
+
+Все события подряд:
+
+```rust
+let mut events = ctx.events();
+while let Some(event) = events.next().await {
+    match event.kind {
+        Some(v1::event::Kind::Takeoff(t)) => {
+            eprintln!("взлёт: {:?}", t.initiator.map(|u| u.name));
+        }
+        Some(v1::event::Kind::Gap(_)) => eprintln!("часть событий потеряна"),
+        _ => {}
+    }
+}
+```
+
+`Gap` значит, что часть событий потеряна; мир при этом остаётся точным. Подписчик, который
+отстал больше чем на 1024 события, пропускает самые старые и пишет предупреждение в лог.
+
+## Меню F10
+
+Команды меню объявляются в сценарии: `sc.menu(ident, надпись, path=[...])`. Логика добавляет их
+в игру и читает нажатия. Меню для всей коалиции не знает, кто нажал:
+
+```rust
+let info = ctx
+    .menu(Coalition::Blue)
+    .command(menus::TARGET_INFO)
+    .key("menu-info")
+    .await?;
+let mut presses = info.presses();
+while presses.next().await.is_some() {
+    ctx.message(Coalition::Blue)
+        .text("Цель: зона Target, 35 км восточнее Кутаиси")
+        .await?;
+}
+```
+
+`.per_group()` ставит команду каждой группе коалиции отдельно, и нажатие несёт группу. Ответ
+можно отправить только ей:
+
+```rust
+let smoke = ctx
+    .menu(Coalition::Blue)
+    .per_group()
+    .command(menus::SMOKE_TARGET)
+    .key("menu-smoke")
+    .await?;
+ctx.spawn(async move |ctx| {
+    let mut presses = smoke.presses();
+    while let Some(press) = presses.next().await {
+        ctx.smoke(zones::TARGET.center(), SmokeColor::Red).await?;
+        ctx.message(press.group) // ответ только той группе, что нажала
+            .text("Красный дым на цели")
+            .await?;
+    }
+    Ok(())
+});
+```
+
+Нажатия копятся с момента, когда движок подтвердил команду меню, поэтому ранние нажатия не
+теряются. Убрать команду:
+
+```rust
+info.remove().await?;
+```
+
+## Фоновые задачи
+
+`ctx.spawn(..)` запускает задачу, которая живёт до конца сессии:
+
+```rust
+let watcher = ctx.spawn(async |ctx| {
+    loop {
+        ctx.sleep(mins(5)).await;
+        let left = ctx.world().group(&groups::ARMOR).alive_count();
+        ctx.message(Coalition::Blue)
+            .text(format!("Осталось машин: {left}"))
+            .await?;
+    }
+});
+// ...
+watcher.abort(); // необязательно: задачи и так заканчиваются вместе с сессией
+```
+
+Ошибка (кроме `SessionEnded`) или паника в задаче записывается в лог логики с местом в коде.
+Остальные задачи продолжают работать.
+
+## Состояние
+
+Движок хранит JSON-документы. Они переживают перезапуск логики, а документы кампании — и новые
+сборки миссии:
+
+```rust
+#[derive(Default, Serialize, Deserialize)]
+pub struct Campaign {
+    pub targets_destroyed: u32,
+}
+
+pub async fn count_kill(ctx: &Ctx<MyMission>) -> sortie::Result<()> {
+    let campaign = ctx.state::<Campaign>("campaign").await?; // область: кампания
+    campaign.update(|c| c.targets_destroyed += 1).await?; // запись со сверкой ревизии
+    let total = campaign.get().targets_destroyed;
+    ctx.report().set("targets_destroyed", total);
+    Ok(())
+}
+```
+
+Тип документа должен реализовать `Serialize`, `Deserialize` и `Default`; для derive добавьте
+`serde` в зависимости. `update` пишет со сверкой ревизии: если документ успел поменять кто-то
+другой, `update` перечитает его и применит изменение снова. Ещё есть `get()`, `set(..)`,
+`reload()`, `revision()`.
+
+| Область | Сколько живёт | Как открыть |
+| --- | --- | --- |
+| сессия | одну сессию; рестарт миссии начинает с нуля | `ctx.state_in(StateScope::Session, ..)` |
+| ход | одну сборку миссии; переживает её рестарты | `ctx.state_in(StateScope::Turn, ..)` |
+| кампания | все ходы сценария | `ctx.state(..)` |
+
+```rust
+let seen = ctx
+    .state_in::<Vec<String>>(StateScope::Session, "seen")
+    .await?;
+seen.update(|names| names.push("Blue 1".into())).await?;
+let attempts = ctx.state_in::<u32>(StateScope::Turn, "attempts").await?;
+attempts.update(|n| *n += 1).await?;
+```
+
+Выполнить блок один раз:
+
+```rust
+// Один раз за сессию: перезапуск процесса логики не повторит.
+ctx.once("intro", async |ctx| {
+    ctx.message(Coalition::Blue).text("Удачной охоты!").await
+})
+.await?;
+// Один раз за ход: не повторит и рестарт миссии.
+ctx.once_per_turn("target-down", async |ctx| {
+    ctx.flag(flags::TARGET_DOWN).set(true).await
+})
+.await?;
+```
+
+`once` возвращает `Ok(None)`, если блок уже выполнялся.
+
+## Конец сессии и итоги
+
+```rust
+ctx.report().set("armor_left", 0);
+ctx.end_session(Outcome::BlueWin)
+    .text("Бронегруппа уничтожена")
+    .await
+```
+
+* `ctx.report().set(ключ, значение)` пишет значение в итоги сессии. Запись не ждёт ответа;
+  ошибка попадёт в лог логики.
+* `ctx.end_session(..)` заканчивает сессию с исходом `BlueWin`, `RedWin`, `Draw` или `Aborted`.
+  Текст сохраняется в итогах, в DCS он не показывается. Сама миссия в DCS продолжается.
+* Если логика не закончила сессию, её закроет лимит времени из сценария (`time_limit`) с
+  исходом `TimeLimit`.
+* Итоги смотрит `python scenario.py results`.
+
+## Ошибки
+
+Всё, что может пойти не так, — `sortie::Error`. Ошибка команды несёт место в вашем коде, где
+команду создали, и, если она пришла из Lua, — Lua traceback.
+
+```rust
+match cap.push_task(Task::rtb(airbases::NALCHIK)).await {
+    Ok(()) => {}
+    Err(sortie::Error::Gone(_)) => {} // группы уже нет: её сбили
+    Err(e) => {
+        eprintln!("{}", e.report()); // место в коде, Lua traceback, подсказка
+        return Err(e);
+    }
+}
+```
+
+| Ошибка | Что значит |
+| --- | --- |
+| `Gone` | объекта уже нет в DCS: погиб или исчез |
+| `Timeout` | DCS не ответила вовремя |
+| `Lua` | ошибка в Lua-слое; смотрите traceback |
+| `Rejected` | движок отклонил команду; причина в сообщении |
+| `SessionEnded` | сессия кончилась раньше команды; нормальный исход для работы в конце сессии |
+| `Invalid` | команда не подходит цели, не хватает аргумента, или в dev-режиме нет `.key(..)` |
+| `Unavailable` | движок не может выполнить команду сейчас |
+| `NameConflict` | живая группа с таким именем уже есть |
+| `Paused` | DCS на паузе, а у команды `.on_pause(Fail)` |
+| `Conflict` | документ состояния поменял кто-то другой |
+| `UnknownSymbol` | в запущенной миссии нет символа: логика собрана с другим lock |
+| `NotInWorld` | символ есть, а живого объекта нет |
+| `State` | хранилище движка отказало |
+| `Transport` | нет связи с движком |
+| `NotYet` | возможность появится в следующей версии |
+
+`e.code()` даёт стабильный код вида `sortie::gone`, `e.help()` — подсказку, `e.report()` —
+многострочный отчёт: место в коде, Lua traceback, id сессии и команды, подсказка.
+
+## Запуск программы логики
+
+```text
+my_mission_logic [--engine <url>] [--build-id <id>] [--logic <name>] [--dev]
+
+  --engine <url>    адрес движка (SORTIE_ENGINE, по умолчанию http://127.0.0.1:50777)
+  --build-id <id>   build id программы, который она сообщает движку (SORTIE_BUILD_ID)
+  --logic <name>    имя логики (по умолчанию имя программы)
+  --dev             dev-режим: спавн и уничтожение только с .key() (SORTIE_DEV=1)
+```
+
+* Токен роли `logic` берётся из `SORTIE_TOKEN`; с `sortied --dev` он не нужен.
+* Фильтр логов — `SORTIE_LOG` (по умолчанию `info`), например `SORTIE_LOG=debug`.
+* При обрыве связи логика переподключается с паузой от 1 до 30 с.
+* Код выхода 0 — движок остановил логику; 2 — неверные аргументы, неверный токен или движок
+  отклонил логику (её надо пересобрать с lock запущенной миссии).
+* Рантайм однопоточный: `Ctx` дёшево клонируется, но не `Send`.
+
+Флаг `--standby` (горячая замена логики) зарезервирован: движок этой версии такую логику
+отклоняет.
+
+## Карта API
+
+| Нужно | Где |
+| --- | --- |
+| функция миссии | `#[sortie::mission] async fn run(ctx: Ctx<M>, start: Start) -> sortie::Result<()>` |
+| программа | `sortie::main!(crate_name::run)` |
+| символы | `sortie::include_scenario!(name)`, `build.rs` с `sortie_build::scenario(..)` |
+| группы | `ctx.group(..)`, `group.set_option(..)`, `push_task`, `set_task`, `destroy` |
+| спавн | `ctx.spawn_group(templates::X)`, `.named`, `.from_airbase`, `.at` |
+| сообщения, дым, флаги | `ctx.message(..)`, `ctx.smoke(..)`, `ctx.flag(..).set(..)` / `.get()` |
+| меню | `ctx.menu(coalition)`, `.per_group()`, `.command(menus::X)`, `presses()`, `remove()` |
+| время | `ctx.sleep`, `ctx.timer`, `ctx.model_time`, `ctx.paused` |
+| мир | `ctx.world()`, `ctx.wait_until(..)` |
+| события | `ctx.events()`, `.of::<v1::Dead>()`, `.in_group`, `.coalition`, `.filter` |
+| задачи | `ctx.spawn(..)` |
+| состояние | `ctx.state`, `ctx.state_in`, `ctx.once`, `ctx.once_per_turn` |
+| итоги | `ctx.report().set(..)`, `ctx.end_session(..)`, `ctx.until_session_end()` |
+| ошибки | `sortie::Error`, `code()`, `help()`, `report()` |
+
+<!-- source: docs/generator.md -->
+
+# Сценарий на Python
+
+Статическая часть миссии описывается на Python пакетом `sortie-gen` поверх
+[pydcs](https://github.com/pydcs/dcs) 1.0.0: карта, время старта, зоны, наземные группы, шаблоны
+для спавна, аэродромы, слоты игроков, флаги и меню. Генератор собирает из сценария `.miz`,
+manifest и `scenario.lock.json` и проверяет имена так же, как потом их проверят движок и логика.
+
+## Сценарий целиком
+
+Это сценарий, на котором построены примеры раздела [Логика на Rust](https://lynxr.github.io/sortie-sdk/docs/sdk.md):
+
+```python
+from dcs import planes, vehicles
+from dcs.terrain import caucasus
+from sortie_gen import Scenario, StartType
+
+sc = Scenario("my_mission", schema=1, theatre=caucasus.Caucasus(),
+              start="2026-06-01T08:00:00Z", time_limit="2h")
+
+target = sc.zone("Target", ident="TARGET", at=sc.latlon(42.27, 42.90), radius=3_000)
+patrol = sc.zone("Patrol", ident="PATROL", at=target.center, radius=40_000)
+sc.zone("Front", ident="FRONT", points=[sc.latlon(42.35, 42.80), sc.latlon(42.35, 43.00),
+                                        sc.latlon(42.20, 43.00), sc.latlon(42.20, 42.80)])
+
+sc.ground_group("Armor", ident="ARMOR", country="Russia", at=target.center,
+                units=[vehicles.Armor.T_72B] * 3 + [vehicles.Armor.BMP_2] * 2,
+                heading=90, formation="line", spacing=30, roles={"armor", "target"})
+sc.ground_group("SAM", ident="SAM", country="Russia", at=sc.latlon(42.285, 42.915),
+                units=[vehicles.AirDefence.Osa_9A33_ln], roles={"sam"})
+sc.ground_group("AAA", ident="AAA", country="Russia", at=sc.latlon(42.26, 42.885),
+                units=[vehicles.AirDefence.ZSU_23_4_Shilka] * 2)
+
+mig = planes.MiG_29S
+sc.air_template("Red CAP", mig, ident="RED_CAP", country="Russia", size=2, airbase="Nalchik",
+                payload=[mig.Pylon1.R_73__AA_11_Archer____Infra_Red,
+                         mig.Pylon3.R_27R__AA_10_Alamo_A____Semi_Act_Rdr,
+                         mig.Pylon5.R_27R__AA_10_Alamo_A____Semi_Act_Rdr,
+                         mig.Pylon7.R_73__AA_11_Archer____Infra_Red])
+
+sc.airbase("Nalchik", ident="NALCHIK", coalition="red")
+sc.airbase("Kutaisi", ident="KUTAISI")   # владельца задаст полёт игроков ниже
+sc.player_flight("Blue 1", planes.Su_25T, country="Georgia",
+                 airbase="Kutaisi", start=StartType.Cold, size=2)
+
+sc.flag("TARGET_DOWN")
+sc.menu("SMOKE_TARGET", "Дым на цели", path=["Цель"])
+sc.menu("TARGET_INFO", "Где цель?", path=["Цель"])
+
+if __name__ == "__main__":
+    sc.cli()
+```
+
+Сценарий — обычный скрипт. `python scenario.py <команда>` выполняет команду генератора (см.
+[команды](https://lynxr.github.io/sortie-sdk/docs/generator.html#команды-сценария)); запускайте его через uv: `uv run python scenario.py build`.
+
+## Заголовок
+
+```python
+from dcs import planes, vehicles
+from dcs.terrain import caucasus
+from sortie_gen import Scenario, StartType
+
+sc = Scenario("my_mission", schema=1, theatre=caucasus.Caucasus(),
+              start="2026-06-01T08:00:00Z", time_limit="2h")
+```
+
+* Имя сценария — `[a-z][a-z0-9_]*`. Из него получаются имя модуля в Rust (`my_mission`) и маркер
+  (`MyMission`).
+* `schema` — номер схемы сценария, целое не меньше 1. Его сверяют bootstrap миссии, движок и
+  логика.
+* `theatre` — карта pydcs: `caucasus.Caucasus()`, `syria.Syria()` и другие.
+* `start` — время старта в RFC 3339. Без часового пояса это местное время карты, как в редакторе.
+* `time_limit` — лимит сессии: `"3h"`, `"1h30m"`, `"90m"` или число секунд. Когда он истекает,
+  движок заканчивает сессию с исходом `TimeLimit`. Без лимита сессию заканчивает только логика.
+
+## Позиции
+
+* `sc.latlon(широта, долгота)` — точка по широте и долготе.
+* `sc.point(север, восток)` — точка в координатах редактора: `x` на север, `y` на восток, метры.
+* `zone.center` — центр объявленной зоны.
+
+Голый кортеж `(x, y)` генератор не принимает: по нему не понять, что это за координаты.
+
+## Зоны
+
+```python
+target = sc.zone("Target", ident="TARGET", at=sc.latlon(42.27, 42.90), radius=3_000)
+patrol = sc.zone("Patrol", ident="PATROL", at=target.center, radius=40_000)
+sc.zone("Front", ident="FRONT", points=[sc.latlon(42.35, 42.80), sc.latlon(42.35, 43.00),
+                                        sc.latlon(42.20, 43.00), sc.latlon(42.20, 42.80)])
+```
+
+Зона — круг (`at` и `radius` в метрах) или четырёхугольник из четырёх точек (`points`). С `ident`
+зона становится символом `zones::TARGET` в Rust, с геометрией: `zones::TARGET.center()` и
+`contains(..)` работают в логике без движка. Без `ident` зона попадает только в `.miz`.
+
+## Наземные группы
+
+```python
+sc.ground_group("Armor", ident="ARMOR", country="Russia", at=target.center,
+                units=[vehicles.Armor.T_72B] * 3 + [vehicles.Armor.BMP_2] * 2,
+                heading=90, formation="line", spacing=30, roles={"armor", "target"})
+sc.ground_group("SAM", ident="SAM", country="Russia", at=sc.latlon(42.285, 42.915),
+                units=[vehicles.AirDefence.Osa_9A33_ln], roles={"sam"})
+sc.ground_group("AAA", ident="AAA", country="Russia", at=sc.latlon(42.26, 42.885),
+                units=[vehicles.AirDefence.ZSU_23_4_Shilka] * 2)
+```
+
+* Юниты называются `<имя группы>-<k>`: `Armor-1`, `Armor-2` и так далее.
+* `formation` — `line`, `star`, `rectangle` или `vee`; `spacing` — расстояние между юнитами в
+  метрах; первый юнит стоит в `at`.
+* Ещё есть `heading` (градусы), `skill`, `late_activation`, `hidden`.
+* `roles` — метки группы, `[a-z][a-z0-9_-]*`; они попадают в lock.
+* С `ident` группа становится символом `groups::ARMOR` типа `GroupRef<MyMission, Ground>`.
+
+## Шаблоны для спавна
+
+```python
+mig = planes.MiG_29S
+sc.air_template("Red CAP", mig, ident="RED_CAP", country="Russia", size=2, airbase="Nalchik",
+                payload=[mig.Pylon1.R_73__AA_11_Archer____Infra_Red,
+                         mig.Pylon3.R_27R__AA_10_Alamo_A____Semi_Act_Rdr,
+                         mig.Pylon5.R_27R__AA_10_Alamo_A____Semi_Act_Rdr,
+                         mig.Pylon7.R_73__AA_11_Archer____Infra_Red])
+```
+
+Шаблон авиагруппы в `.miz` не попадает. Он хранится в manifest, и логика спавнит его
+(`ctx.spawn_group(templates::RED_CAP)`). Параметры: тип самолёта или вертолёта, `ident`
+(обязателен), страна, `size`, `task`, `skill`, место по умолчанию (`at` или `airbase`),
+`altitude`, `speed`, `payload`.
+
+Подвеска. По умолчанию генератор работает герметично: только с данными, встроенными в pydcs, без
+установленной DCS. Поэтому один и тот же сценарий собирается одинаково на любой машине. Подвесок
+по умолчанию в этом режиме нет, и шаблон без `payload` появится без оружия; генератор
+предупредит. Перечислите пилоны, как в примере, или задайте переменную окружения
+`SORTIE_GEN_DCS_DATA=installed`: тогда генератор возьмёт подвески установленной DCS, но сборка
+станет зависеть от машины.
+
+## Аэродромы и слоты игроков
+
+```python
+sc.airbase("Nalchik", ident="NALCHIK", coalition="red")
+sc.airbase("Kutaisi", ident="KUTAISI")   # владельца задаст полёт игроков ниже
+sc.player_flight("Blue 1", planes.Su_25T, country="Georgia",
+                 airbase="Kutaisi", start=StartType.Cold, size=2)
+```
+
+* `sc.airbase(имя, ident=...)` делает аэродром символом `airbases::NALCHIK` для логики.
+  `coalition` меняет владельца аэродрома в миссии; без него остаётся владелец по умолчанию.
+* `sc.player_flight(..)` создаёт клиентские слоты. Старт: `StartType.Cold`, `Hot`, `Runway` или
+  `Air` (тогда нужны `at` и `altitude`). Ещё есть `task`, `skill`, `payload`. Полёты игроков
+  попадают в manifest, но не в lock: символов для них нет.
+
+**Правило аэродрома.** В сетевой игре DCS даёт занять стоянку только той коалиции, которой
+принадлежит аэродром. На нейтральном или чужом аэродроме слот не занять, и игрок остаётся
+наблюдателем. Поэтому полёт игроков со стартом `Cold`, `Hot` или `Runway` отдаёт свой аэродром
+коалиции полёта. Сборка падает с объяснением, если:
+
+* сценарий объявил этот аэродром за другую коалицию (`sc.airbase(..., coalition=...)`);
+* на одном аэродроме стоят игроки двух коалиций.
+
+Если хук `@sc.pydcs` сам ставит клиентскую группу на чужой аэродром, генератор предупредит.
+
+## Флаги и меню
+
+```python
+sc.flag("TARGET_DOWN")
+sc.menu("SMOKE_TARGET", "Дым на цели", path=["Цель"])
+sc.menu("TARGET_INFO", "Где цель?", path=["Цель"])
+```
+
+* `sc.flag(ident, name=None, initial=0)` — флаг миссии `flags::TARGET_DOWN`. Имя флага в DCS по
+  умолчанию равно `ident`; начальное значение ставит триггер в `.miz`.
+* `sc.menu(ident, надпись, path=[...])` — команда меню F10 `menus::SMOKE_TARGET`. `path` — путь
+  подменю. В игре команда появляется, когда её добавит логика.
+
+## Статика, погода и брифинг
+
+Чего нет в API сценария, делается через pydcs напрямую. Функция с `@sc.pydcs` получает миссию
+pydcs при каждой сборке, после объявлений Sortie:
+
+```python
+@sc.pydcs
+def extras(m: dcs.Mission) -> None:
+    # Статический объект: штаб рядом с целью (в .miz, без символа для Rust).
+    hq = dcs.mapping.Point(target.center.x + 800, target.center.y, m.terrain)
+    m.static_group(m.country("Russia"), "HQ", dcs.statics.Fortification._Command_Center, hq)
+    # Погода и брифинг.
+    m.weather.clouds_density = 4
+    m.weather.clouds_base = 2_500
+    m.set_description_bluetask_text("Уничтожить бронегруппу в зоне Target.")
+```
+
+* Группы и статика, добавленные хуком, попадают в manifest без `ident`. Символов для них нет;
+  логика находит их по имени через мир и события.
+* Генератор проверяет уникальность всех имён и после хуков.
+
+Свой DO SCRIPT в хуке пишите через `sortie_gen.miz.InlineDoScript`, а не через `DoScript` из
+pydcs:
+
+```python
+@sc.pydcs
+def hello(m: dcs.Mission) -> None:
+    trig = TriggerStart(comment="hello")
+    trig.add_action(InlineDoScript('trigger.action.outText("Миссия загружена", 10)'))
+    m.triggerrules.triggers.append(trig)
+```
+
+`DoScript` из pydcs хранит код в словаре миссии, а редактор миссий читает такое действие как
+код. Миссия, пересохранённая в редакторе, выполнит имя ключа словаря как Lua и упадёт.
+`InlineDoScript` пишет код прямо в действие, как это делает сам редактор. Bootstrap Sortie
+устроен так же.
+
+## Правила имён
+
+Генератор отказывает сразу, с понятным сообщением:
+
+* имена групп уникальны среди групп, шаблонов и слотов, не длиннее 128 байт, без пробелов по
+  краям и управляющих символов;
+* `#` в именах групп занят: так движок называет группы, созданные спавном;
+* `ident` — `[A-Z][A-Z0-9_]*`, уникален среди символов своего вида;
+* страна, аэродром, тип юнита и задача проверяются по данным pydcs, с подсказкой похожего имени.
+
+## Команды сценария
+
+```text
+python scenario.py lock      [--out FILE] [--check]
+python scenario.py build     [--out DIR] [--stem NAME] [--no-miz] [--build-id ULID] [--lock FILE] [--locked]
+python scenario.py validate  [--engine ADDR] [--token T]
+python scenario.py register  [--out DIR] [--lock FILE] [--locked] [--no-validate] [--engine ADDR] [--token T]
+python scenario.py launch    [--build-id ID] [--out DIR] [--lock FILE] [--locked] [--no-validate] [--engine ADDR] [--token T]
+python scenario.py restart   [--engine ADDR] [--token T]
+python scenario.py watch     [--session S] [--kinds birth,dead,...] [--from-seq N] [--engine ADDR] [--token T]
+python scenario.py results   [--session S] [--json] [--engine ADDR] [--token T]
+```
+
+| Команда | Что делает |
+| --- | --- |
+| `lock` | пишет `scenario.lock.json`, если изменился набор символов, и говорит, что изменилось; `--check` только проверяет (код 1, если lock устарел) |
+| `build` | собирает `dist\<build_id>.miz`, `.manifest.pb` и `.manifest.json` без движка; обновляет lock |
+| `validate` | спрашивает DCS через движок, знает ли она каждый тип юнита и статики сценария, и печатает таблицу |
+| `register` | берёт у движка build id, собирает, проверяет типы и регистрирует сборку; движок кладёт `.miz` в `Saved Games\DCS\Missions\Sortie\` |
+| `launch` | регистрирует свежую сборку и просит движок загрузить её в DCS; с `--build-id` загружает уже зарегистрированную |
+| `restart` | перезагружает миссию, которую сейчас крутит DCS: сессия кончается с причиной `restart`, начинается новая |
+| `watch` | печатает состояние движка и события сессии до Ctrl-C |
+| `results` | итоги последней сессии (или `--session`); `--json` — полностью |
+
+* `--locked` у `build`, `register` и `launch` не переписывает lock, а падает, если он устарел.
+  Вместе с `lock --check` это удобно для CI.
+* `launch` и `restart` загружают миссию серверной функцией DCS `net.load_mission`. Они для
+  dedicated server и хоста сетевой игры, и в живой игре пока не проверялись. В одиночной игре
+  миссию открывают и перезапускают из меню DCS; `restart` там движок отклоняет сразу.
+* Адрес движка — `--engine`, `SORTIE_ENGINE` или `127.0.0.1:50777`. Токен роли `generator` или
+  `admin` — `--token` или `SORTIE_TOKEN`; с `sortied --dev` он не нужен.
+* Коды выхода: 0 — готово, 1 — ошибка, 2 — возможность появится в следующей версии.
+
+Если движок не запущен, команда скажет об этом одной строкой:
+
+```text
+error: cannot reach the Sortie engine at 127.0.0.1:50777 (...). Is sortied running? Start it with `sortied --dev` for local work, or point --engine / SORTIE_ENGINE at it.
+```
+
+### Проверка типов
+
+pydcs знает типы из своей базы, а DCS на сервере может их не знать: опечатка в типе из хука,
+модуль или мод, которого на сервере нет. Такая миссия загрузится без части юнитов. Поэтому
+`register` и `launch` перед регистрацией спрашивают движок о каждом типе сборки. Движок
+спрашивает миссию, которая сейчас идёт в DCS (подойдёт любая миссия с мостом, например lobby).
+
+* Неизвестный тип останавливает команду; в ошибке видно, где он используется. `--no-validate`
+  пропускает проверку.
+* Если проверить нельзя (в DCS не идёт миссия, DCS на паузе), команда предупредит и
+  зарегистрирует сборку без проверки.
+
+## Что получается на выходе
+
+| Файл | Что это |
+| --- | --- |
+| `<build_id>.miz` | миссия pydcs и один триггер MISSION START с bootstrap Sortie |
+| `<build_id>.manifest.pb` | manifest: группы, юниты, зоны, шаблоны, флаги, аэродромы, меню, слоты |
+| `<build_id>.manifest.json` | то же для людей |
+| `scenario.lock.json` | символы сценария и геометрия зон для логики |
+
+Bootstrap при старте миссии вызывает мост и передаёт ему имя сценария, build id, digest
+manifest и номер схемы. Движок сверяет их с зарегистрированной сборкой и начинает сессию.
+
+`build_id` — ULID. Офлайн-сборка выводит его из содержимого, поэтому повторная сборка того же
+сценария даёт побайтно те же файлы. `register` берёт свежий build id у движка. Файлы пишутся
+атомарно.
+
+## Редактор миссий
+
+Собранную `.miz` можно открыть в редакторе миссий, пересохранить и запустить оттуда: bootstrap
+останется рабочим. Но если в редакторе поменять группы, юниты или зоны, manifest перестанет им
+соответствовать. Такие правки делайте в сценарии и пересобирайте. Не загружайте и не
+пересохраняйте готовую `.miz` через pydcs: он вернёт DO SCRIPT в форму со словарём.
+
+## Сборка из кода
+
+Сценарий можно собрать без командной строки:
+
+```python
+def build_to(out_dir: Path) -> Path:
+    b = sc.build()               # в памяти, без движка; build id выводится из содержимого
+    for text in b.warnings:      # те же предупреждения, что печатает `build`
+        print("warning:", text)
+    print(b.build_id, b.digest)  # digest = sha256 manifest.pb, его сверяет bootstrap
+    files = b.write(out_dir)     # <build_id>.miz, .manifest.pb, .manifest.json
+    return files["miz"]
+```
+
+У результата `sc.build()` есть `build_id`, `digest`, `miz` (байты), `manifest_pb`,
+`manifest_json`, `lock`, `warnings` и `type_uses` (типы юнитов и где они используются).
+
+## Команда `sortie-gen`
+
+```text
+sortie-gen lobby  [--out missions/sortie-lobby.miz] [--theatre caucasus]
+sortie-gen adopt  my.miz [--json]
+sortie-gen lock|build|validate|register|launch|restart|watch|results <scenario.py> [аргументы]
+```
+
+* `lobby` — миссия-заглушка для списка миссий dedicated server: без юнитов, с одним сообщением о
+  том, загружен ли мост.
+* `adopt` — разбор миссии, сделанной в редакторе: коалиции, группы, юниты, зоны, предложенные
+  `ident`, конфликтующие и занятые имена. Помогает перенести миссию в сценарий.
+* Команды сценария можно запускать и так: `uv run sortie-gen build scenario.py`.
+
+`sortie-gen worker` (цикл кампании) в этой версии не работает и выходит с кодом 2.
+
+<!-- source: docs/testing.md -->
+
+# Тестирование
+
+## Что есть в 0.1.0
+
+В этой версии SDK нет тестов без DCS: фальшивая DCS (FakeDcs) содержит движок, а движок в SDK
+не входит. Атрибут `#[sortie::test]` в SDK 0.1.0 не компилируется и говорит об этом
+прямо:
+
+```text
+error: #[sortie::test] runs the logic against FakeDcs, which is not part of Sortie SDK 0.1; tests without DCS arrive in SDK 0.2. Test against a live DCS with `sortied --dev` for now.
+```
+
+Что можно проверить уже сейчас:
+
+* **Компиляция.** Символы сценария типизированы: опечатка в имени группы, приказ авиации
+  наземной группе, символ другого сценария — это ошибки `cargo build`, а не сюрпризы в игре.
+  `#[sortie::mission]` проверяет сигнатуру функции миссии.
+* **Обычные тесты Rust.** Свои функции и геометрию зон можно проверять `cargo test`: константы
+  зон несут координаты из `scenario.lock.json`.
+
+```rust
+#[test]
+fn the_target_lies_on_the_front_line() {
+    assert!(zones::FRONT.contains(zones::TARGET.center()));
+    let gap = zones::TARGET.center().distance(zones::PATROL.center());
+    assert!(gap < km(1).meters(), "the patrol is centred on the target");
+}
+```
+
+* **Сценарий.** `python scenario.py build` собирает миссию без движка и ловит ошибки имён,
+  стран, аэродромов, типов pydcs и правило аэродрома игроков. В CI добавьте
+  `python scenario.py lock --check` и `build --locked`: они падают, если `scenario.lock.json`
+  устарел.
+* **Типы юнитов.** `python scenario.py validate` спрашивает запущенную DCS, знает ли она каждый
+  тип сценария.
+
+## Проверка в живой DCS
+
+Удобный цикл на одной машине:
+
+1. Запустите `sortied --dev` и логику (`cargo run`).
+2. Зарегистрируйте сборку (`python scenario.py register`) и откройте миссию в одиночной игре.
+3. Меняйте логику и перезапускайте только её процесс. DCS и миссию перезапускать не нужно:
+   новый процесс подключится к той же сессии и получит `Start::AfterCrash`. Команды с ключами,
+   которые уже выполнились, второй раз в DCS не уйдут, а `ctx.timer` продолжит ждать тот же
+   дедлайн.
+4. Смотрите события в `python scenario.py watch` или `sortie events`, итоги — в
+   `python scenario.py results`, состояние движка — в `sortie status` и `sortie top`.
+5. Ускорение времени в DCS ускоряет и логику: `ctx.sleep` и `ctx.timer` считают модельное время.
+
+Чтобы проверить сценарий целиком с начала, перезапустите миссию: в одиночной игре из меню DCS,
+у хоста сетевой игры — `python scenario.py restart`. Логика получит новую сессию.
+
+Что проверять вручную перед выпуском миссии:
+
+* миссия стартует, логика получает сессию (`sortie status` показывает её);
+* условия срабатывают, когда должны: войдите в зону, уничтожьте цель;
+* перезапуск процесса логики в середине миссии ничего не повторяет;
+* в сетевой игре игроки занимают все слоты.
+
+## Что будет в 0.2
+
+В SDK 0.2 появятся тесты без DCS:
+
+* `#[sortie::test(manifest = "...")]` запускает настоящий движок в процессе теста и фальшивую
+  DCS, которая говорит с ним по настоящему протоколу;
+* мир строится из того же manifest, что и миссия; время виртуальное, поэтому десять минут
+  миссии проходят за миллисекунды и прогоны воспроизводимы;
+* тест управляет фальшивой DCS: ставит юниты, убивает группы, двигает время и проверяет флаги,
+  опции ИИ и точный поток команд в DCS;
+* известные странности DCS (потерянные события гибели, двойное рождение, пустой инициатор
+  попадания) включаются в тесте одной строкой.
+
+<!-- source: docs/operations.md -->
+
+# Эксплуатация
+
+## Где что лежит
+
+Всё, что ставит и пишет Sortie, лежит в папке Saved Games экземпляра DCS:
+`%USERPROFILE%\Saved Games\DCS`, а для `--instance server` — `Saved Games\DCS.server`.
+
+| Путь | Что |
+| --- | --- |
+| `Scripts\Sortie\sortie-mission.lua`, `Scripts\Sortie\layer\` | Lua-слой моста |
+| `Scripts\Sortie\bin\sortie_bridge-<версия>.dll` | DLL моста; версия в имени, потому что загруженную DLL Windows перезаписать не даст |
+| `Scripts\Sortie\pending.txt`, `active.txt` | какую DLL загрузить; при старте DCS `pending` становится `active` |
+| `Scripts\Hooks\sortie-hook.lua` | хук: загружает мост в среду hooks DCS |
+| `Sortie\link.secret` | общий секрет моста и движка |
+| `Sortie\link.addr` | адрес, на котором слушает `sortied`; мост читает его перед каждым подключением |
+| `Sortie\tokens.toml` | токены API |
+| `Sortie\sortie.db` | хранилище движка: сборки, состояние, итоги |
+| `Sortie\Logs\` | логи `sortied` |
+| `Logs\sortie-bridge.log` | лог моста |
+| `Missions\Sortie\` | зарегистрированные сборки: `<сценарий>-<build_id>.miz` |
+
+В папке DCS Sortie меняет одну строку в `Scripts\MissionScripting.lua`. Больше ничего в
+установке DCS не трогается.
+
+## `sortied`
+
+```text
+sortied [--instance <имя>] [--saved-games <папка>] [--dcs <папка DCS>]
+        [--api 127.0.0.1:50777] [--link pipe:<имя> | tcp:<host:port>]
+        [--db <файл> | memory] [--tokens <файл>] [--manifest <файл.manifest.pb>]
+        [--dev] [--dev-eval] [--log-dir <папка> | none]
+```
+
+| Флаг | Переменная | Что делает |
+| --- | --- | --- |
+| `--instance` | `SORTIE_INSTANCE` | экземпляр DCS; то же имя, что у `sortie install` |
+| `--saved-games` | `SORTIE_SAVED_GAMES` | папка Saved Games экземпляра |
+| `--dcs` | `SORTIE_DCS` | папка DCS для проверок `doctor` при старте |
+| `--api` | `SORTIE_API` | адрес API; держите его на `127.0.0.1`: API управляет сервером |
+| `--link` | `SORTIE_LINK` | где ждать мост; по умолчанию именованный канал экземпляра |
+| `--db` | `SORTIE_DB` | файл хранилища; `memory` — без файла, для экспериментов |
+| `--tokens` | `SORTIE_TOKENS` | файл токенов вместо `Sortie\tokens.toml` |
+| `--manifest` | `SORTIE_MANIFEST` | manifest для миссии, которую не регистрировали (собрана `build` и открыта вручную) |
+| `--dev` |  | локальные программы работают без токена; спавн и уничтожение в логике — только с `.key(..)` |
+| `--dev-eval` |  | разрешить отладочные команды `DevEval` (только роль `admin`) |
+| `--log-dir` | `SORTIE_LOG_DIR` | папка логов; `none` — только консоль |
+
+Подробность логов задаёт `SORTIE_LOG` (по умолчанию `info`), например `SORTIE_LOG=debug`.
+
+## Токены
+
+```toml
+# Saved Games\DCS\Sortie\tokens.toml
+[[token]]
+name = "my_mission logic"
+role = "logic"          # admin | logic | generator | observer
+token = "6f1c..."       # клиент шлёт заголовок `authorization: Bearer <token>`
+```
+
+| Роль | Что можно |
+| --- | --- |
+| `observer` | читать: версии, здоровье, мир, события, состояние, итоги |
+| `logic` | плюс подключать логику и отдавать команды, писать состояние |
+| `generator` | регистрировать и запускать сборки, перезапускать миссию, писать состояние |
+| `admin` | всё |
+
+`sortie install` создаёт токены ролей `admin` и `logic`. Токен `generator` добавьте сами, если
+не хотите отдавать генератору `admin`; токен — любая длинная случайная строка. `sortied` читает
+файл при старте.
+
+* Логика берёт токен из `SORTIE_TOKEN`.
+* Генератор — из `--token` или `SORTIE_TOKEN`.
+* `sortie status`, `events`, `top` — из `--token`, `SORTIE_TOKEN` или сами из `tokens.toml`.
+
+С `sortied --dev` программы на той же машине работают без токена.
+
+## Dedicated server
+
+Dedicated server с Sortie ещё не проверялся в живой игре. Ниже — как он должен работать.
+
+* Сервер запускается с `-w DCS.<имя>` и пишет в `Saved Games\DCS.<имя>`. Передайте то же имя
+  всем командам: `sortie install --instance <имя>`, `sortie doctor --instance <имя>`,
+  `sortied --instance <имя>`. Мост берёт имя экземпляра из своей папки сам.
+* Если DCS World Server стоит рядом с игрой, укажите его папку явно:
+
+  ```powershell
+  .\bin\sortie.exe install --instance server --dcs "C:\Program Files\Eagle Dynamics\DCS World Server"
+  .\bin\sortie.exe doctor --instance server --dcs "C:\Program Files\Eagle Dynamics\DCS World Server"
+  .\bin\sortied.exe --instance server
+  ```
+
+* С пустым списком миссий сервер не стартует. Положите в список миссию-заглушку: в ней нет
+  юнитов, только сообщение о том, загружен ли мост. `doctor` проверяет, что список не пустой.
+
+  ```powershell
+  uv run sortie-gen lobby --out sortie-lobby.miz
+  ```
+
+* `python scenario.py launch` регистрирует сборку и просит движок загрузить её в DCS.
+  `python scenario.py restart` перезагружает текущую миссию: сессия кончается с причиной
+  `restart`, начинается новая, логика получает `Start::Restart`.
+* На паузе скрипты миссии не выполняются. Команды логики ждут конца паузы, если не задано
+  `.on_pause(Fail)`. Проверка типов на сервере, который стоит на паузе без игроков, не пройдёт:
+  генератор предупредит и зарегистрирует сборку без неё.
+* Перезапуска DCS после краша или зависания Sortie пока не делает. Если на машине есть
+  DCSServerBot, эту работу делает он.
+
+## Логи
+
+| Что | Где |
+| --- | --- |
+| движок | консоль `sortied` и `Saved Games\DCS\Sortie\Logs\sortied.log.<дата>` |
+| мост | `Saved Games\DCS\Logs\sortie-bridge.log` |
+| Lua-слой | `Saved Games\DCS\Logs\dcs.log`: состояние связи и ошибки |
+| логика | консоль программы логики; подробность — `SORTIE_LOG` |
+
+## Наблюдение
+
+```text
+sortie status                                   # движок, мост, сессия
+sortie events [--kind dead] [--from-seq N] [--limit N]
+sortie top [--interval-ms 1000]                 # здоровье, связи, очереди
+```
+
+Общие флаги утилиты: `--instance`, `--saved-games`, `--dcs`, `--api`, `--token`.
+
+## Обновление
+
+**Рантайм.** Распакуйте новый архив рядом со старым и выполните из новой папки
+`.\bin\sortie.exe install`. Новая DLL ляжет рядом со старой, а запущенная DCS продолжит работать
+со старой. Перезапустите DCS: при старте она возьмёт новую DLL и новую часть Lua-слоя для hooks.
+`sortie doctor` подтвердит версию. Перезапустите и `sortied`.
+
+**SDK.** Поменяйте тег в `Cargo.toml` и `pyproject.toml` (см. [Подключение SDK](https://lynxr.github.io/sortie-sdk/docs/dependency.md)),
+пересоберите логику и зарегистрируйте новую сборку. Версии SDK и рантайма должны совпадать.
+
+**DCS.** Обновление DCS перезаписывает `MissionScripting.lua` и стирает строку Sortie. Тогда
+мост не загрузится в миссию, и на экране будет «Sortie bridge is not installed: run sortie
+doctor». После каждого обновления DCS запускайте `sortie doctor`; если строка пропала —
+`sortie doctor --fix` от имени администратора.
+
+<!-- source: docs/troubleshooting.md -->
+
+# Диагностика
+
+Начинайте с двух команд: `sortie doctor` проверяет установку, `sortie status` — движок, мост и
+сессию. Где лежат логи — в [Эксплуатации](https://lynxr.github.io/sortie-sdk/docs/operations.html#логи).
+
+## На экране «Sortie bridge is not installed: run sortie doctor»
+
+Миссия собрана генератором, но мост в среду миссии не загрузился.
+
+* Запустите `sortie doctor`. Чаще всего обновление DCS стёрло строку в `MissionScripting.lua`:
+  верните её командой `sortie doctor --fix` от имени администратора.
+* Рантайм ставился в другой экземпляр: проверьте `--instance` у `install` и папку Saved Games,
+  которую использует DCS.
+* Ошибка загрузки моста видна в `Saved Games\DCS\Logs\dcs.log`, в строке с `Sortie:`.
+
+## Мост не подключается к движку
+
+* `sortie status` показывает, есть ли связь моста. `sortied` должен быть запущен с тем же
+  экземпляром (`--instance`), что и `sortie install`.
+* Порядок запуска не важен: мост переподключается сам. Адрес движка он читает из
+  `Saved Games\DCS\Sortie\link.addr`, который пишет `sortied`.
+* После установки или обновления рантайма перезапустите саму DCS, а не только миссию: часть
+  моста для среды hooks загружается только при старте DCS. Если она устарела, `sortie status`
+  подскажет перезапустить DCS.
+
+## Миссия идёт, а сессии нет
+
+`sortied` пишет причину в свой лог.
+
+* «build ... is not registered with this engine» — сборку не регистрировали. Регистрируйте
+  миссии через `python scenario.py register`. Для `.miz`, собранной `build` и открытой вручную,
+  запустите `sortied --manifest <файл.manifest.pb>`.
+* «the mission's digest ... does not match build ...» — `.miz` изменили после сборки или она от
+  другой сборки. Соберите и зарегистрируйте заново.
+* Миссия сделана не генератором (нет bootstrap) — сессии не будет. Перенесите её в сценарий; в
+  этом поможет `sortie-gen adopt`.
+
+## Логика не подключается или выходит
+
+* `error[sortie::transport]` — движок не запущен или слушает другой адрес. Проверьте `sortied` и
+  `--engine` / `SORTIE_ENGINE`. Логика повторяет попытки сама.
+* Код выхода 2 и «set SORTIE_TOKEN to a token with the `logic` role» — движок запущен без
+  `--dev`, а токена нет или он неверный. Возьмите токен роли `logic` из `tokens.toml`.
+* «the engine rejected this logic» и список «missing symbols» — логика собрана с другим
+  `scenario.lock.json`, чем запущенная миссия. Выполните `python scenario.py lock`, пересоберите
+  логику, зарегистрируйте и запустите новую сборку.
+
+## Ошибки в логике
+
+* `Error::UnknownSymbol` — то же расхождение lock и миссии, что выше.
+* `Error::NotInWorld` у `ctx.group(..)` — группа есть в сценарии, но живых юнитов сейчас нет:
+  её уже уничтожили, или у неё отложенная активация.
+* `Error::Gone` — объект погиб раньше, чем дошла команда. Обрабатывайте его, если цель может
+  исчезнуть (см. [Ошибки](https://lynxr.github.io/sortie-sdk/docs/sdk.html#ошибки)).
+* `Error::Timeout` — DCS не ответила вовремя. Увеличьте `.timeout(..)`; `sortie top` покажет
+  очереди движка.
+* `Error::Invalid` с «without `.key(..)` in dev mode» — `sortied --dev` требует ключ у спавна и
+  уничтожения. Добавьте `.key("...")`.
+* `e.report()` печатает место в коде, Lua traceback и подсказку.
+
+## Мир пустой, события не приходят
+
+Связь есть, сессия есть, а `ctx.world()` пустой. В DCS 2.9.31 `Unit:getID()` возвращает строку,
+а не число, и мост старых сборок из-за этого не мог передать ни одного юнита. Рантайм
+0.1.0 понимает оба вида. Если вы видите пустой мир, проверьте, что установлен
+рантайм 0.1.0 (`sortie status` показывает версию моста в строке `bridge`), и
+перезапустите DCS.
+
+## Игроки не могут занять слоты в сетевой игре
+
+В сетевой игре DCS даёт место на стоянке только коалиции, которой принадлежит аэродром. Игрок,
+чей слот стоит на нейтральном или чужом аэродроме, остаётся наблюдателем.
+
+* `player_flight` со стартом `Cold`, `Hot` или `Runway` отдаёт аэродром своей коалиции сам.
+* Если сценарий объявил аэродром за другую коалицию или поставил на него игроков двух коалиций,
+  сборка падает с объяснением.
+* Клиентские группы, добавленные хуком `@sc.pydcs`, генератор не переставляет. На чужом аэродроме
+  он только предупреждает.
+
+## Редактор миссий и DO SCRIPT
+
+* Собранную `.miz` можно открыть в редакторе, пересохранить и запустить оттуда. Правки групп,
+  юнитов и зон в редакторе ломают соответствие manifest: делайте их в сценарии.
+* Свой DO SCRIPT в хуке пишите через `sortie_gen.miz.InlineDoScript`. С `DoScript` из pydcs
+  миссия после редактора падает с ошибкой вида
+  `[string "DictKey_Translation_5"]:1: '=' expected near '<eof>'`.
+* Не загружайте и не сохраняйте готовую `.miz` через pydcs.
+
+## Проверка типов предупреждает или падает
+
+* «unit and static types not checked» — проверить было нельзя: в DCS не идёт миссия или DCS на
+  паузе. Сборка зарегистрирована без проверки. Запустите любую миссию с мостом (например,
+  lobby) и повторите, если проверка нужна.
+* «DCS on the server does not know ... type(s)» — опечатка в типе или на сервере нет модуля или
+  мода. Исправьте сценарий или поставьте модуль; `--no-validate` пропускает проверку.
+
+## `restart` отказывает
+
+* В одиночной игре `restart` не работает: перезапускайте миссию из меню DCS.
+* «already asked DCS to reload» — предыдущий перезапуск ещё идёт. Подождите новую сессию.
+* Отказ с просьбой перезапустить DCS значит, что часть моста для hooks загружена до установки
+  рантайма.
+
+## Производительность
+
+Замеры DCS под нагрузкой ещё не сделаны: команда `sortie probe` пока отвечает «lands in M0» и
+выходит с кодом 2. Сколько юнитов и команд в секунду выдерживает связка DCS и Sortie, пока не
+измерено. Мост ограничивает свою работу бюджетом кадра, но сам бюджет ещё не подобран по
+замерам. Если с Sortie проседает FPS, пришлите вывод `sortie top`, логи и число юнитов в
+миссии.
+
+## Что прислать в отчёт об ошибке
+
+* версии: вывод `sortie status` и `sortie doctor`;
+* логи: `sortied.log`, `sortie-bridge.log`, `dcs.log`, вывод логики;
+* `scenario.py` и `scenario.lock.json`, если они не секретные;
+* что делали и что ожидали.
+
+<!-- source: docs/faq.md -->
+
+# Вопросы и ограничения
+
+## Вопросы
+
+**Нужен ли сервер?** Нет. Sortie работает в одиночной игре, в сетевой игре с хостом-клиентом и
+(ещё не проверено) на dedicated server. `sortied` и логика запускаются на той же машине, что и
+DCS.
+
+**Можно ли пользоваться редактором миссий?** Собранную миссию можно открыть, посмотреть,
+пересохранить и запустить из редактора. Группы, юниты и зоны меняйте в сценарии: правки в
+редакторе разойдутся с manifest. Готовую миссию из редактора можно разобрать командой
+`sortie-gen adopt` и перенести в сценарий.
+
+**Работают ли в миссии другие скрипты?** Sortie добавляет в миссию триггер с bootstrap (и, если
+у флагов есть начальные значения, триггер, который их ставит) и ничего не удаляет. Свои DO SCRIPT можно добавить хуком `@sc.pydcs` (см.
+[Сценарий на Python](https://lynxr.github.io/sortie-sdk/docs/generator.html#статика-погода-и-брифинг)). Совместная работа с MOOSE, MIST и
+подобными библиотеками не проверялась.
+
+**Как обратиться к группе, у которой нет `ident`?** Через мир и события по имени DCS:
+`w.group("Имя группы")`, `w.units().in_group("Имя группы")`, `events.in_group("Имя группы")`.
+Типизированного символа у такой группы нет.
+
+**Что делать с тем, чего нет в API?** Задачи авиации, которых нет в `Task`, можно отдать сырой
+таблицей задачи DCS: `Task::raw(..)`. Её содержимое не проверяется. Статику, погоду и брифинг
+задаёт хук `@sc.pydcs` в сценарии.
+
+**Можно ли собирать на Linux?** Логику и сценарий — да. Рантайм работает только на Windows, рядом
+с DCS. API движка по умолчанию слушает только `127.0.0.1`, и так его и оставляйте: API управляет
+сервером. Поэтому логику запускайте на той же машине, что и `sortied`.
+
+**Под какой лицензией SDK?** Крейты SDK, `sortie-gen`, шаблон и примеры — MIT OR Apache-2.0, на
+ваш выбор. Рантайм (`sortied`, `sortie`, мост) распространяется под своей лицензией: файл
+`LICENSE` в архиве рантайма.
+
+## Ограничения версии 0.1.0
+
+**Проверка в игре.** Проверены одиночная игра и сетевая игра с хостом-клиентом в DCS 2.9.31.
+Dedicated server, `restart`, `launch` и проверка типов в живой игре ещё не проверялись.
+
+**Ещё нет:**
+
+* тестов без DCS (`#[sortie::test]`, FakeDcs) — SDK 0.2;
+* горячей замены логики (`--standby`) и команд `sortie dev`, `sortie trace`, `sortie record`;
+* цикла кампании: `sortie-gen worker` выходит с кодом 2, автоматической сборки следующего хода
+  нет;
+* восстановления сессии после перезапуска движка (`Start::Resumed`);
+* перезапуска DCS после краша и зависания (это может делать DCSServerBot);
+* замеров производительности DCS (`sortie probe`).
+
+Вызовы того, чего ещё нет, возвращают ошибку «... lands in Mx» или код выхода 2, а не падают.
+
+**Сценарий.** Размещённые группы — наземные (`ground_group`). Самолёты и вертолёты — шаблоны для
+спавна и слоты игроков. Корабли и прочее — через хук `@sc.pydcs`, без символов для логики.
+
+**Движок:**
+
+* не больше 2 групп и 24 юнитов спавна в секунду;
+* задачу только что созданной группе движок отдаёт не раньше чем через 2 кадра и 0,5 с;
+* логику, которая перестала читать поток (например, остановлена в отладчике), движок отключает
+  после 4096 непрочитанных сообщений; перезапуск подключает её снова;
+* подписчик событий, отставший больше чем на 1024 события, пропускает самые старые.
+
+<!-- source: docs/changelog.md -->
+
+# Что нового
+
+Полная история изменений — в
+[CHANGELOG.md](https://github.com/lynxr/sortie-sdk/blob/v0.1.0/CHANGELOG.md) репозитория
+SDK.
+
+## 0.1.0
+
+Первый выпуск SDK для авторов миссий.
+
+* Крейт `sortie`: функция миссии `#[sortie::mission]`, программа `sortie::main!`, контекст
+  `Ctx`, команды с ключами идемпотентности, ожидание по времени и состоянию мира, события, меню
+  F10, флаги, спавн из шаблонов, задачи авиации, состояние сессии, хода и кампании, итоги
+  сессии, ошибки с местом в коде.
+* Крейт `sortie-build`: символы сценария из `scenario.lock.json` для `build.rs`.
+* Генератор `sortie-gen`: сценарий на pydcs, воспроизводимая сборка `.miz` и manifest, lock,
+  правило аэродрома игроков, проверка типов через запущенную DCS, регистрация, запуск,
+  перезапуск, события и итоги, миссия-заглушка `lobby`, разбор миссий `adopt`.
+* Шаблон миссии и пример `op_north`.
+* Рантайм 0.1.0: `sortied`, `sortie` (`install`, `doctor`, `status`, `events`,
+  `top`) и мост для DCS 2.9.31.
+
+Тесты без DCS появятся в SDK 0.2.
+
+<!-- source: agents/AGENTS.md -->
+
+# Agent instructions: a Sortie mission repository
+
+This repository is one DCS World mission built on the Sortie SDK 0.1.0
+(`https://github.com/lynxr/sortie-sdk`, tag `v0.1.0`). It has two halves:
+
+- `scenario.py`: the static mission in Python (sortie-gen over pydcs). It builds the `.miz`,
+  its manifest and `scenario.lock.json`, the list of symbols the logic may use.
+- the Rust crate: the mission logic, a separate process that attaches to the Sortie engine
+  `sortied` running next to DCS. It reads a replica of the DCS world and sends commands.
+
+The SDK is new: its API is not in your training data. Read the matching skill (below) before
+you change code, and take every name from it or from the SDK source.
+
+## Layout
+
+```text
+Cargo.toml, build.rs     the logic crate; build.rs turns scenario.lock.json into typed symbols
+src/lib.rs               sortie::include_scenario!(..) and the #[sortie::mission] function
+src/main.rs              sortie::main!(<crate>::run);
+scenario.py              the scenario; `ident=` makes a symbol for the logic
+scenario.lock.json       generated by `scenario.py lock`; committed, never edited by hand
+pyproject.toml           uv project with the sortie-gen dependency
+dist/                    offline builds (not committed)
+```
+
+## Commands
+
+```powershell
+uv sync                                       # Python environment with sortie-gen
+uv run python scenario.py lock                # after adding, renaming or removing an ident
+uv run python scenario.py build               # offline build into dist/ (no engine needed)
+cargo build --release                         # the logic (build.rs reads scenario.lock.json)
+cargo clippy --all-targets -- -D warnings
+cargo test                                    # plain unit tests only (see Rules)
+uv run python scenario.py lock --check        # CI: fails if the lock is stale
+```
+
+In DCS (the Sortie runtime installed with `sortie install`, DCS restarted afterwards):
+
+```powershell
+sortied --dev                                 # the engine; no token needed locally
+uv run python scenario.py register            # a new build (= a new turn) for the engine
+cargo run --release -- --dev                  # the logic; attaches and waits for the mission
+uv run python scenario.py watch               # live events; `results` after the session
+```
+
+## Rules
+
+1. **Symbols come from the scenario.** A new group, zone, template, flag, airbase or menu for
+   the logic: add it with `ident=` in `scenario.py`, run `lock`, then `cargo build`. A logic
+   built from another lock is refused by the running mission.
+2. **Key commands by step.** `spawn_group` and `destroy` always get `.key("step-name")` (they
+   are refused without one under `--dev`); so does any command a replay must not repeat. A key
+   is stable across runs (a literal or a deterministic counter) and belongs to one command.
+3. **The mission function replays.** After a restart of the logic process it runs again from
+   the top in the same session. Wait on world state (`ctx.wait_until`), delay with named
+   timers (`ctx.timer`), run one-time steps in `ctx.once` and campaign changes in
+   `ctx.once_per_turn`.
+4. **One thread, short borrows.** No blocking calls; background work through `ctx.spawn`;
+   `ctx.world()` and `StateDoc::get()` are dropped before the next `.await`.
+5. **No tests without DCS in SDK 0.1.0.** FakeDcs and `#[sortie::test]` arrive in
+   SDK 0.2 (`#[sortie::test]` is a compile error until then). Unit-test plain functions with
+   `#[test]`; test the mission in DCS with `sortied --dev`.
+6. **The `.miz` comes from `scenario.py`.** Change groups, units and zones there, not in the
+   Mission Editor. A DO SCRIPT added in a `@sc.pydcs` hook uses
+   `sortie_gen.miz.InlineDoScript`; a built `.miz` is never loaded and saved again with pydcs.
+7. **Multiplayer slots:** a player flight starts at an airfield of its own coalition
+   (`player_flight` sets the owner; a hook that adds client groups must do it too).
+
+## Docs and skills
+
+- Skills, one per task: `sortie-mission-logic` (the Rust logic), `sortie-scenario`
+  (`scenario.py` and its commands), `sortie-live-debugging` (install, logs, failures in DCS).
+  They are in the `agents/` folder of the SDK repository and in
+  [the skills zip](https://lynxr.github.io/sortie-sdk/agents/sortie-agent-skills-0.1.0.zip); online:
+  [mission logic](https://lynxr.github.io/sortie-sdk/agents/sortie-mission-logic/SKILL.html),
+  [scenario](https://lynxr.github.io/sortie-sdk/agents/sortie-scenario/SKILL.html),
+  [live debugging](https://lynxr.github.io/sortie-sdk/agents/sortie-live-debugging/SKILL.html).
+- Docs (Russian): https://lynxr.github.io/sortie-sdk/. For agents: [llms.txt](https://lynxr.github.io/sortie-sdk/llms.txt) (an index)
+  and [llms-full.txt](https://lynxr.github.io/sortie-sdk/llms-full.txt) (all docs and skills in one file).
+- The SDK source at the tag: `crates/sortie` (the API), `examples/op_north` (a complete
+  mission), `python/sortie-gen` (the generator).
+
+<!-- source: agents/README.md -->
+
+# Sortie for AI coding agents
+
+This folder helps coding agents work on a Sortie mission (Sortie SDK 0.1.0). It is
+written in English; the SDK docs are in Russian.
+
+| File | For | What it is |
+| --- | --- | --- |
+| [sortie-mission-logic/](https://lynxr.github.io/sortie-sdk/agents/sortie-mission-logic/SKILL.md) | Claude Code | skill: the mission logic in Rust (`Ctx`, keys, waits, events, menus, state, long multiplayer missions, errors) |
+| [sortie-scenario/](https://lynxr.github.io/sortie-sdk/agents/sortie-scenario/SKILL.md) | Claude Code | skill: `scenario.py` with sortie-gen and its commands |
+| [sortie-live-debugging/](https://lynxr.github.io/sortie-sdk/agents/sortie-live-debugging/SKILL.md) | Claude Code | skill: install, logs and failures in a live DCS |
+| [AGENTS.md](https://lynxr.github.io/sortie-sdk/agents/AGENTS.md) | Codex, Cursor, others | instructions for the root of a mission repository |
+| [llms.txt](https://lynxr.github.io/sortie-sdk/llms.txt) | any agent that reads the web | an index of the docs and skills ([llmstxt.org](https://llmstxt.org) format) |
+
+The site build packs this whole folder into a zip:
+[sortie-agent-skills-0.1.0.zip](https://lynxr.github.io/sortie-sdk/agents/sortie-agent-skills-0.1.0.zip).
+Its root holds the three skill folders, `AGENTS.md`, `llms.txt` and this file.
+
+## Claude Code
+
+A skill is a folder with a `SKILL.md`. Claude Code loads skills from `.claude/skills/` of the
+project and from `~/.claude/skills/` of the user, and picks a skill by its description when the
+task fits (writing logic, editing `scenario.py`, a failure in DCS).
+
+Below, `<skills>` is the unzipped zip or the `agents` folder of the SDK repository.
+
+Into one mission repository (commit them with it, so everyone working on it gets them):
+
+```powershell
+New-Item -ItemType Directory -Force .claude\skills | Out-Null
+Copy-Item -Recurse -Force <skills>\sortie-* .claude\skills\
+```
+
+For every project of this user:
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\.claude\skills" | Out-Null
+Copy-Item -Recurse -Force <skills>\sortie-* "$HOME\.claude\skills\"
+```
+
+```bash
+mkdir -p .claude/skills && cp -r <skills>/sortie-* .claude/skills/
+```
+
+Copy `AGENTS.md` to the repository root too, and add a `CLAUDE.md` with the line
+`@AGENTS.md` so Claude Code reads it. After an SDK update, replace the folders with the new
+version's.
+
+## Codex, Cursor and other agents
+
+- Put `AGENTS.md` at the root of the mission repository. Codex and Cursor read it there; for
+  other tools, point their rules file at it.
+- Give an agent that reads the web the index [https://lynxr.github.io/sortie-sdk/llms.txt](https://lynxr.github.io/sortie-sdk/llms.txt),
+  or the whole text in one file:
+  [https://lynxr.github.io/sortie-sdk/llms-full.txt](https://lynxr.github.io/sortie-sdk/llms-full.txt).
+- The skills are plain Markdown: an agent without skill support can read
+  `agents/<skill>/SKILL.md` and its `references/` when the task matches the skill's
+  `description`.
+
+## How the examples are checked
+
+Every Rust and Python example in these files is compiled: they come from the `frontline`
+example scenario (`snippets/python/skills_scenario.py`) and the code in `snippets/src/skills/`
+of the SDK repository.
+
+<!-- source: agents/sortie-live-debugging/SKILL.md -->
+
+Skill `sortie-live-debugging` (sortie-live-debugging/SKILL.md): Sortie in a live DCS World: install and `sortie doctor`, `sortied --dev`, attaching the mission and the logic, reading dcs.log, the sortied log, sortie-bridge.log and the logic's stderr. Use when a Sortie mission does not attach or misbehaves in DCS, when the DCS screen shows a "Sortie ..." message, after installing or updating Sortie or DCS, when players cannot take multiplayer slots, after a Mission Editor round trip, or when an error mentions the bridge, the engine, a session or a token.
+
+
+# Debugging Sortie in a live DCS
+
+The chain, top to bottom; a problem is the first link that is down:
+
+```text
+DCS (mission and hooks environments)
+  └─ bridge DLL + Lua layer    loaded by one line in <DCS>\Scripts\MissionScripting.lua
+                               and by Saved Games\DCS\Scripts\Hooks\sortie-hook.lua
+       └─ link (named pipe) ─► sortied (gRPC 127.0.0.1:50777)
+                                 ◄─ your logic binary (Logic.Attach)
+                                 ◄─ sortie-gen (register, launch, watch, results)
+                                 ◄─ sortie CLI (status, events, top)
+```
+
+The Saved Games folder is `%USERPROFILE%\Saved Games\DCS` (a dedicated server started with
+`-w DCS.server`: `DCS.server`, and every command gets `--instance server`).
+
+## Setup on a machine with DCS
+
+1. Unzip `sortie-runtime-0.1.0-win64.zip` from the GitHub release of
+   `lynxr/sortie-sdk` and follow its README; check it against `SHA256SUMS`.
+2. `sortie.exe install` from a console **run as administrator**: it copies the Lua layer, the
+   hook and the bridge DLL into Saved Games, creates `Sortie\link.secret` and
+   `Sortie\tokens.toml`, and adds one line to `<DCS>\Scripts\MissionScripting.lua` (the only
+   change in the DCS folder). `--dry-run` shows the plan; `--no-patch` leaves
+   `MissionScripting.lua` alone; `--dcs <folder>` picks the install.
+3. **Restart DCS itself** (not only the mission). The hooks part of the layer and a new bridge
+   DLL load only when DCS starts.
+4. `sortie.exe doctor`: done when it exits 0. `doctor --fix` (administrator) restores the
+   `MissionScripting.lua` line after a DCS update overwrote it.
+5. `sortied.exe --dev`: local API calls need no token; spawns and destroys need `.key()`. Keep
+   the console open: it logs every attach and refusal. DCS and `sortied` start in any order.
+6. Register the mission (`uv run python scenario.py register`), start the logic
+   (`cargo run --release -- --dev`), then fly: open
+   `Saved Games\DCS\Missions\Sortie\<scenario>-<build_id>.miz` (single player) or
+   `scenario.py launch` (dedicated server).
+7. Done when `sortie status` shows `session <id> (<scenario>)` with `1 logic client(s)` and the
+   logic's stderr says `session started`.
+
+## Where to look
+
+| Source | What it shows |
+| --- | --- |
+| the DCS screen | `Sortie bridge is not installed: run sortie doctor` (the mission found no bridge); `Sortie: <reason>` (the engine refused the mission) |
+| `sortie status` | engine and bridge versions, DCS version, `link hooks/mission: up/down`, the session, model time, `PAUSED`, logic clients, `note` lines with the reason something is degraded |
+| `sortie events --kind dead --limit 20`, `scenario.py watch` | the live event stream |
+| `sortie top` | health, links, credits, queues, refreshed every second |
+| `Saved Games\DCS\Logs\dcs.log` | Lua layer lines start with `Sortie:` (mission) or come from the `SORTIE` subsystem (hooks): link up/down, boot errors. `Select-String Sortie dcs.log` |
+| `Saved Games\DCS\Logs\sortie-bridge.log` | the bridge DLL |
+| `Saved Games\DCS\Sortie\Logs\sortied.log.*` | the engine (also on its console), including the `doctor` checks it runs at start |
+| the logic's stderr | attach, `session started` / `session ended`, every recorded error with its Rust call site; `SORTIE_LOG=debug` for more |
+| `scenario.py results` | the outcome, fates, kills, flags and report of the last session |
+
+## The development loop
+
+- **Logic change:** stop the logic (Ctrl-C), `cargo build --release`, start it again. The
+  running session continues; the mission function starts with `Start::AfterCrash` and replays:
+  keyed commands, `once` and named timers do not repeat. (`sortie dev` with hot reload is not
+  available yet.)
+- **Scenario change without new symbols** (positions, units, weather): `register` a new
+  build and load it. A new build is a new turn: `Start::Fresh`.
+- **New or renamed symbols:** `lock`, rebuild the logic, `register`, load the new build. An
+  old logic is refused by a mission that lacks its symbols.
+- **Same build again:** `scenario.py restart` (multiplayer host or server), or load the same
+  `.miz` again in single player: `Start::Restart`, the world is back to the manifest.
+- Only one logic per scenario can be attached: stop the old process before starting a new
+  one.
+
+## Facts that cause most surprises
+
+- **Restart DCS after `sortie install`.** A new DLL is named in `Scripts\Sortie\pending.txt`
+  and becomes active at the next DCS start; the hooks Lua loads only at DCS start. A stale
+  layer shows as a `sortie status` note: "the Lua layer DCS loaded differs from what
+  `sortie install` put there ...: run `sortie install` again and restart DCS itself".
+- **Multiplayer slots and airfields.** DCS offers a parking slot only to the coalition that
+  owns the airfield. A player who stays a spectator after picking a slot: the airfield belongs
+  to someone else. `player_flight` handles it; a client group added in a `@sc.pydcs` hook needs
+  its airfield owner set in the hook (the build warns).
+- **Unit ids are strings in DCS 2.9.31.** `Unit:getID()` returns a string there. The Lua layer
+  and the engine of this runtime accept both forms; in the SDK `Entity.unit_id` is a number.
+  A world that stays empty (no units in `wait_until`, nothing in `sortie events`) with an older
+  runtime: install this one and restart DCS.
+- **Mission Editor round trips are safe** for a built `.miz` (open, re-save, fly from the
+  editor): the bootstrap is an inline DO SCRIPT. The `dcs.log` error
+  `[string "DictKey_..."]:1: '=' expected near '<eof>'` means a DO SCRIPT in the dictionary
+  form: the `.miz` went through a pydcs load and save, or a hook used pydcs's `DoScript`
+  instead of `sortie_gen.miz.InlineDoScript`. Groups, units and zones edited in the editor no
+  longer match the manifest: edit `scenario.py`.
+- **Pause stops model time.** Commands to the mission wait while DCS is paused (unless sent
+  with `.on_pause(Fail)`), `ctx.sleep` and timers stop, and the type check of `register` cannot
+  run.
+- **Measurements of DCS itself** (event ids, timer cadence, sampling cost) are not part of SDK
+  0.1.0: `sortie probe` prints "`sortie probe` lands in M0" and exits with code 2;
+  `sortie dev`, `sortie trace` and `sortie record` are not built yet either (M4). Report what
+  you measure with the DCS version, FPS and hardware.
+
+Failure signatures and fixes, symptom first: [references/failures.md](https://lynxr.github.io/sortie-sdk/agents/sortie-live-debugging/references/failures.md).
+Mission-side errors (`sortie::*` codes): the sortie-mission-logic skill,
+`references/errors.md`. Docs (Russian): https://lynxr.github.io/sortie-sdk/.
+
+<!-- source: agents/sortie-live-debugging/references/failures.md -->
+
+# Failure signatures (for agents)
+
+Symptom first. Check the links of the chain in this order: DCS screen and `dcs.log`, then
+`sortie status`, then the `sortied` console, then the logic's stderr.
+
+## The mission does not attach
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| screen: `Sortie bridge is not installed: run sortie doctor` | the mission found no `SORTIE` global: the `MissionScripting.lua` line is missing (a DCS update rewrites the file) or the Lua boot failed | `sortie doctor`; `sortie doctor --fix` as administrator; then read the `Sortie:` error in `dcs.log` |
+| `dcs.log`: ``Sortie: lfs/io/package are not available: the Sortie line must come before the sanitizer in MissionScripting.lua (run `sortie doctor --fix`)`` | the line sits after the sanitizer | `sortie doctor --fix` as administrator |
+| `dcs.log`: ``Sortie: Scripts/Sortie/active.txt is missing: run `sortie install` `` | no bridge installed in this Saved Games folder (or another instance) | `sortie install` with the right `--instance`, restart DCS |
+| screen: ``Sortie: build <id> (<scenario>) is not registered with this engine; register it with `sortie-gen register` ...`` | the `.miz` came from an offline `build`, or the engine's database is another one (`--db memory` forgets on restart) | `scenario.py register` and open the registered copy from `Missions\Sortie`, or start `sortied --manifest dist\<id>.manifest.pb` |
+| screen: `Sortie: the mission's digest ... does not match build ...` | the `.miz` was changed after the build or belongs to another build | build and register again; edit `scenario.py`, not the `.miz` |
+| screen: `Sortie: the mission says scenario ...` / `... schema ...` | the bootstrap and the registered build disagree | rebuild and register |
+| nothing on screen; `sortie status`: `link mission: down`, note `no mission link: no Sortie mission is running` | `sortied` is not running, the mission has not started, or the link points elsewhere | start `sortied`; same `--instance` for `install`, `doctor` and `sortied`; `dcs.log`: `mission link down: <error>; retrying` names the reason |
+| note `the DCS hooks link is not connected (is DCS running with Scripts/Hooks/sortie-hook.lua?)` | DCS was not restarted after the install, or the hook is missing | restart DCS; `sortie doctor` checks `hook` |
+| note ``the Lua layer DCS loaded differs from what `sortie install` put there (...): run `sortie install` again and restart DCS itself`` | an update of the layer while DCS ran | as it says (for the mission part: restart the mission) |
+| `dcs.log`: ``[string "DictKey_..."]:1: '=' expected near '<eof>'`` | a DO SCRIPT in pydcs's dictionary form | rebuild from `scenario.py`; hooks use `sortie_gen.miz.InlineDoScript`; never load/save a built `.miz` with pydcs |
+
+## The logic does not run
+
+| Symptom (logic stderr) | Cause | Fix |
+| --- | --- | --- |
+| ``cannot reach the engine at http://127.0.0.1:50777: ... (is `sortied` running?); retrying in N s`` | no engine at that address | start `sortied`; `--engine` / `SORTIE_ENGINE` |
+| `attaching`, then nothing | no session of this scenario runs yet; the logic waits for one | start the mission; the scenario name of the logic and the mission must match |
+| ``error[sortie::transport]: Logic.Attach at ... failed: ... (set SORTIE_TOKEN to a token with the `logic` role)``, exit code 2 | `sortied` without `--dev` needs a token | `SORTIE_TOKEN` from `Saved Games\DCS\Sortie\tokens.toml` (role `logic`), or `sortied --dev` on your own machine |
+| ``error[sortie::rejected]: the engine rejected this logic: logic `x` was built against a different `s` schema: N symbol(s) missing from the running mission``, exit code 2 | the mission in DCS lacks symbols the logic was built with | build the logic and the mission from the same `scenario.lock.json`; `register` and load the new build |
+| ``another PRIMARY logic is attached for `s` `` | a second copy of the logic | stop the old process |
+| `the engine shut this logic down`, exit code 0 | the engine stopped, or the logic stopped reading (a blocked thread: 4096 unread messages) | restart it; remove the blocking code |
+| `session started` with `kind=AfterCrash` after a restart of the logic | expected: same session, the mission function replays | nothing; keys, `once` and timers keep it from repeating |
+
+## The mission runs, but wrong
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| a player picks a slot and stays a spectator (multiplayer) | the airfield belongs to another coalition | `player_flight` sets the owner; for a client group from a hook, set the airfield's coalition in the hook; read the build warnings |
+| `sortie status` shows the session, but `wait_until` on units never fires and `sortie events` stays silent | the world stays empty: an older runtime reads DCS 2.9.31's string unit ids as numbers | install the current runtime, restart DCS |
+| `sortie::invalid`: spawn or destroy without a key | `sortied --dev` or the logic's `--dev` | `.key("step-name")` |
+| a spawn twice after a logic restart | the spawn had no key, or its key changes between runs | a stable key per step |
+| `sortie::timeout` on spawns, note `N command(s) waiting: spawn rate limit (2 groups / 24 units per second)` | too many spawns at once | spawn in a loop, cap the count, raise `.timeout(..)` |
+| commands hang, `sortie status` says `PAUSED` | DCS is paused: mission commands wait | unpause, or `.on_pause(v1::PausePolicy::Fail)` |
+| `ctx.group(groups::X)` → `sortie::not_in_world` | late activation or the group is dead | spawn it from a template instead; check `alive_count()` |
+| `ctx.group(groups::X)` → `sortie::unknown_symbol` | the mission in DCS was built from another lock | rebuild both sides from one lock |
+| `register` stops: `DCS on the server does not know N type(s) ...` | a misspelled type or a module or mod missing on the server | fix the type or install it there; `--no-validate` skips |
+| `register` warns `unit and static types not checked: ...` | no mission ran in DCS, or it was paused | run the lobby (`sortie-gen lobby`) unpaused |
+| `scenario.py restart` → `FAILED_PRECONDITION`: `Missions.Restart needs DCS running as a multiplayer server ...` | single player | restart from the DCS menu, or host in multiplayer |
+| `restart` → `DCS did not say whether it runs multiplayer: the Sortie hooks layer DCS loaded predates ...` | DCS was not restarted after `sortie install` | restart DCS itself |
+| `scenario.py launch` fails on a single-player DCS | `launch` loads missions through the server API | open the registered `.miz` yourself |
+
+## `sortie doctor` checks
+
+| Check | When it fails | Fix |
+| --- | --- | --- |
+| `dcs install`, `saved games`, `writedir` | wrong folder or instance | `--dcs <DCS World folder>`, `--instance <name>`, `--saved-games <folder>` |
+| `MissionScripting`, `sanitizer` | the line is missing, misplaced, or the sanitizer was changed | `sortie doctor --fix` as administrator; restore the stock sanitizer |
+| `hook`, `lua layer`, `bridge dll` | files missing or changed | `sortie install`, then restart DCS |
+| `lua.dll` | this DCS build changed `lua.dll`: the bridge does not match it | a runtime release built for this DCS version is needed: report it |
+| `link secret`, `api tokens` | not created yet | `sortie install` |
+| `missionList` | an empty mission list on a dedicated server (the server does not start) | add a mission, e.g. a `sortie-gen lobby` mission |
+| `unsafe api` (warning) | `autoexec.cfg` opens `net.allow_unsafe_api` to missions | Sortie does not need it |
+
+<!-- source: agents/sortie-mission-logic/SKILL.md -->
+
+Skill `sortie-mission-logic` (sortie-mission-logic/SKILL.md): Sortie mission logic in Rust (crate `sortie`, DCS World). Use when writing or changing a `#[sortie::mission]` or code that uses `Ctx` (commands, `.key()`, `ctx.once`, waits, events, F10 menus, flags, state, timers, `end_session`), when handling `Start` kinds, when a `sortie::*` error code appears (`sortie::gone`, `sortie::invalid`, `sortie::unknown_symbol`, ...), or when designing a long multiplayer mission. Applies to any crate that depends on `sortie` or calls `sortie::include_scenario!`.
+
+
+# Sortie mission logic
+
+The mission logic is an ordinary async Rust program next to DCS. The engine `sortied` owns
+the link to DCS; the logic attaches to it over gRPC and gets one call of its mission function
+per session.
+
+- **Reads are local and synchronous.** `ctx.world()` is a replica of the DCS world, updated
+  10 times a second and by every event. No RPC.
+- **Writes are commands.** Every write is a `Cmd` builder; `.await` sends it and resolves when
+  DCS has executed it (or with a `sortie::Error`).
+- **The mission function is a replayable script.** It runs again from the top when the logic
+  process restarts inside a running session (`Start::AfterCrash`). Every step must be safe to
+  run twice: keyed commands, `ctx.once`, named timers, waits on world state.
+- **One thread.** `Ctx` is cheap to clone and not `Send`; background work is `ctx.spawn`.
+- **Typed scenario.** `groups::X`, `zones::X`, `templates::X`, `flags::X`, `airbases::X`,
+  `menus::X` come from the scenario lock; a symbol of another scenario does not compile.
+
+## Project layout
+
+A mission repository starts as a copy of the SDK's `template/` folder:
+
+```text
+my-mission/
+  Cargo.toml             # the logic crate (package my_mission_logic)
+  build.rs               # turns the lock into typed symbols
+  src/lib.rs             # include_scenario! and the #[sortie::mission]
+  src/main.rs            # one line: sortie::main!(my_mission_logic::run);
+  scenario.py            # the scenario (sortie-gen); see the sortie-scenario skill
+  scenario.lock.json     # written by `python scenario.py lock`; commit it, never edit it
+  pyproject.toml         # uv project with the sortie-gen dependency
+```
+
+`examples/op_north` keeps the crate in a `logic/` subfolder instead; both work.
+
+```toml
+# Cargo.toml
+[package]
+name = "my_mission_logic"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+
+[dependencies]
+sortie = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.1.0" }
+serde = { version = "1", features = ["derive"] }   # only for state documents
+
+[build-dependencies]
+sortie-build = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.1.0" }
+
+[lints.clippy]
+await_holding_refcell_ref = "deny"   # catches a world borrow held across .await
+```
+
+- `build.rs`: `fn main() { sortie_build::scenario("my_mission", "scenario.lock.json").emit(); }`.
+  The first argument is the scenario name; the path is relative to the crate's `Cargo.toml`.
+- `src/lib.rs` starts with `sortie::include_scenario!(my_mission);`, which defines
+  `pub mod my_mission` with the marker type `MyMission` and the symbol modules.
+- `src/main.rs` is `sortie::main!(my_mission_logic::run);`: arguments, attach, reconnects.
+- A private SDK repository needs credentials for cargo (`net.git-fetch-with-cli = true` in
+  `.cargo/config.toml`, plus your git credential helper) and for uv: see the docs.
+
+## The mission function
+
+The examples in this skill use the `frontline` scenario of the sortie-scenario skill.
+
+```rust
+use sortie::prelude::*;
+
+// lib.rs of the logic crate also has `sortie::include_scenario!(frontline);`
+use frontline::{Frontline, groups, zones};
+
+#[sortie::mission] // runs once per session of `frontline`
+pub async fn run(ctx: Ctx<Frontline>, start: Start) -> sortie::Result<()> {
+    let sam = ctx.group(groups::SAM_NORTH)?; // Group<Ground>, checked against the manifest
+    sam.set_option(Alarm::Green).key("sam-dark").await?;
+
+    if start.is_fresh() {
+        ctx.message(Coalition::Blue)
+            .text("SAM North is cold. Push when ready.")
+            .secs(20)
+            .key("intro")
+            .await?;
+    }
+
+    // Evaluated on the local replica after every tick and every event: no RPC.
+    ctx.wait_until(|w| {
+        w.units()
+            .coalition(Coalition::Blue)
+            .air()
+            .any_inside(zones::SAM_RING)
+    })
+    .await;
+    sam.set_option(Alarm::Red).key("sam-hot").await?;
+
+    // A state, not an event: still correct when the function runs again after a crash.
+    ctx.wait_until(|w| w.group(&sam).alive_count() == 0).await;
+    ctx.end_session(Outcome::BlueWin)
+        .text("SAM North is down")
+        .await
+}
+```
+
+`#[sortie::mission]` checks the signature: `async fn`, `ctx: Ctx<M>` first, `start: Start`
+second, return type `sortie::Result<()>`. Returning `Err` records a logic error with the call
+site; the session goes on.
+
+## Workflow
+
+1. **Symbols first.** Everything the logic names (a group, zone, template, flag, airbase or
+   menu) needs an `ident=` in `scenario.py`. Add it there, run `python scenario.py lock`, then
+   build the logic. Groups added only by a `@sc.pydcs` hook have no symbol: reach them by DCS
+   name in world queries (`w.group("Name")`, `.in_group("Name")`).
+2. **Write the step replay-safe** (rules below), then `cargo build` and `cargo clippy`.
+   Done when both pass and every `spawn_group` and `destroy` in the diff carries `.key(..)`.
+3. **Run it in DCS** with `sortied --dev` and the logic's `--dev` (see the
+   sortie-live-debugging skill). SDK 0.1.0 has no tests without DCS: FakeDcs
+   arrives in SDK 0.2, and `#[sortie::test]` is a compile error until then. Put pure decisions
+   (which wave, which target) in plain functions and test them with ordinary `#[test]`.
+
+## Rules
+
+1. **Key every command whose repetition matters.** `spawn_group` and `destroy` always: they
+   are refused without a key when `sortied` runs with `--dev` and when the logic runs with
+   `--dev`. Key messages, smoke, flags and menu commands that a replay must not repeat. Key
+   semantics:
+   - the scope is the session: within it, a key that already ran returns the stored result
+     without reaching DCS (a replayed spawn returns the same `Group`);
+   - a key names a step, so it is the same on every run: a literal (`"red-cap-1"`) or built
+     from a deterministic counter (`format!("wave-{n}")`), never from model time, a random
+     number or an Eid;
+   - one key, one command: reusing a key for a different body (other text, other target) fails
+     with `sortie::invalid` ("key `k` was already used for a different command in session ...");
+   - a keyed command that timed out after reaching DCS is not sent again on retry with the
+     same key: the retry waits for the late result;
+   - a mission restart is a new session: keys start empty again.
+2. **Wait on states, not events,** when the condition is visible in the world:
+   `ctx.wait_until(|w| w.group(&sam).alive_count() == 0)`. A replay sees the state; it never
+   sees an event that happened before it subscribed.
+3. **Delays that must survive a logic restart are named timers:**
+   `ctx.timer("cap-delay", mins(10))`. `ctx.sleep` starts over after a restart.
+4. **Campaign changes go inside `ctx.once_per_turn`.** After a mission restart the turn is
+   played again in a new session; `once_per_turn` keeps a kill from being counted twice in one
+   turn. `ctx.once` is per session.
+5. **Short borrows.** Take `ctx.world()` and `StateDoc::get()` in a statement or a block that
+   ends before the next `.await`. A borrow held across `.await` stops the replica from updating
+   (the runtime records "the world replica is borrowed across an `.await`").
+6. **Never block the thread.** No `std::thread::sleep`, blocking I/O or long CPU loops: ticks
+   stop, and after 4096 unread messages the engine detaches the logic (it exits with code 0).
+   Wait with `ctx.sleep`, `ctx.timer`, `ctx.wait_until`.
+7. **Background work is `ctx.spawn`.** Its tasks end with the session; an `Err` or a panic in
+   one is recorded with its call site and the other tasks keep running. No `std::thread`, no
+   runtime of your own.
+
+## Start kinds
+
+```rust
+match start {
+    // First session of this build: the world is as the manifest describes it.
+    Start::Fresh => {}
+    // The mission was reloaded (same turn): a fresh world, fresh keys and `once`s;
+    // `once_per_turn` and the campaign state remember the earlier session.
+    Start::Restart => {
+        ctx.message(Coalition::Blue)
+            .text("Mission restarted")
+            .key("restarted")
+            .await?;
+    }
+    // The logic process restarted inside a running session (crash, or you restarted it
+    // after a rebuild): the world is as it is now; keys, `once` and timers remember.
+    // `Resumed` (the engine resumed the session after its own restart) is not sent yet;
+    // treat it the same way.
+    Start::AfterCrash | Start::Resumed => {}
+}
+```
+
+| `Start` | When | The world | Keys, `once`, timers | `once_per_turn`, campaign state |
+| --- | --- | --- | --- | --- |
+| `Fresh` | first session of this build (turn) | as in the manifest | empty | as stored |
+| `Restart` | the mission was reloaded (`scenario.py restart`, or the same build loaded again) | as in the manifest | empty (new session) | remembered |
+| `AfterCrash` | the logic process restarted in the running session (crash, or restarted after a rebuild) | as it is now | remembered | remembered |
+| `Resumed` | the engine resumed a session after its own restart (not sent yet) | as it is now | remembered | remembered |
+
+A replay-safe mission needs no branch on `Start` except for player-facing extras (a briefing on
+`Fresh`, a notice on `Restart`).
+
+## API map
+
+| Need | Use |
+| --- | --- |
+| a scenario group | `ctx.group(groups::X)?` → `Group<Ground/Air/Helo/Ship>`; `set_option(Alarm::Red / Roe::..)`, `destroy()`, `push_task`/`set_task` (air and helicopters) |
+| spawn | `ctx.spawn_group(templates::X)` or `templates::X.named("..")`, then `.from_airbase(airbases::Y, StartType::..)` or `.at(Vec3, heading_rad)`, `.key(..)` → `Group<K>` |
+| tell players | `ctx.message(Coalition::Blue / &group / press.group / sortie::MessageTarget::All).text(..).secs(..)` |
+| read the world | `ctx.world()`, `w.units().coalition(..).air().in_zone(zones::X).count()`, `w.players()`, `w.group(&g).alive_count()` |
+| wait | `ctx.wait_until(pred)`, `ctx.timer(name, dur)`, `ctx.sleep(dur)`, `ctx.until_session_end()` |
+| react | `ctx.events().of::<v1::Dead>().in_group(&g)`; `use sortie::proto::v1;` |
+| F10 menu | `ctx.menu(Coalition::Blue).per_group().command(menus::X).key(..).await?`, then `.presses()` |
+| flags | `ctx.flag(flags::X).set(true)`, `.get()` → `i32` |
+| remember | `ctx.state::<T>("name")` (campaign), `ctx.state_in::<T>(v1::StateScope::Turn, ..)`, `ctx.once`, `ctx.once_per_turn` |
+| results | `ctx.report().set("key", value)`, `ctx.end_session(Outcome::BlueWin).text(..)` |
+
+Signatures, defaults and an example for each: [references/api.md](https://lynxr.github.io/sortie-sdk/agents/sortie-mission-logic/references/api.md).
+
+## More
+
+- [references/patterns.md](https://lynxr.github.io/sortie-sdk/agents/sortie-mission-logic/references/patterns.md): a long multiplayer mission (thousands of
+  units, players joining and leaving, AI waves, polling, scores) and the anti-patterns.
+- [references/errors.md](https://lynxr.github.io/sortie-sdk/agents/sortie-mission-logic/references/errors.md): every `sortie::*` error code, the build and
+  attach errors, and their fixes.
+- Docs (Russian): https://lynxr.github.io/sortie-sdk/. Scenario side: the sortie-scenario skill. Running in DCS:
+  the sortie-live-debugging skill.
+
+<!-- source: agents/sortie-mission-logic/references/api.md -->
+
+# Sortie SDK API reference (for agents)
+
+Everything below is in `sortie::prelude::*` unless a path is given. Event and state enums live
+in `sortie::proto::v1` (`use sortie::proto::v1;`). The examples use the `frontline` scenario
+(module `frontline`, marker `Frontline`).
+
+## Commands
+
+Every write returns a `Cmd<..>`. Nothing happens until it is awaited; `.await` gives
+`sortie::Result<Output>`.
+
+```rust
+ctx.smoke(zones::OBJECTIVE.center(), SmokeColor::Red)
+    .key("smoke-obj")
+    .await?;
+ctx.flag(flags::SAM_DOWN)
+    .set(true)
+    .key("flag-sam-down")
+    .await?;
+
+let cap = ctx
+    .spawn_group(templates::RED_CAP.named("Red CAP 1"))
+    .from_airbase(airbases::MAYKOP, StartType::Runway)
+    .key("red-cap-1") // spawn and destroy: always keyed
+    .await?; // Group<Air>
+cap.push_task(
+    Task::cap(zones::SAM_RING)
+        .altitude(ft(25_000))
+        .speed(kts(420)),
+)
+.timeout(secs(5))
+.await?;
+cap.set_option(Roe::WeaponFree).await?;
+
+let armor = ctx.group(groups::RED_ARMOR)?;
+armor.destroy().key("armor-despawn").await?;
+```
+
+Options on every command:
+
+| Option | Meaning |
+| --- | --- |
+| `.key(impl Into<String>)` | idempotency key, scope: the session (see the rules in SKILL.md) |
+| `.timeout(Duration)` | fail with `sortie::timeout` if DCS has not answered; default 10 s, 30 s for `spawn_group` and `destroy` |
+| `.on_pause(v1::PausePolicy::Fail)` | fail with `sortie::paused` instead of waiting while the simulation is paused (default: wait) |
+| `.after(&other_cmd)` | run only after `other_cmd` (not yet awaited) completed |
+| `.lane(v1::Lane::..)` | scheduling lane; the default fits the command |
+| `.id()` | the command id, shown in errors |
+
+| Command | Output | Notes |
+| --- | --- | --- |
+| `ctx.message(to).text(..).secs(u32).clear_view()` | `()` | `to`: `Coalition`, `&Group<K>`, `AnyGroup` (a menu press), `sortie::MessageTarget::All`; 10 s by default |
+| `ctx.smoke(at, SmokeColor::Red)` | `()` | `at`: a `MapPoint` (on the ground) or a `Vec3` |
+| `ctx.flag(flags::X).set(v)` / `.get()` | `()` / `i32` | `v`: `bool` or `i32` |
+| `ctx.spawn_group(t)` | `Group<K>` | `t`: `templates::X` or `templates::X.named("Name")`; then `.from_airbase(airbases::Y, StartType::{Runway, Hot, Cold, Air})` or `.at(Vec3, heading_rad)`; without either, the template's own placement. Default name `<template name>#<session4>-<n>`, units `<group>-<k>`; `.named` fails with `sortie::name_conflict` if a live group has the name. The engine paces spawns (currently 2 groups or 24 units a second), so a big wave takes time. |
+| `group.set_option(o)` | `()` | `o`: `Alarm::{Auto, Green, Red}` or `Roe::{WeaponFree, OpenFireWeaponFree, OpenFire, ReturnFire, WeaponHold}` |
+| `group.destroy()` | `()` | despawn; no DEAD event follows (a `UnitGone` does) |
+| `group.push_task(task)` / `group.set_task(task)` | `()` | `Group<Air>` and `Group<Helo>` only; push on the task stack or replace it |
+| `ctx.menu(c).command(menus::X)` | `MenuCommand<S>` | see Menus |
+| `ctx.end_session(outcome).text(..)` | `()` | ends the session (the turn); succeeds even if the session ends first |
+
+Tasks (`Task` is in the prelude):
+
+| Task | Defaults |
+| --- | --- |
+| `Task::cap(zones::X).altitude(Length).speed(Speed)` | 6000 m, 420 kt |
+| `Task::orbit(MapPoint).altitude(..).speed(..).race_track(MapPoint)` | 6000 m, 350 kt, a circle without `race_track` |
+| `Task::rtb(airbases::X)` | |
+| `Task::raw(sortie::proto::LuaValue)` | a DCS task table, not checked |
+
+Units and geometry: `m`, `km`, `ft`, `nm` → `Length`; `kts`, `mps`, `kmh` → `Speed`; `secs`,
+`mins`, `hours` → `Duration`. `MapPoint { north, east }` (metres, map axes): `.alt(Length)` →
+`Vec3`, `.distance(p)`, `.offset(north_m, east_m)`, `.bearing_to(p)`,
+`.toward(bearing_rad, Length)`. `Vec3 { x: north, y: up, z: east }`: `.map_point()`. Zones:
+`zones::X.center()`, `zones::X.contains(p)`.
+
+Groups: `ctx.group(groups::X)?` returns the live group or `sortie::not_in_world` (no live unit:
+late activation, destroyed) or `sortie::unknown_symbol` (the running mission lacks the symbol).
+`Group<K>` is bound to one life of the group: a group respawned under the same name is a new
+handle. Methods: `eid()`, `name()`, `alive_count()`, `is_alive()`, `any()` → `AnyGroup`.
+
+## Keys in loops
+
+```rust
+for n in 1..=3 {
+    ctx.timer(&format!("wave-{n}-delay"), mins(5)).await; // deadline stored in the engine
+    let wave = ctx
+        .spawn_group(templates::RED_CAP)
+        .from_airbase(airbases::MAYKOP, StartType::Hot)
+        .key(format!("wave-{n}")) // same n, same key: never spawned twice
+        .await?;
+    ctx.wait_until(|w| w.group(&wave).alive_count() == 0).await;
+}
+```
+
+After a logic restart the loop runs again from `n = 1`: passed timers return at once, keyed
+spawns return their stored groups, and the waits on dead groups pass. The script fast-forwards
+to where it was.
+
+## Once
+
+`Campaign` here and below is a state document type:
+`#[derive(Default, Serialize, Deserialize)] pub struct Campaign { pub sams_killed: u32 }`.
+
+```rust
+let campaign = ctx.state::<Campaign>("campaign").await?; // campaign scope: kept across turns
+
+// Once per session: skipped when the function runs again after a crash.
+ctx.once("briefing", async |ctx| {
+    ctx.message(Coalition::Blue)
+        .text("Destroy SAM North.")
+        .secs(30)
+        .await
+})
+.await?;
+
+// Once per turn (= per mission build): also skipped after a mission restart.
+ctx.wait_until(|w| w.group(&groups::SAM_NORTH).alive_count() == 0)
+    .await;
+ctx.once_per_turn("count-sam-kill", async |ctx| {
+    campaign.update(|c| c.sams_killed += 1).await?;
+    ctx.flag(flags::SAM_DOWN).set(true).await
+})
+.await?;
+```
+
+`ctx.once(name, f)` and `ctx.once_per_turn(name, f)` return `Ok(Some(value))` when `f` ran and
+`Ok(None)` when it had run before. The mark is written after `f` succeeded: an `Err` from `f`
+leaves it unmarked.
+
+## Waiting
+
+```rust
+ctx.sleep(secs(30)).await; // model time; stops while paused; starts over after a crash
+ctx.timer("cap-delay", mins(10)).await; // named: the deadline survives a logic restart
+
+let blue_in_front = |w: &World| {
+    w.units()
+        .coalition(Coalition::Blue)
+        .in_zone(zones::FRONT)
+        .any()
+};
+ctx.wait_until(blue_in_front).await;
+
+let red_left = ctx.world().group(&groups::RED_ARMOR).alive_count(); // a short borrow
+ctx.report().set("red_armor_left", red_left);
+
+// Any end: the logic, the time limit, a restart. Code after it runs only up to the next
+// .await; then the session's tasks are aborted.
+let end = ctx.until_session_end().await;
+eprintln!("session ended: {:?} ({:?})", end.outcome, end.reason); // the logic's stderr
+```
+
+- `wait_until` checks its predicate now, after every tick (10 per second) and after every
+  event. Keep the predicate cheap; see patterns.md for thousands of units.
+- `sleep`, `timer`: model time; a pause stops them.
+- `until_session_end()` → `SessionEnd { outcome: Option<Outcome>, text, reason }`, with
+  `sortie::EndReason`: `Logic`, `TimeLimit`, `Restart`, `MissionUnloaded`, `EngineShutdown`,
+  `Replaced`, `Disconnected`, `Unspecified`. When the session ends, pending commands fail with
+  `sortie::session_ended` (not a logic error) and every task of the session is aborted.
+- `ctx.model_time()`, `ctx.paused()`, `ctx.is_session_ended()`, `ctx.session_id()`,
+  `ctx.turn()` (the build id of the running mission).
+
+World queries (`ctx.world()` or the `wait_until` argument, a `&World`):
+
+| Query | Methods |
+| --- | --- |
+| `w.units()` (live units) | filters `.coalition(c)`, `.air()`, `.planes()`, `.helos()`, `.ground()`, `.ships()`, `.statics()`, `.any_category()`, `.dead()`, `.including_dead()`, `.players()`, `.in_group(&g)`, `.of_type("F-16C_50")`, `.in_zone(zones::X)`, `.within(point, km(5))`; results `.count()`, `.any()`, `.first()`, `.iter()`, `.eids()`, `.nearest_to(point)`, `.inside(&zone)`, `.any_inside(zone)`, `.count_inside(zone)` |
+| `w.players()`, `w.statics()` | the same query, preset |
+| `w.group(&g)` | `g`: a `Group<K>`, `&groups::X`, a DCS group name; `.exists()`, `.alive_count()`, `.size()`, `.is_dead()`, `.center()`, `.any_inside(z)`, `.count_inside(z)`, `.all_inside(z)`, `.units()`, `.alive_units()`; a missing group counts as empty |
+| `w.airbase_by_ident("MAYKOP")`, `w.airbase_by_name(..)`, `w.airbases()` | airbases with their current owner |
+
+An entity (`&sortie::world::Entity`) has `name`, `type_name`, `coalition`, `category`,
+`group_name`, `pos: Option<Vec3>`, `velocity`, `heading`, `player: Option<String>`, `life`,
+`dead`.
+
+## Events
+
+```rust
+let sam = ctx.group(groups::SAM_NORTH)?;
+// Subscribe first, then act: a stream only sees events from the moment it was made.
+let mut deaths = ctx.events().of::<v1::Dead>().in_group(&sam);
+ctx.spawn(async move |ctx| {
+    while let Some(dead) = deaths.next().await {
+        let name = dead.initiator.map(|u| u.name).unwrap_or_default();
+        ctx.message(Coalition::Blue)
+            .text(format!("{name} destroyed"))
+            .secs(10)
+            .await?;
+    }
+    Ok(()) // `None`: the session ended
+});
+```
+
+- `ctx.events()` → `Events`, `.next().await` → `Option<v1::Event>` (`ev.kind`,
+  `ev.model_time`, `ev.seq`); `None` once the session ended.
+- `.of::<E>()` keeps one type; filters `.in_group(&g)` (a `Group<K>` matches only its own life;
+  a `GroupRef` or a name matches whatever group has it now), `.coalition(c)`, `.filter(|e| ..)`.
+  They test the event's subject: the initiator, `unit` for `PlayerEnteredUnit`, `last_known`
+  for `UnitGone`.
+- Types: `Birth`, `Dead`, `UnitLost`, `Kill`, `Hit` (the initiator may be missing), `Shot`,
+  `Takeoff`, `Land`, `BaseCaptured`, `Mark`, `PlayerEnteredUnit` (built from BIRTH and the
+  player name: multiplayer clients do not get a reliable DCS event), `UnitGone` (left the world
+  without DEAD: despawned, missing from a sample), `MenuPressed`, `PlayerConnected`,
+  `PlayerDisconnected`, `PlayerChangedSlot`, `ChatMessage`, `SimulationPaused`,
+  `SimulationResumed`, `Gap` (events were lost; the replica was resynced), `Unknown`.
+- Each event is applied to the replica before your code sees it: in a `Dead` handler the unit
+  already counts as dead.
+- A stream sees events from the moment it was created. A stream that falls more than 1024
+  events behind skips the oldest and logs a warning.
+
+## Menus
+
+```rust
+let smoke = ctx
+    .menu(Coalition::Blue)
+    .per_group() // every blue player group gets the command; a press carries the group
+    .command(menus::SMOKE_OBJECTIVE)
+    .key("menu-smoke")
+    .await?;
+ctx.spawn(async move |ctx| {
+    let mut presses = smoke.presses();
+    while let Some(p) = presses.next().await {
+        ctx.smoke(zones::OBJECTIVE.center(), SmokeColor::Red)
+            .await?;
+        ctx.message(p.group)
+            .text("Red smoke on the objective")
+            .secs(10)
+            .await?;
+    }
+    Ok(())
+});
+
+let sitrep = ctx
+    .menu(Coalition::Blue)
+    .command(menus::SITREP)
+    .key("menu-sitrep")
+    .await?;
+ctx.spawn(async move |ctx| {
+    let mut presses = sitrep.presses();
+    while presses.next().await.is_some() {
+        let left = ctx.world().group(&groups::SAM_NORTH).alive_count();
+        ctx.message(Coalition::Blue)
+            .text(format!("SAM North: {left} alive"))
+            .await?;
+    }
+    Ok(())
+});
+```
+
+- `ctx.menu(coalition)` is one command for the whole coalition; a press is a
+  `CoalitionPress { coalition, model_time }`. `.per_group()` installs it for every player group
+  of the coalition (those present now and each new one at its first player BIRTH); a press is
+  a `GroupPress { group: AnyGroup, coalition, model_time }`, and `ctx.message(p.group)` answers
+  that group.
+- Label and sub-menu path come from `scenario.py` (`sc.menu(ident, label, path=[..])`).
+- Presses are queued from the moment the command is installed. Each press goes to one
+  `Presses` stream. `menu.remove()` removes the command. Adding the same command twice changes
+  nothing in DCS.
+
+## Flags
+
+```rust
+let sam_down = ctx.flag(flags::SAM_DOWN);
+sam_down.set(1).key("sam-down").await?; // bool or i32
+let value: i32 = sam_down.get().await?; // reads DCS (a mission trigger may change it too)
+```
+
+## State and results
+
+```rust
+#[derive(Default, Serialize, Deserialize)]
+struct Progress {
+    waves_sent: u32,
+}
+// Campaign scope (default): kept across turns; the generator can read it.
+let campaign = ctx.state::<Campaign>("campaign").await?;
+// Turn scope: survives mission restarts of this build; session scope: this session only.
+let turn = ctx
+    .state_in::<Progress>(v1::StateScope::Turn, "progress")
+    .await?;
+
+turn.update(|p| p.waves_sent += 1).await?; // compare-and-swap, retried on conflict
+let killed = campaign.get().sams_killed; // a local copy; do not hold `get()` across .await
+ctx.report().set("sams_killed", killed); // MissionResults.report_json, read by `results`
+```
+
+| Scope | Lives | API |
+| --- | --- | --- |
+| `v1::StateScope::Session` | this session | `ctx.state_in::<T>(v1::StateScope::Session, name)` |
+| `v1::StateScope::Turn` | this build (turn), across mission restarts | `ctx.state_in::<T>(v1::StateScope::Turn, name)` |
+| `v1::StateScope::Campaign` | across turns of the scenario | `ctx.state::<T>(name)` |
+
+`T: Serialize + DeserializeOwned + Default` (`#[derive(Default, Serialize, Deserialize)]`; the
+crate needs `serde` with the `derive` feature). `StateDoc<T>`: `get()` (local copy),
+`update(|t| ..)` (compare-and-swap; on a conflict it reloads and applies the closure again, up
+to 8 times), `set(value)`, `reload()`, `revision()`. The engine stores the documents (SQLite)
+and the generator reads them.
+
+`ctx.report().set(key, value)` writes a key of the session's results (`scenario.py results`);
+it does not wait, and a failure shows up as a logic error.
+
+## Binary and environment
+
+`sortie::main!(my_mission_logic::run)` makes the binary:
+
+```text
+my_mission_logic [--engine <url>] [--build-id <id>] [--logic <name>] [--dev]
+  --engine     engine gRPC address (SORTIE_ENGINE, default http://127.0.0.1:50777)
+  --build-id   build id announced to the engine (SORTIE_BUILD_ID, default <binary>@<version>)
+  --logic      logic name (default: the binary name)
+  --dev        spawns and destroys without .key() fail at the call site (SORTIE_DEV=1)
+```
+
+`SORTIE_TOKEN`: the API token (role `logic`; not needed with `sortied --dev`). `SORTIE_LOG`:
+the log filter (default `info`; logs go to stderr). `--standby` (hot reload) is not available
+yet. The binary reconnects with a backoff of 1 to 30 s. Exit codes: 0 after the engine shut it
+down, 2 for bad arguments, a refused token or a rejected attach, 1 if the runtime could not
+start.
+
+<!-- source: agents/sortie-mission-logic/references/errors.md -->
+
+# Sortie errors and fixes (for agents)
+
+A command error is a `sortie::Error` with a stable code and the Rust call site that built the
+command:
+
+```text
+error[sortie::gone]: `push_task` on group "Red CAP 1": Unit doesn't exist (at logic/src/lib.rs:48:9)
+```
+
+`e.report()` is the long form the runtime logs: the call site, the Lua traceback, the session
+and command ids and a `help:` line. `e.code()`, `e.origin()`, `e.lua_traceback()`,
+`e.failure()` (op, target, message) give the parts; `e.is_session_ended()` tells the normal
+end of a session from a failure.
+
+## Handling errors in a mission
+
+```rust
+let sam = match ctx.group(groups::SAM_NORTH) {
+    Ok(g) => g,
+    // In the manifest, but no live unit now (late activation, already destroyed).
+    Err(sortie::Error::NotInWorld { .. }) => return Ok(()),
+    // UnknownSymbol: the running mission was built from another scenario lock.
+    Err(e) => return Err(e),
+};
+match sam.set_option(Alarm::Red).key("sam-hot").await {
+    Ok(()) => {}
+    // The group died between the check and the command: expected in a live mission.
+    Err(sortie::Error::Gone(f)) => eprintln!("SAM North is gone: {}", f.message),
+    // The session ended while the command was in flight: not a logic error.
+    Err(e) if e.is_session_ended() => return Ok(()),
+    // Anything else: the runtime records it with `e.report()` (code, call site, hint).
+    Err(e) => return Err(e),
+}
+```
+
+An `Err` that leaves the mission function or a task spawned with `ctx.spawn` is recorded as a
+logic error (stderr of the logic, with its call site) and ends that task only. `SessionEnded`
+is never recorded. A panic is recorded the same way, with its location.
+
+## Command errors
+
+| Code | Meaning | Usual cause → fix |
+| --- | --- | --- |
+| `sortie::gone` | the target no longer exists in DCS | it died or was despawned before the command ran → match `Error::Gone` where a target can die (always in a live mission) |
+| `sortie::timeout` | DCS did not answer in time (10 s, 30 s for spawns and destroys) | a big spawn wave queued behind the spawn pacing, or a busy server → `.timeout(..)`, spawn in smaller steps, check `sortie status` / `sortie top` |
+| `sortie::lua_error` | the Lua layer raised an error | a bad `Task::raw` table, a wrong option for the unit type → read `e.lua_traceback()` |
+| `sortie::invalid` | the command does not fit | a spawn or destroy without `.key(..)` under `--dev`; a key reused for another command ("key `k` was already used for a different command in session ..."); a manifest without the template |
+| `sortie::name_conflict` | a live group already has this name | `.named("..")` twice → drop `.named` (default names are unique) or add a counter |
+| `sortie::session_ended` | the session ended before the command completed | normal at the end of a turn → return `Ok(())` |
+| `sortie::unavailable` | the engine cannot run it now | no mission session is running; or a keyed command was in flight when the DCS link dropped ("whether it ran is not known": check the world, then use a new key) |
+| `sortie::paused` | the simulation is paused | the command was sent with `.on_pause(v1::PausePolicy::Fail)` |
+| `sortie::rejected` | the engine refused the command | read the message |
+| `sortie::quarantined` | this command kind is disabled after it faulted the bridge | run `sortie doctor`, report it with `Logs/sortie-bridge.log` |
+| `sortie::bridge_fault` | the bridge caught a fault | report it with `Logs/sortie-bridge.log` |
+| `sortie::conflict` | a state write lost against another writer | `StateDoc::update` retries by itself; seen only after 8 conflicts in a row |
+
+## Lookup and state errors
+
+| Code | Message | Fix |
+| --- | --- | --- |
+| `sortie::unknown_symbol` | "the running mission has no group `X`; regenerate the scenario lock" | the mission in DCS was built from another lock: `python scenario.py lock`, `cargo build`, register and launch the mission again |
+| `sortie::not_in_world` | "group `X` is not in the world right now" | late activation, or all its units are dead → check `w.group(&groups::X).alive_count()` first, or match the error |
+| `sortie::state` | "state `name`: ..." | the engine's store refused: read the message; a `T` that no longer deserializes the stored JSON (changed field types) also lands here: add `#[serde(default)]` to new fields |
+| `sortie::transport` | "engine connection: ..." | the engine is unreachable: start `sortied`, check `--engine` / `SORTIE_ENGINE` |
+
+## Build errors
+
+| Where | Message (start) | Fix |
+| --- | --- | --- |
+| `build.rs` | `error: sortie-build failed for scenario "x": <path>: ...` + `help: the path is relative to the logic crate's Cargo.toml; ...` | the lock path is wrong or the lock is missing: `python scenario.py lock` |
+| `build.rs` | `... is for scenario "a", but build.rs asked for "b"` | the first argument of `sortie_build::scenario(..)` must be the lock's scenario name |
+| `build.rs` | `help: the lock was edited by hand or is corrupt; ...` | regenerate the lock; never edit it |
+| `include_scenario!` | `OUT_DIR is not set, so there is no generated scenario module to include` | add `sortie-build` to `[build-dependencies]` and the one-line `build.rs` |
+| `include_scenario!` | ``no generated module for scenario `x` (...); build.rs generated: ...`` | use the same name in `include_scenario!` and `sortie_build::scenario` |
+| `#[sortie::mission]` | ``a mission must be an `async fn` ...``, `the arguments are swapped ...`, ``a mission must return `sortie::Result<()>` ...`` | the signature is `async fn run(ctx: Ctx<M>, start: Start) -> sortie::Result<()>` |
+| `#[sortie::mission]` | `` `X` is not a scenario marker `` | `Ctx<M>` takes the marker from the generated module, e.g. `Ctx<frontline::Frontline>` |
+| `#[sortie::test]` | a compile error: tests without DCS arrive in SDK 0.2 | test decisions in plain functions with `#[test]`; test the mission in DCS |
+| any `.await` on a borrow | clippy `await_holding_refcell_ref` | end the `ctx.world()` / `StateDoc::get()` borrow before the `.await` |
+
+## Attach and runtime messages (the logic's stderr)
+
+| Message | Meaning → fix |
+| --- | --- |
+| ``cannot reach the engine at http://127.0.0.1:50777: ... (is `sortied` running?); retrying in N s`` | start `sortied`; the logic keeps retrying (1 to 30 s) |
+| ``error[sortie::transport]: Logic.Attach at ... failed: ... (set SORTIE_TOKEN to a token with the `logic` role)`` | exit code 2: set `SORTIE_TOKEN` (from `Saved Games\DCS\Sortie\tokens.toml`), or run `sortied --dev` locally |
+| ``error[sortie::rejected]: the engine rejected this logic: logic `x` was built against a different `s` schema: N symbol(s) missing from the running mission`` + `missing symbols: ...` | exit code 2: the mission in DCS lacks symbols this logic was built with; build the logic and the mission from the same lock |
+| ``another PRIMARY logic is attached for `s` `` | a second copy of the logic is running: stop the old process |
+| ``a `observer` token cannot attach a logic (needs `logic` or `admin`)`` | use a `logic` token |
+| `` `spawn_group` without `.key(..)` in dev mode: a hot reload would run it again; add a key such as `.key("spawn-group-1")` `` | the logic runs with `--dev`: add a key |
+| ``in dev mode spawn_group and destroy need `.key(..)` (hot reload replays commands by key)`` | `sortied --dev` refused it: add a key |
+| ``tick N: the world replica is borrowed across an `.await` ...`` | a `ctx.world()` guard lives across `.await`: shorten the borrow |
+| `event stream lagged` (warning, `skipped = N`) | an event loop is too slow: keep it short, move slow work to another task |
+| `task spawned at src/lib.rs:L:C returned` + report, or `... panicked at ...` | that task ended with an error; the others keep running |
+
+<!-- source: agents/sortie-mission-logic/references/patterns.md -->
+
+# Patterns for a long multiplayer mission (for agents)
+
+A server mission runs for hours, holds thousands of units, and players come and go. The
+patterns below keep it cheap and replay-safe. They use the `frontline` scenario.
+
+## Shape: one task per concern
+
+```rust
+use sortie::prelude::*;
+use sortie::proto::v1;
+use sortie::types::Eid;
+
+use frontline::{Frontline, airbases, groups, menus, templates, zones};
+
+#[sortie::mission]
+pub async fn run(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
+    // One task per concern; each lives until the session ends.
+    ctx.spawn(support_menu);
+    ctx.spawn(players);
+    ctx.spawn(red_waves);
+    ctx.spawn(front_control);
+    ctx.spawn(idle_end);
+
+    // The turn ends when the objective falls; otherwise the manifest's time limit ends it.
+    ctx.wait_until(|w| w.group(&groups::SAM_NORTH).alive_count() == 0)
+        .await;
+    ctx.end_session(Outcome::BlueWin)
+        .text("SAM North destroyed")
+        .await
+}
+```
+
+- Each concern (menus, players, AI waves, zone control, the idle timeout) is a plain
+  `async fn name(ctx: Ctx<M>) -> sortie::Result<()>` started with `ctx.spawn(name)`. An error
+  in one is recorded and ends only that task.
+- The mission function itself waits for the end condition and calls `end_session`. Without
+  one, the time limit of the scenario (`time_limit=` in `scenario.py`) ends the turn.
+- Every task is a replayable script: after a logic restart all of them start again from the
+  top, so each step is keyed, `once`d, timed by a named timer or a wait on world state.
+
+## Players joining and leaving
+
+```rust
+/// Players joining and leaving: one loop over the raw event stream.
+pub async fn players(ctx: Ctx<Frontline>) -> sortie::Result<()> {
+    let mut events = ctx.events();
+    while let Some(ev) = events.next().await {
+        match ev.kind {
+            Some(v1::event::Kind::PlayerEnteredUnit(e)) => {
+                let Some(unit) = e.unit else { continue };
+                let group = AnyGroup {
+                    eid: unit.group_eid.and_then(Eid::from_u64),
+                    name: unit.group_name,
+                };
+                let text = format!("Welcome, {}. F10 > Support has smoke.", e.player);
+                match ctx.message(group).text(text).secs(15).await {
+                    // Gone: the player left the slot before the message went out.
+                    Ok(()) | Err(sortie::Error::Gone(_)) => {}
+                    Err(err) => return Err(err),
+                }
+            }
+            Some(v1::event::Kind::PlayerDisconnected(e)) => {
+                eprintln!("{} left", e.name); // the logic's stderr
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+```
+
+- `PlayerEnteredUnit` comes for every player who takes a slot, also on a respawn into a new
+  aircraft. `PlayerConnected` and `PlayerDisconnected` (player id, name, `ucid`) and
+  `PlayerChangedSlot` (player id, name, coalition, slot) come from the server.
+- Who is flying now is world state: `w.players()` (units with a player), `.coalition(..)`,
+  `entity.player`. After a logic restart the event history is gone; the world is not.
+- Per-group menus (`.per_group()`) reach groups that spawn later on their own: no code per
+  join.
+- Event-driven messages need no key: a replay does not see old events, so it cannot repeat
+  them.
+
+## AI waves
+
+```rust
+/// AI pressure: paced by named timers, keyed per wave, capped, scaled to the players online.
+pub async fn red_waves(ctx: Ctx<Frontline>) -> sortie::Result<()> {
+    let mut alive: Vec<Group<Air>> = Vec::new();
+    for n in 1u32.. {
+        ctx.timer(&format!("wave-{n}"), mins(15)).await;
+        alive.retain(Group::is_alive);
+        let blue = ctx.world().players().coalition(Coalition::Blue).count();
+        if blue == 0 || alive.len() >= 4 {
+            continue; // nobody to fight, or enough red in the air already
+        }
+        let cap = ctx
+            .spawn_group(templates::RED_CAP)
+            .from_airbase(airbases::MAYKOP, StartType::Hot)
+            .key(format!("wave-{n}"))
+            .await?;
+        cap.push_task(Task::cap(zones::FRONT))
+            .key(format!("wave-{n}-task"))
+            .await?;
+        alive.push(cap);
+    }
+    Ok(())
+}
+```
+
+- A named timer per wave paces the loop and survives a logic restart; a key per wave makes the
+  spawn and its task happen once.
+- The decision (players online, red already in the air) reads the world as it is now. A replay
+  decides again only for waves that never spawned.
+- Cap the number of live AI groups. The engine paces spawns (currently 2 groups or 24 units a
+  second) and a spawn waits at most 30 s by default: a wave of many groups is a loop of
+  awaited spawns, not hundreds of commands at once.
+- A spawned group's name is `<template name>#<session4>-<n>`; find spawned groups in queries by
+  their `Group` handle, not by name.
+
+## Thousands of units
+
+- `wait_until` runs its predicate after every tick (10 a second) and every event. A predicate
+  over a group (`w.group(&g).alive_count()`) or a zone (`.any_inside(zone)`, indexed by a
+  spatial grid) is cheap. A predicate that scans every unit is not: poll it every few seconds
+  with `ctx.sleep` instead.
+
+```rust
+/// A periodic check instead of `wait_until`: cheap with thousands of units.
+pub async fn front_control(ctx: Ctx<Frontline>) -> sortie::Result<()> {
+    loop {
+        ctx.sleep(secs(30)).await;
+        let (red, blue) = {
+            let w = ctx.world();
+            let red = w
+                .units()
+                .coalition(Coalition::Red)
+                .ground()
+                .count_inside(zones::FRONT);
+            let blue = w
+                .units()
+                .coalition(Coalition::Blue)
+                .ground()
+                .count_inside(zones::FRONT);
+            (red, blue)
+        }; // the borrow of the world ends here, before the next .await
+        if red == 0 && blue > 0 {
+            ctx.message(sortie::MessageTarget::All)
+                .text("Blue holds the front")
+                .key("front-taken")
+                .await?;
+            return Ok(());
+        }
+    }
+}
+```
+
+- Symbols are for what the logic names. Ten scenario groups with idents and hundreds of
+  anonymous ones (from templates or a `@sc.pydcs` hook) is normal: query those by zone, type
+  (`.of_type(..)`), coalition, or DCS name (`.in_group("Name")`).
+- An event stream that falls more than 1024 events behind drops the oldest. Keep each event
+  loop short; hand slow work (spawns, many messages) to another task. Several typed streams
+  (`.of::<v1::Dead>()`, `.of::<v1::Kill>()`) are cheaper to keep up than one loop that awaits
+  inside.
+- Read the world in a block and drop the borrow before the next `.await`.
+
+## Idle server
+
+```rust
+/// Ends the turn after 30 minutes of model time without a player in a slot.
+pub async fn idle_end(ctx: Ctx<Frontline>) -> sortie::Result<()> {
+    let mut idle_minutes = 0;
+    loop {
+        ctx.sleep(mins(1)).await;
+        let online = ctx.world().players().count();
+        idle_minutes = if online == 0 { idle_minutes + 1 } else { 0 };
+        if idle_minutes == 30 {
+            return ctx
+                .end_session(Outcome::Aborted)
+                .text("No players for 30 minutes")
+                .await;
+        }
+    }
+}
+```
+
+Model time stops while the simulation is paused; a server that pauses without players never
+reaches the 30 minutes, which is what you want.
+
+## Scores and other campaign data
+
+```rust
+/// Campaign-wide scores, kept by the engine.
+#[derive(Default, Serialize, Deserialize)]
+pub struct Scores {
+    pub kills: std::collections::BTreeMap<String, u32>,
+}
+
+pub async fn scores(ctx: Ctx<Frontline>) -> sortie::Result<()> {
+    let scores = ctx.state::<Scores>("scores").await?;
+    let mut kills = ctx.events().of::<v1::Kill>().coalition(Coalition::Blue);
+    while let Some(kill) = kills.next().await {
+        let Some(player) = kill.initiator.and_then(|u| u.player) else {
+            continue; // an AI kill
+        };
+        scores
+            .update(|s| *s.kills.entry(player.clone()).or_default() += 1)
+            .await?;
+    }
+    Ok(())
+}
+```
+
+- Campaign documents live in the engine and survive restarts of the logic, the mission and the
+  engine; the generator reads them for the next turn.
+- Every `update` is a round trip to the engine. One per kill is fine; for high-rate data
+  (hits, shots) count locally and write once a minute.
+- A logic restart does not replay old events, so an event-driven counter never counts twice.
+  A counter driven by a replayed step (a wave, an objective) goes inside `ctx.once_per_turn`.
+
+## Instead of → do
+
+| Instead of | Do |
+| --- | --- |
+| a spawn or destroy without a key | `.key("step-name")` on every spawn and destroy |
+| a key built from model time, a random number or an Eid | a key built from the step: a literal or a deterministic counter |
+| the same key with a changing text | a key per distinct command, or no key for event-driven messages |
+| `ctx.sleep` for a delay that must survive a restart | `ctx.timer("name", dur)` |
+| waiting for a `Dead` event | a `wait_until` on `w.group(&g).alive_count() == 0` |
+| `campaign.update(..)` in the open | inside `ctx.once_per_turn(..)` |
+| holding `ctx.world()` or `doc.get()` across `.await` | a block that ends before the `.await` |
+| `std::thread::sleep`, blocking I/O, `std::thread::spawn` | `ctx.sleep`, `ctx.spawn` |
+| hundreds of spawns at once | a loop of awaited spawns with a cap |
+| a `wait_until` predicate scanning every unit | a group or zone predicate, or a poll with `ctx.sleep` |
+| `ctx.group(groups::X)?` on a group that may be dead | match `Error::NotInWorld`, or check `alive_count()` first |
+| `.unwrap()` on command results | `?`, or a `match` on the errors the step expects (`Gone`, `SessionEnded`) |
+| editing `scenario.lock.json` | `python scenario.py lock` |
+
+<!-- source: agents/sortie-scenario/SKILL.md -->
+
+Skill `sortie-scenario` (sortie-scenario/SKILL.md): Sortie scenarios in Python (`scenario.py` with sortie-gen over pydcs, DCS World). Use when writing or changing a scenario (zones, ground groups, air templates, statics or other pydcs content, airbases, player flights and their airfield coalition, flags, F10 menus), when running `lock`, `build`, `validate`, `register`, `launch`, `restart`, `watch` or `results`, when a sortie-gen error or warning appears, or when the Rust logic needs a new symbol.
+
+
+# Sortie scenarios
+
+`scenario.py` declares the static part of a mission. sortie-gen (a wrapper over pydcs 1.0.0)
+builds three things from it:
+
+- the `.miz`, with one MISSION START trigger whose DO SCRIPT calls `SORTIE.attach{..}`;
+- the manifest (`<build_id>.manifest.pb` and `.json`): groups, units, zones, templates, flags,
+  airbases, menus, player slots, as the engine and the logic see them;
+- `scenario.lock.json`: the symbols (idents) the Rust logic compiles against. It is the
+  contract between the two sides: commit it, never edit it.
+
+An `ident=` makes a symbol: `groups::SAM_NORTH`, `zones::FRONT`, `templates::RED_CAP`,
+`airbases::MAYKOP`, `flags::SAM_DOWN`, `menus::SITREP` in Rust. Without an ident a zone is
+only in the `.miz`, and a group is in the `.miz` and the manifest but has no Rust symbol.
+
+## Setup
+
+```powershell
+uv add "sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.1.0#subdirectory=python/sortie-gen"
+```
+
+Or install the `sortie_gen` wheel from the GitHub release. Python 3.11+.
+
+## A scenario, step by step
+
+The `frontline` scenario that the mission-logic skill uses. Header: name, schema, map, start,
+time limit.
+
+```python
+from dcs import planes, statics, vehicles
+from dcs.terrain import caucasus
+
+from sortie_gen import Coalition, Scenario, StartType
+
+sc = Scenario(
+    "frontline",
+    schema=1,
+    theatre=caucasus.Caucasus(),
+    start="2026-11-01T07:00:00Z",  # RFC 3339; without an offset: the map's local time
+    time_limit="4h",  # the engine ends the session (turn) after 4 h of model time
+)
+```
+
+Zones: a circle (`at` + `radius`, metres) or a quad (`points=[4 points]`).
+
+```python
+obj = sc.zone("Objective", ident="OBJECTIVE", at=sc.latlon(44.62, 40.10), radius=500)
+ring = sc.zone("SAM Ring", ident="SAM_RING", at=obj.center, radius=60_000)
+front = sc.zone("Front", ident="FRONT", at=sc.latlon(44.95, 38.60), radius=20_000)
+sc.zone("Editor note", at=sc.latlon(44.70, 40.00), radius=1_000)  # no ident: .miz only
+```
+
+Ground groups are placed in the `.miz`; unit `k` is named `<group>-<k>`.
+
+```python
+sc.ground_group(
+    "SAM North",
+    ident="SAM_NORTH",
+    country="Russia",
+    at=obj.center,
+    units=[
+        vehicles.AirDefence.S_300PS_54K6_cp,
+        vehicles.AirDefence.S_300PS_40B6M_tr,
+        vehicles.AirDefence.S_300PS_64H6E_sr,
+        *[vehicles.AirDefence.S_300PS_5P85C_ln] * 4,
+    ],
+    roles={"sam", "north"},
+)
+sc.ground_group(
+    "Red Armor",
+    ident="RED_ARMOR",
+    country="Russia",
+    at=front.center,
+    units=[vehicles.Armor.T_72B] * 4,
+    formation="line",
+    heading=270,
+    roles={"armor"},
+)
+```
+
+Air templates stay out of the `.miz`: the logic spawns them (`ctx.spawn_group`).
+
+```python
+sc.air_template(
+    "Red CAP",
+    planes.Su_27,
+    ident="RED_CAP",
+    country="Russia",
+    size=2,
+    airbase="Maykop-Khanskaya",  # default placement when the logic gives none
+    payload=[  # pylon tuples: the hermetic build knows no default loadout for this task
+        planes.Su_27.Pylon1.R_73__AA_11_Archer____Infra_Red,
+        planes.Su_27.Pylon10.R_73__AA_11_Archer____Infra_Red,
+    ],
+)
+```
+
+Airbases (symbols for the logic) and player slots:
+
+```python
+sc.airbase("Maykop-Khanskaya", ident="MAYKOP", coalition=Coalition.Red)
+sc.airbase("Krymsk", ident="KRYMSK")  # the player flights below give it to blue
+sc.player_flight(
+    "Viper 1", planes.F_16C_50, country="USA", airbase="Krymsk", start=StartType.Cold, size=2
+)
+sc.player_flight(
+    "Hog 1", planes.A_10C_2, country="USA", airbase="Krymsk", start=StartType.Hot, size=2
+)
+```
+
+Flags and F10 menu commands (the logic installs the menus):
+
+```python
+sc.flag("SAM_DOWN")
+sc.menu("SMOKE_OBJECTIVE", "Smoke the objective", path=["Support"])
+sc.menu("SITREP", "Situation report")
+```
+
+Everything Sortie does not wrap (statics, air groups placed in the `.miz`, weather, briefing,
+your own triggers) goes in a `@sc.pydcs` hook. It runs on every build after the declarations.
+Groups it adds are in the manifest without an ident; reach them by DCS name.
+
+```python
+from dcs.triggers import TriggerStart
+
+from sortie_gen.miz import InlineDoScript
+
+
+@sc.pydcs
+def extras(m):
+    # What Sortie does not wrap: statics, weather, briefing, your own triggers.
+    hq = sc.latlon(44.61, 40.08)
+    m.static_group(m.country("Russia"), "Red HQ", statics.Fortification._Command_Center, hq)
+    t = TriggerStart(comment="welcome")
+    t.add_action(InlineDoScript('trigger.action.outText("Frontline is live", 15)'))
+    m.triggerrules.triggers.append(t)
+```
+
+```python
+if __name__ == "__main__":
+    sc.cli()  # lock | build | validate | register | launch | restart | watch | results
+```
+
+All signatures and defaults: [references/reference.md](https://lynxr.github.io/sortie-sdk/agents/sortie-scenario/references/reference.md).
+
+## Rules
+
+1. **Positions** are `sc.latlon(lat, lon)`, `sc.point(north, east)` (editor axes, metres), a
+   zone (`zone.center` or the handle) or an airbase handle. A bare tuple is refused.
+2. **Names.** DCS group names are unique across groups, templates and player flights, at most
+   128 bytes, without `#` (reserved for spawned groups: `<template>#<session4>-<n>`). Idents
+   match `[A-Z][A-Z0-9_]*` and are unique per kind; roles `[a-z][a-z0-9_-]*`; the scenario name
+   `[a-z][a-z0-9_]*` and not a Rust keyword. sortie-gen refuses a bad name at the declaration.
+3. **The airfield coalition rule (multiplayer).** DCS offers a parking slot only to the
+   coalition that owns the airfield; at a neutral or enemy airfield the player stays a
+   spectator. So `player_flight` with a `Cold`, `Hot` or `Runway` start gives its airfield to
+   the flight's coalition. The build fails when the scenario gives that airbase to another
+   coalition (`airbase(.., coalition=..)`) or starts flights of two coalitions there. A client
+   group added by a `@sc.pydcs` hook gets only a warning: fix its airfield owner in the hook.
+4. **Late activation** (`late_activation=True`) has no activate command in the SDK: a group
+   that appears later is an `air_template` the logic spawns.
+5. **A symbol change needs both sides.** Add or rename an ident → `lock` → `cargo build` of
+   the logic → `register` a new build. Moving a zone or a unit changes no symbol: the logic
+   needs no change (the running manifest's geometry wins).
+
+## Commands
+
+Run from the mission repository: `uv run python scenario.py <command>`.
+
+| Command | Does | Needs |
+| --- | --- | --- |
+| `lock [--check]` | writes `scenario.lock.json`; `--check` only fails if it is stale (CI) | nothing |
+| `build [--out DIR] [--no-miz] [--stem NAME] [--locked]` | offline build into `dist/` (or `--out`); updates the lock unless `--locked` | nothing |
+| `validate` | asks DCS whether it knows every unit and static type | a running mission with Sortie (the lobby is enough) |
+| `register [--out DIR] [--no-validate]` | engine build id, build, type check, `Missions.Register`; the engine stores the `.miz` in `Saved Games\DCS\Missions\Sortie\` | `sortied` |
+| `launch [--build-id ID] [--no-validate]` | registers a fresh build (without `--build-id`) and loads it in DCS | a dedicated server with Sortie |
+| `restart` | reloads the running mission: its session ends (reason `restart`), a new one starts with `Start::Restart` | a multiplayer server or host; single player refuses at once |
+| `watch [--kinds dead,birth] [--from-seq N] [--session S]` | engine health and the live event stream | `sortied` |
+| `results [--session S] [--json]` | results of the last (or a given) session: outcome, fates, kills, flags, report | `sortied` |
+
+The engine address is `--engine`, `SORTIE_ENGINE` or `127.0.0.1:50777`; the token is
+`--token` or `SORTIE_TOKEN` (role `generator`; not needed with `sortied --dev`). Exit codes: 0
+done, 1 error, 2 a feature that is not built yet.
+
+Single player: `launch` needs a server, so `register`, then open
+`Saved Games\DCS\Missions\Sortie\<scenario>-<build_id>.miz` in DCS yourself.
+
+## Builds and turns
+
+- **Determinism.** An offline `build` derives the build id from the content (start time,
+  manifest, mission): the same scenario gives byte-identical files on one machine; the manifest
+  and the lock are meant to match across machines too. By default the build uses only the data
+  inside pydcs (hermetic): a template without a default loadout warns "spawns without weapons";
+  pass `payload=` (pylon tuples, as above). `SORTIE_GEN_DCS_DATA=installed` uses the installed
+  DCS loadouts and makes the build machine-dependent.
+- **A build is a turn.** `register` takes a fresh build id from the engine every time, so a new
+  registration starts a new turn: `Start::Fresh`, fresh keys, `once` and `once_per_turn`.
+  `restart` keeps the build (same turn).
+- **Type check.** `register` and `launch` stop when DCS on the server does not know a type
+  (a typo, a missing module or mod) and print where it is used. When the check cannot run (no
+  mission, the server is paused, an older engine) they warn and register anyway.
+  `--no-validate` skips it.
+
+## The Mission Editor and DO SCRIPT
+
+- A built `.miz` can be opened, re-saved and flown from the Mission Editor: the bootstrap is
+  stored the way the editor writes DO SCRIPT (code inline in the action), so the mission still
+  attaches.
+- Change groups, units and zones in `scenario.py`, not in the editor: the manifest describes
+  the build, and an edited `.miz` no longer matches it.
+- A DO SCRIPT added in a `@sc.pydcs` hook uses `sortie_gen.miz.InlineDoScript`, not pydcs's
+  `DoScript` (the editor would run its dictionary key as Lua).
+- Do not load and save a built `.miz` with pydcs: it rewrites every DO SCRIPT into the
+  dictionary form.
+- `uv run sortie-gen adopt my.miz [--json]` lists the coalitions, groups, units and zones of an
+  editor mission with proposed idents: the start for porting it to `scenario.py`.
+
+## More
+
+- [references/reference.md](https://lynxr.github.io/sortie-sdk/agents/sortie-scenario/references/reference.md): every declaration with its parameters,
+  the CLI flags, the `sortie-gen` command, and the generator's errors.
+- The Rust side: the sortie-mission-logic skill. Running in DCS: the sortie-live-debugging
+  skill. Docs (Russian): https://lynxr.github.io/sortie-sdk/.
+
+<!-- source: agents/sortie-scenario/references/reference.md -->
+
+# sortie-gen reference (for agents)
+
+`from sortie_gen import Scenario, StartType, Coalition`. Unit and aircraft types are pydcs
+classes (`dcs.vehicles.*`, `dcs.planes.*`, `dcs.helicopters.*`); countries are pydcs country
+names (`"Russia"`, `"USA"`); airbases are names of the map's airports (`"Krymsk"`) or
+`sc.theatre.airports[..]`. Unknown names fail with a "did you mean" hint.
+
+## Declarations
+
+| Declaration | Parameters (defaults) | Result |
+| --- | --- | --- |
+| `Scenario(name, *, schema, theatre, start, time_limit=None, description=None)` | `name`: `[a-z][a-z0-9_]*`; `schema`: int ≥ 1; `theatre`: a pydcs terrain (`caucasus.Caucasus()`); `start`: RFC 3339, without an offset the map's local time; `time_limit`: `"3h"`, `"1h30m"`, `"90m"`, seconds, `None` = no limit | the scenario |
+| `sc.zone(name, *, ident=None, at=, radius=)` or `points=[p1, p2, p3, p4]`; `hidden=True`, `color=None` | a circle or a quad | `ZoneHandle` (`.center`) |
+| `sc.ground_group(name, *, ident=None, country, at, units=[..], heading=0.0, formation="star", spacing=40.0, skill="Excellent", roles=None, late_activation=False, hidden=False)` | `formation`: `line`, `star`, `rectangle`, `vee`; the first unit stands at `at`; units named `<name>-<k>` | `GroupHandle` |
+| `sc.air_template(name, unit_type, *, ident, country, size=1, task=None, at=None, airbase=None, altitude=None, speed=None, skill="High", roles=None, payload=None)` | kept out of the `.miz`; `task` defaults to the type's main task; placement when the logic gives none: `at`, else `airbase`, else the first declared airbase, else the coalition's bullseye; `altitude` 6000 m (2000 m for helicopters); `speed` in km/h; `payload`: a pydcs loadout name or a list of pylon tuples | `TemplateHandle` |
+| `sc.airbase(name, *, ident, coalition=None)` | `coalition`: `Coalition.Red/Blue/Neutral` or `"red"`; without it the map's default owner stays (except player airfields) | `AirbaseHandle` (`.position`) |
+| `sc.player_flight(name, unit_type, *, country, airbase, start=StartType.Cold, size=1, task=None, skill="Client", payload=None, at=None, altitude=3000.0)` | `start`: `StartType.Cold`, `Hot`, `Runway`, `Air` (`Air` needs `at=`); the type must be flyable; goes to `manifest.player_flights`, not to the lock | `FlightHandle` |
+| `sc.flag(ident, *, name=None, initial=0)` | DCS flag name defaults to the ident; a non-zero `initial` is set by a MISSION START trigger | `FlagHandle` |
+| `sc.menu(ident, label, *, path=())` | `path`: sub-menus, e.g. `["Support"]` | `MenuHandle` |
+| `@sc.pydcs` on `def hook(mission)` | runs after the declarations on every build; names are checked for uniqueness afterwards | the function |
+| `sc.latlon(lat, lon)`, `sc.point(north, east)` | positions; `latlon` is rounded to 1 mm | `dcs.mapping.Point` |
+| `sc.time_limit = "2h"` | changes the limit after construction | |
+| `sc.build(build_id=None)` | in-memory build: `.build_id`, `.manifest`, `.miz`, `.lock`, `.warnings`, `.write(out_dir)` | `Build` |
+| `sc.cli()` | the command line below | exits |
+
+Idents are optional for zones and ground groups (no ident: no Rust symbol) and required for
+templates, airbases, flags and menus.
+
+## `python scenario.py` flags
+
+```text
+lock      [--out FILE] [--check]
+build     [--out DIR] [--lock FILE] [--locked] [--build-id ULID] [--stem NAME] [--no-miz]
+validate  [--engine ADDR] [--token T] [--timeout S]
+register  [--out DIR] [--lock FILE] [--locked] [--no-validate] [--engine ADDR] [--token T] [--timeout S]
+launch    [--build-id ID] [--out DIR] [--lock FILE] [--locked] [--no-validate] [--engine ADDR] [--token T] [--timeout S]
+restart   [--engine ADDR] [--token T] [--timeout S]
+watch     [--session S] [--kinds birth,dead,...] [--from-seq N] [--engine ADDR] [--token T] [--timeout S]
+results   [--session S] [--json] [--engine ADDR] [--token T] [--timeout S]
+```
+
+- `--timeout`: seconds per engine call (default 15).
+- `watch --kinds`: `birth`, `dead`, `unit_lost`, `kill`, `hit`, `shot`, `takeoff`, `land`,
+  `base_captured`, `mark`, `player_entered_unit`, `unit_gone`, `menu_pressed`,
+  `player_connected`, `player_disconnected`, `player_changed_slot`, `chat_message`,
+  `simulation_paused`, `simulation_resumed`, `gap`, `unknown`.
+- `build --no-miz --stem NAME --out DIR` writes only the manifest files.
+- `launch --build-id ID` builds and checks nothing: it loads a build registered earlier.
+
+## `sortie-gen`
+
+```text
+sortie-gen lock|build|validate|register|launch <scenario.py> [flags]
+sortie-gen restart|watch|results [flags]                 # no scenario file needed
+sortie-gen lobby [--out missions/sortie-lobby.miz] [--theatre caucasus]
+sortie-gen adopt my.miz [--json]
+```
+
+- `lobby` writes the idle mission for a dedicated server's `missionList` (no units, no
+  bootstrap; it shows whether the bridge loaded). The engine uses the running lobby to check
+  types.
+- `adopt` reports an editor mission: groups, units, zones, proposed idents, names that break
+  the rules. pydcs may move aircraft to other parking spots when it saves a mission: place
+  player slots with `player_flight`.
+- `worker` (the campaign loop) is not available yet: it exits with code 2.
+
+## Errors and warnings
+
+The CLI prints `error: ...` without a traceback. In code they are `sortie_gen` exceptions:
+`InvalidName`, `NameConflict`, `ScenarioError`, `LockError`, `UnknownTypes`, `EngineError`,
+`EngineUnavailable`, `EngineNotReady`, `NotYet` (all `GeneratorError`).
+
+| Message (start) | Fix |
+| --- | --- |
+| `... ident 'x' must match [A-Z][A-Z0-9_]*` | idents are Rust constants: `SAM_NORTH` |
+| `a group named 'X' already exists in this scenario` / `two groups are named 'X'` | DCS would destroy one of them: rename |
+| `... contains '#', which is reserved for spawned groups` | drop the `#` |
+| `pass a position made with sc.latlon(lat, lon), sc.point(north, east), a zone or an airbase` | a bare tuple is ambiguous |
+| `player flights 'A' (blue) and 'B' (red) both start at X` | one airfield, one coalition: move a flight or use an air start |
+| `player flight 'A' (blue) starts at X, which the scenario gives to red` | give the airbase to the flight's coalition or start elsewhere |
+| warning `player group 'A' (blue) starts at X, which belongs to red` | a hook placed a client group: set the airfield owner in the hook |
+| warning `template 'X' (Su-27) spawns without weapons` | `payload=[..]` pylon tuples, or `SORTIE_GEN_DCS_DATA=installed` |
+| `pydcs knows no loadout 'X' for Y` | a loadout name needs `SORTIE_GEN_DCS_DATA=installed`; or list the pylons |
+| `scenario.lock.json is stale (...); run python scenario.py lock` | after `--locked` / `--check`: run `lock`, rebuild the logic |
+| warning `the symbol set changed: rebuild the mission logic (cargo build)` | rebuild the logic before running it against the new build |
+| `DCS on the server does not know N type(s) this scenario uses:` | fix the type name, or install the module or mod on the server; `--no-validate` skips the check |
+| warning `unit and static types not checked: ... (registering anyway)` | no mission ran in DCS, or it was paused; start the lobby to get the check |
+| `cannot reach the Sortie engine at 127.0.0.1:50777 (...). Is sortied running?` | start `sortied --dev` locally, or point `--engine` / `SORTIE_ENGINE` at it |
+| `... FAILED_PRECONDITION ...` on `restart` | single player, or the hooks part of Sortie predates the install: restart DCS itself |

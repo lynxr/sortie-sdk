@@ -1,0 +1,19 @@
+error: `OpNorth` is not a scenario name: names match [a-z][a-z0-9_]*
+ --> tests/ui/include_scenario.rs:1:34
+  |
+1 | sortie_macros::include_scenario!(OpNorth);
+  |                                  ^^^^^^^
+
+error: OUT_DIR is not set, so there is no generated scenario module to include. Add `sortie-build` to [build-dependencies] and a build.rs with `fn main() { sortie_build::scenario("op_north", "scenario.lock.json").emit(); }`
+ --> tests/ui/include_scenario.rs:3:34
+  |
+3 | sortie_macros::include_scenario!(op_north);
+  |                                  ^^^^^^^^
+
+error: unexpected end of input, expected the scenario name, e.g. `sortie::include_scenario!(op_north);`
+ --> tests/ui/include_scenario.rs:5:1
+  |
+5 | sortie_macros::include_scenario!();
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the macro `sortie_macros::include_scenario` (in Nightly builds, run with -Z macro-backtrace for more info)

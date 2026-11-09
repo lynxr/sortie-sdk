@@ -1,0 +1,228 @@
+// Typed events (decoded by the engine from raw DCS events) and the Events service.
+syntax = "proto3";
+
+package sortie.v1;
+
+import "google/protobuf/timestamp.proto";
+import "sortie/v1/common.proto";
+import "sortie/v1/world.proto";
+
+service Events {
+  // Live events, optionally replayed from the journal starting at `from_seq`.
+  rpc Subscribe(SubscribeEventsRequest) returns (stream Event);
+}
+
+message Event {
+  // Monotonic within a session, starting at 1. A hole is always announced by a Gap event.
+  uint64 seq = 1;
+  double model_time = 2;
+  google.protobuf.Timestamp wall_time = 3;
+  string session = 4;
+  oneof kind {
+    Birth birth = 10;
+    Dead dead = 11;
+    UnitLost unit_lost = 12;
+    Kill kill = 13;
+    Hit hit = 14;
+    Shot shot = 15;
+    Takeoff takeoff = 16;
+    Land land = 17;
+    BaseCaptured base_captured = 18;
+    Mark mark = 19;
+    // Synthesised by the engine.
+    PlayerEnteredUnit player_entered_unit = 30;
+    UnitGone unit_gone = 31;
+    MenuPressed menu_pressed = 32;
+    // From the hooks environment.
+    PlayerConnected player_connected = 33;
+    PlayerDisconnected player_disconnected = 34;
+    PlayerChangedSlot player_changed_slot = 35;
+    ChatMessage chat_message = 36;
+    SimulationPaused simulation_paused = 40;
+    SimulationResumed simulation_resumed = 41;
+    Gap gap = 50;
+    // Anything DCS emits that the engine does not decode yet.
+    Unknown unknown = 99;
+  }
+}
+
+// Filter values for Events.Subscribe.
+enum EventKind {
+  EVENT_KIND_UNSPECIFIED = 0;
+  EVENT_KIND_BIRTH = 1;
+  EVENT_KIND_DEAD = 2;
+  EVENT_KIND_UNIT_LOST = 3;
+  EVENT_KIND_KILL = 4;
+  EVENT_KIND_HIT = 5;
+  EVENT_KIND_SHOT = 6;
+  EVENT_KIND_TAKEOFF = 7;
+  EVENT_KIND_LAND = 8;
+  EVENT_KIND_BASE_CAPTURED = 9;
+  EVENT_KIND_MARK = 10;
+  EVENT_KIND_PLAYER_ENTERED_UNIT = 11;
+  EVENT_KIND_UNIT_GONE = 12;
+  EVENT_KIND_MENU_PRESSED = 13;
+  EVENT_KIND_PLAYER_CONNECTED = 14;
+  EVENT_KIND_PLAYER_DISCONNECTED = 15;
+  EVENT_KIND_PLAYER_CHANGED_SLOT = 16;
+  EVENT_KIND_CHAT_MESSAGE = 17;
+  EVENT_KIND_SIMULATION_PAUSED = 18;
+  EVENT_KIND_SIMULATION_RESUMED = 19;
+  EVENT_KIND_GAP = 20;
+  EVENT_KIND_UNKNOWN = 21;
+}
+
+message SubscribeEventsRequest {
+  // Empty = all kinds. Gap is always delivered.
+  repeated EventKind kinds = 1;
+  // Empty = all coalitions (matched against the initiator).
+  repeated Coalition coalitions = 2;
+  // 0 = live only; otherwise replay from this seq (inclusive) out of the journal first.
+  uint64 from_seq = 3;
+  // Empty = current session.
+  string session = 4;
+}
+
+message Birth {
+  EntitySnap initiator = 1;
+  AirbaseSnap place = 2;
+}
+
+message Dead {
+  EntitySnap initiator = 1;
+}
+
+message UnitLost {
+  EntitySnap initiator = 1;
+}
+
+message Kill {
+  EntitySnap initiator = 1;
+  EntitySnap target = 2;
+  WeaponSnap weapon = 3;
+}
+
+// `initiator` may be absent: DCS sends HIT with a nil initiator for some weapons.
+message Hit {
+  EntitySnap initiator = 1;
+  EntitySnap target = 2;
+  WeaponSnap weapon = 3;
+}
+
+message Shot {
+  EntitySnap initiator = 1;
+  WeaponSnap weapon = 2;
+}
+
+message Takeoff {
+  EntitySnap initiator = 1;
+  AirbaseSnap place = 2;
+}
+
+message Land {
+  EntitySnap initiator = 1;
+  AirbaseSnap place = 2;
+}
+
+message BaseCaptured {
+  EntitySnap initiator = 1;
+  AirbaseSnap place = 2;
+  Coalition coalition = 3;
+}
+
+enum MarkAction {
+  MARK_ACTION_UNSPECIFIED = 0;
+  MARK_ACTION_ADDED = 1;
+  MARK_ACTION_CHANGED = 2;
+  MARK_ACTION_REMOVED = 3;
+}
+
+// An F10 map mark event (S_EVENT_MARK_ADDED / CHANGE / REMOVED).
+message Mark {
+  MarkAction action = 1;
+  uint32 mark_id = 2;
+  string text = 3;
+  Vec3 pos = 4;
+  Coalition coalition = 5;
+  optional uint64 group_eid = 6;
+  EntitySnap initiator = 7;
+}
+
+// Synthesised from BIRTH + Unit:getPlayerName() (MP clients do not get
+// S_EVENT_PLAYER_ENTER_UNIT reliably).
+message PlayerEnteredUnit {
+  EntitySnap unit = 1;
+  string player = 2;
+}
+
+enum GoneReason {
+  GONE_REASON_UNSPECIFIED = 0;
+  // Missing from a full sample sweep.
+  GONE_REASON_MISSING_FROM_SWEEP = 1;
+  // DCS reused the runtime id for a different object.
+  GONE_REASON_RUNTIME_ID_REUSED = 2;
+  // Destroyed by a Destroy command (no DEAD event follows).
+  GONE_REASON_DESPAWNED = 3;
+  // Not present in a fresh world snapshot.
+  GONE_REASON_MISSING_FROM_SNAPSHOT = 4;
+}
+
+message UnitGone {
+  uint64 eid = 1;
+  string name = 2;
+  GoneReason reason = 3;
+  EntitySnap last_known = 4;
+}
+
+// Synthesised from the Lua menu callback. `group_*` is set for per-group menus only.
+message MenuPressed {
+  string ident = 1;
+  optional uint64 group_eid = 2;
+  string group_name = 3;
+  Coalition coalition = 4;
+}
+
+message PlayerConnected {
+  uint32 player_id = 1;
+  string name = 2;
+  string ucid = 3;
+}
+
+message PlayerDisconnected {
+  uint32 player_id = 1;
+  string name = 2;
+  string ucid = 3;
+}
+
+message PlayerChangedSlot {
+  uint32 player_id = 1;
+  string name = 2;
+  Coalition coalition = 3;
+  string slot = 4;
+}
+
+message ChatMessage {
+  uint32 player_id = 1;
+  string name = 2;
+  string text = 3;
+  bool all = 4;
+}
+
+message SimulationPaused {}
+
+message SimulationResumed {}
+
+// Events [from_seq, to_seq] were lost; a fresh snapshot follows.
+message Gap {
+  uint64 from_seq = 1;
+  uint64 to_seq = 2;
+  string reason = 3;
+}
+
+message Unknown {
+  // DCS event name from world.event, e.g. "S_EVENT_WEAPON_ADD".
+  string dcs_name = 1;
+  int32 dcs_id = 2;
+  // The raw event table as captured by the Lua layer.
+  LuaValue fields = 3;
+}

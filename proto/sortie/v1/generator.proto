@@ -1,0 +1,88 @@
+// The pydcs generator as an engine client: build ids, type validation, campaign worker.
+syntax = "proto3";
+
+package sortie.v1;
+
+import "sortie/v1/common.proto";
+import "sortie/v1/missions.proto";
+import "sortie/v1/state.proto";
+
+service Generator {
+  // Allocates a build id (ULID) that the generator embeds in the bootstrap and the manifest.
+  rpc BeginBuild(BeginBuildRequest) returns (BeginBuildResponse);
+  // Checks unit types with Unit.getDescByName in the live (lobby) mission.
+  rpc ValidateTypes(ValidateTypesRequest) returns (ValidateTypesResponse);
+  // Worker mode: the worker connects, says hello, then answers GenerateRequests.
+  rpc Serve(stream WorkerUp) returns (stream WorkerDown);
+}
+
+message BeginBuildRequest {
+  string scenario = 1;
+  uint32 schema = 2;
+  // Lowercase hex, as in scenario.lock.json.
+  string schema_sha256 = 3;
+  string generator_version = 4;
+}
+
+message BeginBuildResponse {
+  string build_id = 1;
+}
+
+message ValidateTypesRequest {
+  repeated string type_names = 1;
+}
+
+message TypeCheck {
+  string type_name = 1;
+  bool known = 2;
+  Category category = 3;
+}
+
+message ValidateTypesResponse {
+  repeated TypeCheck results = 1;
+}
+
+message WorkerUp {
+  oneof msg {
+    WorkerHello hello = 1;
+    GenerateResponse response = 2;
+  }
+}
+
+message WorkerHello {
+  // Scenarios this worker can generate.
+  repeated string scenarios = 1;
+  string worker = 2;
+  string version = 3;
+}
+
+message WorkerDown {
+  oneof msg {
+    GenerateRequest request = 1;
+  }
+}
+
+// "Build the next turn": sent after a session of `scenario` ended.
+message GenerateRequest {
+  string request_id = 1;
+  string scenario = 2;
+  // CAMPAIGN-scope state documents of the scenario.
+  repeated StateDoc state = 3;
+  MissionResults results = 4;
+  // Parameters from ctx.campaign().next_turn(params), if the logic asked.
+  map<string, string> params = 5;
+}
+
+message GenerateResponse {
+  string request_id = 1;
+  oneof result {
+    // A build registered through Missions.Register; the engine launches it.
+    string build_id = 2;
+    GenerateError error = 3;
+  }
+}
+
+message GenerateError {
+  string message = 1;
+  string traceback = 2;
+}

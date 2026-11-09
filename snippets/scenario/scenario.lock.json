@@ -1,0 +1,114 @@
+{
+  "format": 1,
+  "generator": "sortie-gen 0.1.0",
+  "geometry": {
+    "zones": {
+      "FRONT": {
+        "polygon": {
+          "points": [
+            {
+              "east": 707988.142,
+              "north": -262715.342
+            },
+            {
+              "east": 724482.063,
+              "north": -260775.998
+            },
+            {
+              "east": 726460.408,
+              "north": -277453.91
+            },
+            {
+              "east": 709926.029,
+              "north": -279392.423
+            }
+          ]
+        }
+      },
+      "PATROL": {
+        "circle": {
+          "center": {
+            "east": 717280.017,
+            "north": -270645.234
+          },
+          "radius_m": 40000.0
+        }
+      },
+      "TARGET": {
+        "circle": {
+          "center": {
+            "east": 717280.017,
+            "north": -270645.234
+          },
+          "radius_m": 3000.0
+        }
+      }
+    }
+  },
+  "scenario": "my_mission",
+  "schema": 1,
+  "schema_sha256": "c8ef8226e2cf46d04d3d8571bc66e204b647f3fe4b1d012807a161ae545eba07",
+  "symbols": {
+    "airbases": [
+      {
+        "ident": "KUTAISI"
+      },
+      {
+        "ident": "NALCHIK"
+      }
+    ],
+    "flags": [
+      {
+        "ident": "TARGET_DOWN"
+      }
+    ],
+    "groups": [
+      {
+        "ident": "AAA",
+        "kind": "ground",
+        "roles": []
+      },
+      {
+        "ident": "ARMOR",
+        "kind": "ground",
+        "roles": [
+          "armor",
+          "target"
+        ]
+      },
+      {
+        "ident": "SAM",
+        "kind": "ground",
+        "roles": [
+          "sam"
+        ]
+      }
+    ],
+    "menus": [
+      {
+        "ident": "SMOKE_TARGET"
+      },
+      {
+        "ident": "TARGET_INFO"
+      }
+    ],
+    "templates": [
+      {
+        "ident": "RED_CAP",
+        "kind": "air",
+        "roles": []
+      }
+    ],
+    "zones": [
+      {
+        "ident": "FRONT"
+      },
+      {
+        "ident": "PATROL"
+      },
+      {
+        "ident": "TARGET"
+      }
+    ]
+  }
+}

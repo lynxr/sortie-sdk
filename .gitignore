@@ -1,0 +1,13 @@
+target/
+*.pdb
+**/*.rs.bk
+*.snap.new
+*.pending-snap
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+dist/
+# Built against the crates of this repository by CI, not committed.
+/template/Cargo.lock
+/examples/op_north/logic/Cargo.lock

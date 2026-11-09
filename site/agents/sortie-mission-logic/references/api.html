@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sortie SDK API reference (for agents) | Sortie SDK</title>
+<meta name="description" content="Everything below is in sortie::prelude::* unless a path is given. Event and state enums live in sortie::proto::v1 (use sortie::proto::v1;). The examples use the frontline scenario…">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/agents/sortie-mission-logic/references/api.html">
+<link rel="stylesheet" href="../../../assets/style.css">
+<link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-agent has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../../../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="../../../docs/quickstart.html">Быстрый старт</a><a href="../../../docs/index.html">Документация</a><a href="../../../agents.html" aria-current="true">Для агентов</a><a href="../../../downloads.html">Загрузки</a><a href="../../../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Файлы для агентов">
+<nav class="toc">
+<a class="toc-home" href="../../../agents.html">Для агентов</a>
+<ul>
+<li><a href="../../AGENTS.html">AGENTS.md</a></li>
+<li><a href="../../README.html">README.md</a></li>
+</ul>
+<p class="toc-part">Навыки</p>
+<ul>
+<li><a href="../../sortie-live-debugging/SKILL.html"><code>sortie-live-debugging</code></a>
+<ul>
+<li><a href="../../sortie-live-debugging/references/failures.html">references/failures.md</a></li>
+</ul>
+</li>
+<li><a href="../SKILL.html"><code>sortie-mission-logic</code></a>
+<ul>
+<li><a href="api.html" aria-current="page">references/api.md</a></li>
+<li><a href="errors.html">references/errors.md</a></li>
+<li><a href="patterns.html">references/patterns.md</a></li>
+</ul>
+</li>
+<li><a href="../../sortie-scenario/SKILL.html"><code>sortie-scenario</code></a>
+<ul>
+<li><a href="../../sortie-scenario/references/reference.html">references/reference.md</a></li>
+</ul>
+</li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<p class="lang-note">Инструкции и навыки для агентов написаны на английском.</p>
+<article class="prose" lang="en">
+<h1 id="sortie-sdk-api-reference-for-agents">Sortie SDK API reference (for agents)<a class="anchor" href="#sortie-sdk-api-reference-for-agents" aria-label="Ссылка на этот раздел">#</a></h1>
+<p>Everything below is in <code>sortie::prelude::*</code> unless a path is given. Event and state enums live
+in <code>sortie::proto::v1</code> (<code>use sortie::proto::v1;</code>). The examples use the <code>frontline</code> scenario
+(module <code>frontline</code>, marker <code>Frontline</code>).</p>
+<h2 id="commands">Commands<a class="anchor" href="#commands" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Every write returns a <code>Cmd&lt;..&gt;</code>. Nothing happens until it is awaited; <code>.await</code> gives
+<code>sortie::Result&lt;Output&gt;</code>.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">ctx.smoke(zones::OBJECTIVE.center(), SmokeColor::Red)
+    .key(&quot;smoke-obj&quot;)
+    .await?;
+ctx.flag(flags::SAM_DOWN)
+    .set(true)
+    .key(&quot;flag-sam-down&quot;)
+    .await?;
+
+let cap = ctx
+    .spawn_group(templates::RED_CAP.named(&quot;Red CAP 1&quot;))
+    .from_airbase(airbases::MAYKOP, StartType::Runway)
+    .key(&quot;red-cap-1&quot;) // spawn and destroy: always keyed
+    .await?; // Group&lt;Air&gt;
+cap.push_task(
+    Task::cap(zones::SAM_RING)
+        .altitude(ft(25_000))
+        .speed(kts(420)),
+)
+.timeout(secs(5))
+.await?;
+cap.set_option(Roe::WeaponFree).await?;
+
+let armor = ctx.group(groups::RED_ARMOR)?;
+armor.destroy().key(&quot;armor-despawn&quot;).await?;
+</code></pre></div>
+<p>Options on every command:</p>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Option</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>.key(impl Into&lt;String&gt;)</code></td><td>idempotency key, scope: the session (see the rules in SKILL.md)</td></tr>
+<tr><td><code>.timeout(Duration)</code></td><td>fail with <code>sortie::timeout</code> if DCS has not answered; default 10 s, 30 s for <code>spawn_group</code> and <code>destroy</code></td></tr>
+<tr><td><code>.on_pause(v1::PausePolicy::Fail)</code></td><td>fail with <code>sortie::paused</code> instead of waiting while the simulation is paused (default: wait)</td></tr>
+<tr><td><code>.after(&amp;other_cmd)</code></td><td>run only after <code>other_cmd</code> (not yet awaited) completed</td></tr>
+<tr><td><code>.lane(v1::Lane::..)</code></td><td>scheduling lane; the default fits the command</td></tr>
+<tr><td><code>.id()</code></td><td>the command id, shown in errors</td></tr>
+</tbody></table>
+</div>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Command</th><th>Output</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>ctx.message(to).text(..).secs(u32).clear_view()</code></td><td><code>()</code></td><td><code>to</code>: <code>Coalition</code>, <code>&amp;Group&lt;K&gt;</code>, <code>AnyGroup</code> (a menu press), <code>sortie::MessageTarget::All</code>; 10 s by default</td></tr>
+<tr><td><code>ctx.smoke(at, SmokeColor::Red)</code></td><td><code>()</code></td><td><code>at</code>: a <code>MapPoint</code> (on the ground) or a <code>Vec3</code></td></tr>
+<tr><td><code>ctx.flag(flags::X).set(v)</code> / <code>.get()</code></td><td><code>()</code> / <code>i32</code></td><td><code>v</code>: <code>bool</code> or <code>i32</code></td></tr>
+<tr><td><code>ctx.spawn_group(t)</code></td><td><code>Group&lt;K&gt;</code></td><td><code>t</code>: <code>templates::X</code> or <code>templates::X.named("Name")</code>; then <code>.from_airbase(airbases::Y, StartType::{Runway, Hot, Cold, Air})</code> or <code>.at(Vec3, heading_rad)</code>; without either, the template's own placement. Default name <code>&lt;template name&gt;#&lt;session4&gt;-&lt;n&gt;</code>, units <code>&lt;group&gt;-&lt;k&gt;</code>; <code>.named</code> fails with <code>sortie::name_conflict</code> if a live group has the name. The engine paces spawns (currently 2 groups or 24 units a second), so a big wave takes time.</td></tr>
+<tr><td><code>group.set_option(o)</code></td><td><code>()</code></td><td><code>o</code>: <code>Alarm::{Auto, Green, Red}</code> or <code>Roe::{WeaponFree, OpenFireWeaponFree, OpenFire, ReturnFire, WeaponHold}</code></td></tr>
+<tr><td><code>group.destroy()</code></td><td><code>()</code></td><td>despawn; no DEAD event follows (a <code>UnitGone</code> does)</td></tr>
+<tr><td><code>group.push_task(task)</code> / <code>group.set_task(task)</code></td><td><code>()</code></td><td><code>Group&lt;Air&gt;</code> and <code>Group&lt;Helo&gt;</code> only; push on the task stack or replace it</td></tr>
+<tr><td><code>ctx.menu(c).command(menus::X)</code></td><td><code>MenuCommand&lt;S&gt;</code></td><td>see Menus</td></tr>
+<tr><td><code>ctx.end_session(outcome).text(..)</code></td><td><code>()</code></td><td>ends the session (the turn); succeeds even if the session ends first</td></tr>
+</tbody></table>
+</div>
+<p>Tasks (<code>Task</code> is in the prelude):</p>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Task</th><th>Defaults</th></tr></thead><tbody>
+<tr><td><code>Task::cap(zones::X).altitude(Length).speed(Speed)</code></td><td>6000 m, 420 kt</td></tr>
+<tr><td><code>Task::orbit(MapPoint).altitude(..).speed(..).race_track(MapPoint)</code></td><td>6000 m, 350 kt, a circle without <code>race_track</code></td></tr>
+<tr><td><code>Task::rtb(airbases::X)</code></td><td></td></tr>
+<tr><td><code>Task::raw(sortie::proto::LuaValue)</code></td><td>a DCS task table, not checked</td></tr>
+</tbody></table>
+</div>
+<p>Units and geometry: <code>m</code>, <code>km</code>, <code>ft</code>, <code>nm</code> → <code>Length</code>; <code>kts</code>, <code>mps</code>, <code>kmh</code> → <code>Speed</code>; <code>secs</code>,
+<code>mins</code>, <code>hours</code> → <code>Duration</code>. <code>MapPoint { north, east }</code> (metres, map axes): <code>.alt(Length)</code> →
+<code>Vec3</code>, <code>.distance(p)</code>, <code>.offset(north_m, east_m)</code>, <code>.bearing_to(p)</code>,
+<code>.toward(bearing_rad, Length)</code>. <code>Vec3 { x: north, y: up, z: east }</code>: <code>.map_point()</code>. Zones:
+<code>zones::X.center()</code>, <code>zones::X.contains(p)</code>.</p>
+<p>Groups: <code>ctx.group(groups::X)?</code> returns the live group or <code>sortie::not_in_world</code> (no live unit:
+late activation, destroyed) or <code>sortie::unknown_symbol</code> (the running mission lacks the symbol).
+<code>Group&lt;K&gt;</code> is bound to one life of the group: a group respawned under the same name is a new
+handle. Methods: <code>eid()</code>, <code>name()</code>, <code>alive_count()</code>, <code>is_alive()</code>, <code>any()</code> → <code>AnyGroup</code>.</p>
+<h2 id="keys-in-loops">Keys in loops<a class="anchor" href="#keys-in-loops" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">for n in 1..=3 {
+    ctx.timer(&amp;format!(&quot;wave-{n}-delay&quot;), mins(5)).await; // deadline stored in the engine
+    let wave = ctx
+        .spawn_group(templates::RED_CAP)
+        .from_airbase(airbases::MAYKOP, StartType::Hot)
+        .key(format!(&quot;wave-{n}&quot;)) // same n, same key: never spawned twice
+        .await?;
+    ctx.wait_until(|w| w.group(&amp;wave).alive_count() == 0).await;
+}
+</code></pre></div>
+<p>After a logic restart the loop runs again from <code>n = 1</code>: passed timers return at once, keyed
+spawns return their stored groups, and the waits on dead groups pass. The script fast-forwards
+to where it was.</p>
+<h2 id="once">Once<a class="anchor" href="#once" aria-label="Ссылка на этот раздел">#</a></h2>
+<p><code>Campaign</code> here and below is a state document type:
+<code>#[derive(Default, Serialize, Deserialize)] pub struct Campaign { pub sams_killed: u32 }</code>.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let campaign = ctx.state::&lt;Campaign&gt;(&quot;campaign&quot;).await?; // campaign scope: kept across turns
+
+// Once per session: skipped when the function runs again after a crash.
+ctx.once(&quot;briefing&quot;, async |ctx| {
+    ctx.message(Coalition::Blue)
+        .text(&quot;Destroy SAM North.&quot;)
+        .secs(30)
+        .await
+})
+.await?;
+
+// Once per turn (= per mission build): also skipped after a mission restart.
+ctx.wait_until(|w| w.group(&amp;groups::SAM_NORTH).alive_count() == 0)
+    .await;
+ctx.once_per_turn(&quot;count-sam-kill&quot;, async |ctx| {
+    campaign.update(|c| c.sams_killed += 1).await?;
+    ctx.flag(flags::SAM_DOWN).set(true).await
+})
+.await?;
+</code></pre></div>
+<p><code>ctx.once(name, f)</code> and <code>ctx.once_per_turn(name, f)</code> return <code>Ok(Some(value))</code> when <code>f</code> ran and
+<code>Ok(None)</code> when it had run before. The mark is written after <code>f</code> succeeded: an <code>Err</code> from <code>f</code>
+leaves it unmarked.</p>
+<h2 id="waiting">Waiting<a class="anchor" href="#waiting" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">ctx.sleep(secs(30)).await; // model time; stops while paused; starts over after a crash
+ctx.timer(&quot;cap-delay&quot;, mins(10)).await; // named: the deadline survives a logic restart
+
+let blue_in_front = |w: &amp;World| {
+    w.units()
+        .coalition(Coalition::Blue)
+        .in_zone(zones::FRONT)
+        .any()
+};
+ctx.wait_until(blue_in_front).await;
+
+let red_left = ctx.world().group(&amp;groups::RED_ARMOR).alive_count(); // a short borrow
+ctx.report().set(&quot;red_armor_left&quot;, red_left);
+
+// Any end: the logic, the time limit, a restart. Code after it runs only up to the next
+// .await; then the session&#39;s tasks are aborted.
+let end = ctx.until_session_end().await;
+eprintln!(&quot;session ended: {:?} ({:?})&quot;, end.outcome, end.reason); // the logic&#39;s stderr
+</code></pre></div>
+<ul>
+<li><code>wait_until</code> checks its predicate now, after every tick (10 per second) and after every
+event. Keep the predicate cheap; see patterns.md for thousands of units.</li>
+<li><code>sleep</code>, <code>timer</code>: model time; a pause stops them.</li>
+<li><code>until_session_end()</code> → <code>SessionEnd { outcome: Option&lt;Outcome&gt;, text, reason }</code>, with
+<code>sortie::EndReason</code>: <code>Logic</code>, <code>TimeLimit</code>, <code>Restart</code>, <code>MissionUnloaded</code>, <code>EngineShutdown</code>,
+<code>Replaced</code>, <code>Disconnected</code>, <code>Unspecified</code>. When the session ends, pending commands fail with
+<code>sortie::session_ended</code> (not a logic error) and every task of the session is aborted.</li>
+<li><code>ctx.model_time()</code>, <code>ctx.paused()</code>, <code>ctx.is_session_ended()</code>, <code>ctx.session_id()</code>,
+<code>ctx.turn()</code> (the build id of the running mission).</li>
+</ul>
+<p>World queries (<code>ctx.world()</code> or the <code>wait_until</code> argument, a <code>&amp;World</code>):</p>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Query</th><th>Methods</th></tr></thead><tbody>
+<tr><td><code>w.units()</code> (live units)</td><td>filters <code>.coalition(c)</code>, <code>.air()</code>, <code>.planes()</code>, <code>.helos()</code>, <code>.ground()</code>, <code>.ships()</code>, <code>.statics()</code>, <code>.any_category()</code>, <code>.dead()</code>, <code>.including_dead()</code>, <code>.players()</code>, <code>.in_group(&amp;g)</code>, <code>.of_type("F-16C_50")</code>, <code>.in_zone(zones::X)</code>, <code>.within(point, km(5))</code>; results <code>.count()</code>, <code>.any()</code>, <code>.first()</code>, <code>.iter()</code>, <code>.eids()</code>, <code>.nearest_to(point)</code>, <code>.inside(&amp;zone)</code>, <code>.any_inside(zone)</code>, <code>.count_inside(zone)</code></td></tr>
+<tr><td><code>w.players()</code>, <code>w.statics()</code></td><td>the same query, preset</td></tr>
+<tr><td><code>w.group(&amp;g)</code></td><td><code>g</code>: a <code>Group&lt;K&gt;</code>, <code>&amp;groups::X</code>, a DCS group name; <code>.exists()</code>, <code>.alive_count()</code>, <code>.size()</code>, <code>.is_dead()</code>, <code>.center()</code>, <code>.any_inside(z)</code>, <code>.count_inside(z)</code>, <code>.all_inside(z)</code>, <code>.units()</code>, <code>.alive_units()</code>; a missing group counts as empty</td></tr>
+<tr><td><code>w.airbase_by_ident("MAYKOP")</code>, <code>w.airbase_by_name(..)</code>, <code>w.airbases()</code></td><td>airbases with their current owner</td></tr>
+</tbody></table>
+</div>
+<p>An entity (<code>&amp;sortie::world::Entity</code>) has <code>name</code>, <code>type_name</code>, <code>coalition</code>, <code>category</code>,
+<code>group_name</code>, <code>pos: Option&lt;Vec3&gt;</code>, <code>velocity</code>, <code>heading</code>, <code>player: Option&lt;String&gt;</code>, <code>life</code>,
+<code>dead</code>.</p>
+<h2 id="events">Events<a class="anchor" href="#events" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let sam = ctx.group(groups::SAM_NORTH)?;
+// Subscribe first, then act: a stream only sees events from the moment it was made.
+let mut deaths = ctx.events().of::&lt;v1::Dead&gt;().in_group(&amp;sam);
+ctx.spawn(async move |ctx| {
+    while let Some(dead) = deaths.next().await {
+        let name = dead.initiator.map(|u| u.name).unwrap_or_default();
+        ctx.message(Coalition::Blue)
+            .text(format!(&quot;{name} destroyed&quot;))
+            .secs(10)
+            .await?;
+    }
+    Ok(()) // `None`: the session ended
+});
+</code></pre></div>
+<ul>
+<li><code>ctx.events()</code> → <code>Events</code>, <code>.next().await</code> → <code>Option&lt;v1::Event&gt;</code> (<code>ev.kind</code>,
+<code>ev.model_time</code>, <code>ev.seq</code>); <code>None</code> once the session ended.</li>
+<li><code>.of::&lt;E&gt;()</code> keeps one type; filters <code>.in_group(&amp;g)</code> (a <code>Group&lt;K&gt;</code> matches only its own life;
+a <code>GroupRef</code> or a name matches whatever group has it now), <code>.coalition(c)</code>, <code>.filter(|e| ..)</code>.
+They test the event's subject: the initiator, <code>unit</code> for <code>PlayerEnteredUnit</code>, <code>last_known</code>
+for <code>UnitGone</code>.</li>
+<li>Types: <code>Birth</code>, <code>Dead</code>, <code>UnitLost</code>, <code>Kill</code>, <code>Hit</code> (the initiator may be missing), <code>Shot</code>,
+<code>Takeoff</code>, <code>Land</code>, <code>BaseCaptured</code>, <code>Mark</code>, <code>PlayerEnteredUnit</code> (built from BIRTH and the
+player name: multiplayer clients do not get a reliable DCS event), <code>UnitGone</code> (left the world
+without DEAD: despawned, missing from a sample), <code>MenuPressed</code>, <code>PlayerConnected</code>,
+<code>PlayerDisconnected</code>, <code>PlayerChangedSlot</code>, <code>ChatMessage</code>, <code>SimulationPaused</code>,
+<code>SimulationResumed</code>, <code>Gap</code> (events were lost; the replica was resynced), <code>Unknown</code>.</li>
+<li>Each event is applied to the replica before your code sees it: in a <code>Dead</code> handler the unit
+already counts as dead.</li>
+<li>A stream sees events from the moment it was created. A stream that falls more than 1024
+events behind skips the oldest and logs a warning.</li>
+</ul>
+<h2 id="menus">Menus<a class="anchor" href="#menus" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let smoke = ctx
+    .menu(Coalition::Blue)
+    .per_group() // every blue player group gets the command; a press carries the group
+    .command(menus::SMOKE_OBJECTIVE)
+    .key(&quot;menu-smoke&quot;)
+    .await?;
+ctx.spawn(async move |ctx| {
+    let mut presses = smoke.presses();
+    while let Some(p) = presses.next().await {
+        ctx.smoke(zones::OBJECTIVE.center(), SmokeColor::Red)
+            .await?;
+        ctx.message(p.group)
+            .text(&quot;Red smoke on the objective&quot;)
+            .secs(10)
+            .await?;
+    }
+    Ok(())
+});
+
+let sitrep = ctx
+    .menu(Coalition::Blue)
+    .command(menus::SITREP)
+    .key(&quot;menu-sitrep&quot;)
+    .await?;
+ctx.spawn(async move |ctx| {
+    let mut presses = sitrep.presses();
+    while presses.next().await.is_some() {
+        let left = ctx.world().group(&amp;groups::SAM_NORTH).alive_count();
+        ctx.message(Coalition::Blue)
+            .text(format!(&quot;SAM North: {left} alive&quot;))
+            .await?;
+    }
+    Ok(())
+});
+</code></pre></div>
+<ul>
+<li><code>ctx.menu(coalition)</code> is one command for the whole coalition; a press is a
+<code>CoalitionPress { coalition, model_time }</code>. <code>.per_group()</code> installs it for every player group
+of the coalition (those present now and each new one at its first player BIRTH); a press is
+a <code>GroupPress { group: AnyGroup, coalition, model_time }</code>, and <code>ctx.message(p.group)</code> answers
+that group.</li>
+<li>Label and sub-menu path come from <code>scenario.py</code> (<code>sc.menu(ident, label, path=[..])</code>).</li>
+<li>Presses are queued from the moment the command is installed. Each press goes to one
+<code>Presses</code> stream. <code>menu.remove()</code> removes the command. Adding the same command twice changes
+nothing in DCS.</li>
+</ul>
+<h2 id="flags">Flags<a class="anchor" href="#flags" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let sam_down = ctx.flag(flags::SAM_DOWN);
+sam_down.set(1).key(&quot;sam-down&quot;).await?; // bool or i32
+let value: i32 = sam_down.get().await?; // reads DCS (a mission trigger may change it too)
+</code></pre></div>
+<h2 id="state-and-results">State and results<a class="anchor" href="#state-and-results" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">#[derive(Default, Serialize, Deserialize)]
+struct Progress {
+    waves_sent: u32,
+}
+// Campaign scope (default): kept across turns; the generator can read it.
+let campaign = ctx.state::&lt;Campaign&gt;(&quot;campaign&quot;).await?;
+// Turn scope: survives mission restarts of this build; session scope: this session only.
+let turn = ctx
+    .state_in::&lt;Progress&gt;(v1::StateScope::Turn, &quot;progress&quot;)
+    .await?;
+
+turn.update(|p| p.waves_sent += 1).await?; // compare-and-swap, retried on conflict
+let killed = campaign.get().sams_killed; // a local copy; do not hold `get()` across .await
+ctx.report().set(&quot;sams_killed&quot;, killed); // MissionResults.report_json, read by `results`
+</code></pre></div>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Scope</th><th>Lives</th><th>API</th></tr></thead><tbody>
+<tr><td><code>v1::StateScope::Session</code></td><td>this session</td><td><code>ctx.state_in::&lt;T&gt;(v1::StateScope::Session, name)</code></td></tr>
+<tr><td><code>v1::StateScope::Turn</code></td><td>this build (turn), across mission restarts</td><td><code>ctx.state_in::&lt;T&gt;(v1::StateScope::Turn, name)</code></td></tr>
+<tr><td><code>v1::StateScope::Campaign</code></td><td>across turns of the scenario</td><td><code>ctx.state::&lt;T&gt;(name)</code></td></tr>
+</tbody></table>
+</div>
+<p><code>T: Serialize + DeserializeOwned + Default</code> (<code>#[derive(Default, Serialize, Deserialize)]</code>; the
+crate needs <code>serde</code> with the <code>derive</code> feature). <code>StateDoc&lt;T&gt;</code>: <code>get()</code> (local copy),
+<code>update(|t| ..)</code> (compare-and-swap; on a conflict it reloads and applies the closure again, up
+to 8 times), <code>set(value)</code>, <code>reload()</code>, <code>revision()</code>. The engine stores the documents (SQLite)
+and the generator reads them.</p>
+<p><code>ctx.report().set(key, value)</code> writes a key of the session's results (<code>scenario.py results</code>);
+it does not wait, and a failure shows up as a logic error.</p>
+<h2 id="binary-and-environment">Binary and environment<a class="anchor" href="#binary-and-environment" aria-label="Ссылка на этот раздел">#</a></h2>
+<p><code>sortie::main!(my_mission_logic::run)</code> makes the binary:</p>
+<div class="code"><pre tabindex="0"><code>my_mission_logic [--engine &lt;url&gt;] [--build-id &lt;id&gt;] [--logic &lt;name&gt;] [--dev]
+  --engine     engine gRPC address (SORTIE_ENGINE, default http://127.0.0.1:50777)
+  --build-id   build id announced to the engine (SORTIE_BUILD_ID, default &lt;binary&gt;@&lt;version&gt;)
+  --logic      logic name (default: the binary name)
+  --dev        spawns and destroys without .key() fail at the call site (SORTIE_DEV=1)
+</code></pre></div>
+<p><code>SORTIE_TOKEN</code>: the API token (role <code>logic</code>; not needed with <code>sortied --dev</code>). <code>SORTIE_LOG</code>:
+the log filter (default <code>info</code>; logs go to stderr). <code>--standby</code> (hot reload) is not available
+yet. The binary reconnects with a backoff of 1 to 30 s. Exit codes: 0 after the engine shut it
+down, 2 for bad arguments, a refused token or a rejected attach, 1 if the runtime could not
+start.</p>
+</article>
+<p class="page-source"><a href="api.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

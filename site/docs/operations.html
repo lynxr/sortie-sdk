@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Эксплуатация | Sortie SDK</title>
+<meta name="description" content="Всё, что ставит и пишет Sortie, лежит в папке Saved Games экземпляра DCS: %USERPROFILE%\Saved Games\DCS, а для --instance server — Saved Games\DCS.server.">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/docs/operations.html">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-doc has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Страницы документации">
+<nav class="toc">
+<a class="toc-home" href="index.html">Документация</a>
+<ul>
+<li><a href="index.html">Обзор</a></li>
+<li><a href="install-runtime.html">Установка рантайма</a></li>
+<li><a href="quickstart.html">Быстрый старт</a></li>
+<li><a href="dependency.html">Подключение SDK</a></li>
+<li><a href="sdk.html">Логика на Rust</a></li>
+<li><a href="generator.html">Сценарий на Python</a></li>
+<li><a href="testing.html">Тестирование</a></li>
+<li><a href="operations.html" aria-current="page">Эксплуатация</a></li>
+<li><a href="troubleshooting.html">Диагностика</a></li>
+<li><a href="faq.html">Вопросы и ограничения</a></li>
+<li><a href="changelog.html">Что нового</a></li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="эксплуатация">Эксплуатация<a class="anchor" href="#эксплуатация" aria-label="Ссылка на этот раздел">#</a></h1>
+<h2 id="где-что-лежит">Где что лежит<a class="anchor" href="#где-что-лежит" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Всё, что ставит и пишет Sortie, лежит в папке Saved Games экземпляра DCS:
+<code>%USERPROFILE%\Saved Games\DCS</code>, а для <code>--instance server</code> — <code>Saved Games\DCS.server</code>.</p>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Путь</th><th>Что</th></tr></thead><tbody>
+<tr><td><code>Scripts\Sortie\sortie-mission.lua</code>, <code>Scripts\Sortie\layer\</code></td><td>Lua-слой моста</td></tr>
+<tr><td><code>Scripts\Sortie\bin\sortie_bridge-&lt;версия&gt;.dll</code></td><td>DLL моста; версия в имени, потому что загруженную DLL Windows перезаписать не даст</td></tr>
+<tr><td><code>Scripts\Sortie\pending.txt</code>, <code>active.txt</code></td><td>какую DLL загрузить; при старте DCS <code>pending</code> становится <code>active</code></td></tr>
+<tr><td><code>Scripts\Hooks\sortie-hook.lua</code></td><td>хук: загружает мост в среду hooks DCS</td></tr>
+<tr><td><code>Sortie\link.secret</code></td><td>общий секрет моста и движка</td></tr>
+<tr><td><code>Sortie\link.addr</code></td><td>адрес, на котором слушает <code>sortied</code>; мост читает его перед каждым подключением</td></tr>
+<tr><td><code>Sortie\tokens.toml</code></td><td>токены API</td></tr>
+<tr><td><code>Sortie\sortie.db</code></td><td>хранилище движка: сборки, состояние, итоги</td></tr>
+<tr><td><code>Sortie\Logs\</code></td><td>логи <code>sortied</code></td></tr>
+<tr><td><code>Logs\sortie-bridge.log</code></td><td>лог моста</td></tr>
+<tr><td><code>Missions\Sortie\</code></td><td>зарегистрированные сборки: <code>&lt;сценарий&gt;-&lt;build_id&gt;.miz</code></td></tr>
+</tbody></table>
+</div>
+<p>В папке DCS Sortie меняет одну строку в <code>Scripts\MissionScripting.lua</code>. Больше ничего в
+установке DCS не трогается.</p>
+<h2 id="sortied"><code>sortied</code><a class="anchor" href="#sortied" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code"><pre tabindex="0"><code>sortied [--instance &lt;имя&gt;] [--saved-games &lt;папка&gt;] [--dcs &lt;папка DCS&gt;]
+        [--api 127.0.0.1:50777] [--link pipe:&lt;имя&gt; | tcp:&lt;host:port&gt;]
+        [--db &lt;файл&gt; | memory] [--tokens &lt;файл&gt;] [--manifest &lt;файл.manifest.pb&gt;]
+        [--dev] [--dev-eval] [--log-dir &lt;папка&gt; | none]
+</code></pre></div>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Флаг</th><th>Переменная</th><th>Что делает</th></tr></thead><tbody>
+<tr><td><code>--instance</code></td><td><code>SORTIE_INSTANCE</code></td><td>экземпляр DCS; то же имя, что у <code>sortie install</code></td></tr>
+<tr><td><code>--saved-games</code></td><td><code>SORTIE_SAVED_GAMES</code></td><td>папка Saved Games экземпляра</td></tr>
+<tr><td><code>--dcs</code></td><td><code>SORTIE_DCS</code></td><td>папка DCS для проверок <code>doctor</code> при старте</td></tr>
+<tr><td><code>--api</code></td><td><code>SORTIE_API</code></td><td>адрес API; держите его на <code>127.0.0.1</code>: API управляет сервером</td></tr>
+<tr><td><code>--link</code></td><td><code>SORTIE_LINK</code></td><td>где ждать мост; по умолчанию именованный канал экземпляра</td></tr>
+<tr><td><code>--db</code></td><td><code>SORTIE_DB</code></td><td>файл хранилища; <code>memory</code> — без файла, для экспериментов</td></tr>
+<tr><td><code>--tokens</code></td><td><code>SORTIE_TOKENS</code></td><td>файл токенов вместо <code>Sortie\tokens.toml</code></td></tr>
+<tr><td><code>--manifest</code></td><td><code>SORTIE_MANIFEST</code></td><td>manifest для миссии, которую не регистрировали (собрана <code>build</code> и открыта вручную)</td></tr>
+<tr><td><code>--dev</code></td><td></td><td>локальные программы работают без токена; спавн и уничтожение в логике — только с <code>.key(..)</code></td></tr>
+<tr><td><code>--dev-eval</code></td><td></td><td>разрешить отладочные команды <code>DevEval</code> (только роль <code>admin</code>)</td></tr>
+<tr><td><code>--log-dir</code></td><td><code>SORTIE_LOG_DIR</code></td><td>папка логов; <code>none</code> — только консоль</td></tr>
+</tbody></table>
+</div>
+<p>Подробность логов задаёт <code>SORTIE_LOG</code> (по умолчанию <code>info</code>), например <code>SORTIE_LOG=debug</code>.</p>
+<h2 id="токены">Токены<a class="anchor" href="#токены" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="toml"><pre tabindex="0"><code class="language-toml"># Saved Games\DCS\Sortie\tokens.toml
+[[token]]
+name = &quot;my_mission logic&quot;
+role = &quot;logic&quot;          # admin | logic | generator | observer
+token = &quot;6f1c...&quot;       # клиент шлёт заголовок `authorization: Bearer &lt;token&gt;`
+</code></pre></div>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Роль</th><th>Что можно</th></tr></thead><tbody>
+<tr><td><code>observer</code></td><td>читать: версии, здоровье, мир, события, состояние, итоги</td></tr>
+<tr><td><code>logic</code></td><td>плюс подключать логику и отдавать команды, писать состояние</td></tr>
+<tr><td><code>generator</code></td><td>регистрировать и запускать сборки, перезапускать миссию, писать состояние</td></tr>
+<tr><td><code>admin</code></td><td>всё</td></tr>
+</tbody></table>
+</div>
+<p><code>sortie install</code> создаёт токены ролей <code>admin</code> и <code>logic</code>. Токен <code>generator</code> добавьте сами, если
+не хотите отдавать генератору <code>admin</code>; токен — любая длинная случайная строка. <code>sortied</code> читает
+файл при старте.</p>
+<ul>
+<li>Логика берёт токен из <code>SORTIE_TOKEN</code>.</li>
+<li>Генератор — из <code>--token</code> или <code>SORTIE_TOKEN</code>.</li>
+<li><code>sortie status</code>, <code>events</code>, <code>top</code> — из <code>--token</code>, <code>SORTIE_TOKEN</code> или сами из <code>tokens.toml</code>.</li>
+</ul>
+<p>С <code>sortied --dev</code> программы на той же машине работают без токена.</p>
+<h2 id="dedicated-server">Dedicated server<a class="anchor" href="#dedicated-server" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Dedicated server с Sortie ещё не проверялся в живой игре. Ниже — как он должен работать.</p>
+<ul>
+<li>
+<p>Сервер запускается с <code>-w DCS.&lt;имя&gt;</code> и пишет в <code>Saved Games\DCS.&lt;имя&gt;</code>. Передайте то же имя
+всем командам: <code>sortie install --instance &lt;имя&gt;</code>, <code>sortie doctor --instance &lt;имя&gt;</code>,
+<code>sortied --instance &lt;имя&gt;</code>. Мост берёт имя экземпляра из своей папки сам.</p>
+</li>
+<li>
+<p>Если DCS World Server стоит рядом с игрой, укажите его папку явно:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">.\bin\sortie.exe install --instance server --dcs &quot;C:\Program Files\Eagle Dynamics\DCS World Server&quot;
+.\bin\sortie.exe doctor --instance server --dcs &quot;C:\Program Files\Eagle Dynamics\DCS World Server&quot;
+.\bin\sortied.exe --instance server
+</code></pre></div>
+</li>
+<li>
+<p>С пустым списком миссий сервер не стартует. Положите в список миссию-заглушку: в ней нет
+юнитов, только сообщение о том, загружен ли мост. <code>doctor</code> проверяет, что список не пустой.</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">uv run sortie-gen lobby --out sortie-lobby.miz
+</code></pre></div>
+</li>
+<li>
+<p><code>python scenario.py launch</code> регистрирует сборку и просит движок загрузить её в DCS.
+<code>python scenario.py restart</code> перезагружает текущую миссию: сессия кончается с причиной
+<code>restart</code>, начинается новая, логика получает <code>Start::Restart</code>.</p>
+</li>
+<li>
+<p>На паузе скрипты миссии не выполняются. Команды логики ждут конца паузы, если не задано
+<code>.on_pause(Fail)</code>. Проверка типов на сервере, который стоит на паузе без игроков, не пройдёт:
+генератор предупредит и зарегистрирует сборку без неё.</p>
+</li>
+<li>
+<p>Перезапуска DCS после краша или зависания Sortie пока не делает. Если на машине есть
+DCSServerBot, эту работу делает он.</p>
+</li>
+</ul>
+<h2 id="логи">Логи<a class="anchor" href="#логи" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Что</th><th>Где</th></tr></thead><tbody>
+<tr><td>движок</td><td>консоль <code>sortied</code> и <code>Saved Games\DCS\Sortie\Logs\sortied.log.&lt;дата&gt;</code></td></tr>
+<tr><td>мост</td><td><code>Saved Games\DCS\Logs\sortie-bridge.log</code></td></tr>
+<tr><td>Lua-слой</td><td><code>Saved Games\DCS\Logs\dcs.log</code>: состояние связи и ошибки</td></tr>
+<tr><td>логика</td><td>консоль программы логики; подробность — <code>SORTIE_LOG</code></td></tr>
+</tbody></table>
+</div>
+<h2 id="наблюдение">Наблюдение<a class="anchor" href="#наблюдение" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code"><pre tabindex="0"><code>sortie status                                   # движок, мост, сессия
+sortie events [--kind dead] [--from-seq N] [--limit N]
+sortie top [--interval-ms 1000]                 # здоровье, связи, очереди
+</code></pre></div>
+<p>Общие флаги утилиты: <code>--instance</code>, <code>--saved-games</code>, <code>--dcs</code>, <code>--api</code>, <code>--token</code>.</p>
+<h2 id="обновление">Обновление<a class="anchor" href="#обновление" aria-label="Ссылка на этот раздел">#</a></h2>
+<p><strong>Рантайм.</strong> Распакуйте новый архив рядом со старым и выполните из новой папки
+<code>.\bin\sortie.exe install</code>. Новая DLL ляжет рядом со старой, а запущенная DCS продолжит работать
+со старой. Перезапустите DCS: при старте она возьмёт новую DLL и новую часть Lua-слоя для hooks.
+<code>sortie doctor</code> подтвердит версию. Перезапустите и <code>sortied</code>.</p>
+<p><strong>SDK.</strong> Поменяйте тег в <code>Cargo.toml</code> и <code>pyproject.toml</code> (см. <a href="dependency.html">Подключение SDK</a>),
+пересоберите логику и зарегистрируйте новую сборку. Версии SDK и рантайма должны совпадать.</p>
+<p><strong>DCS.</strong> Обновление DCS перезаписывает <code>MissionScripting.lua</code> и стирает строку Sortie. Тогда
+мост не загрузится в миссию, и на экране будет «Sortie bridge is not installed: run sortie
+doctor». После каждого обновления DCS запускайте <code>sortie doctor</code>; если строка пропала —
+<code>sortie doctor --fix</code> от имени администратора.</p>
+</article>
+<nav class="pager" aria-label="Соседние страницы">
+<a class="pager-prev" rel="prev" href="testing.html"><span class="pager-dir">Назад</span><span class="pager-title">Тестирование</span></a>
+<a class="pager-next" rel="next" href="troubleshooting.html"><span class="pager-dir">Дальше</span><span class="pager-title">Диагностика</span></a>
+</nav>
+<p class="page-source"><a href="operations.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

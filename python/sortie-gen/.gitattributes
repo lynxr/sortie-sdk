@@ -1,0 +1,3 @@
+# Generated stubs are compared byte for byte with fresh protoc output.
+*.pyi text eol=lf
+uv.lock text eol=lf

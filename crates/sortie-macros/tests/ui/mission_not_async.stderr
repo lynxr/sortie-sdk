@@ -1,0 +1,5 @@
+error: a mission must be an `async fn`: `async fn run(ctx: Ctx<M>, start: Start) -> sortie::Result<()>`
+ --> tests/ui/mission_not_async.rs:4:5
+  |
+4 | pub fn run(_ctx: Ctx<Demo>, _start: Start) -> sortie::Result<()> {
+  |     ^^

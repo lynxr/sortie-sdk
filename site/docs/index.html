@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sortie SDK | Sortie SDK</title>
+<meta name="description" content="Sortie — внешний движок миссий для DCS World. Поведение миссии пишется на Rust и работает в отдельном процессе рядом с DCS. Статическая часть миссии описывается на Python и…">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/docs/">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-doc has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="page">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Страницы документации">
+<nav class="toc">
+<a class="toc-home" href="index.html" aria-current="page">Документация</a>
+<ul>
+<li><a href="index.html" aria-current="page">Обзор</a></li>
+<li><a href="install-runtime.html">Установка рантайма</a></li>
+<li><a href="quickstart.html">Быстрый старт</a></li>
+<li><a href="dependency.html">Подключение SDK</a></li>
+<li><a href="sdk.html">Логика на Rust</a></li>
+<li><a href="generator.html">Сценарий на Python</a></li>
+<li><a href="testing.html">Тестирование</a></li>
+<li><a href="operations.html">Эксплуатация</a></li>
+<li><a href="troubleshooting.html">Диагностика</a></li>
+<li><a href="faq.html">Вопросы и ограничения</a></li>
+<li><a href="changelog.html">Что нового</a></li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="sortie-sdk">Sortie SDK<a class="anchor" href="#sortie-sdk" aria-label="Ссылка на этот раздел">#</a></h1>
+<p>Sortie — внешний движок миссий для DCS World. Поведение миссии пишется на Rust и работает в
+отдельном процессе рядом с DCS. Статическая часть миссии описывается на Python и собирается в
+обычный <code>.miz</code>.</p>
+<p>Это SDK версии 0.1.0: библиотеки для логики на Rust, генератор миссий на Python,
+шаблон проекта и документация. Движок и мост для DCS поставляются отдельно, готовым архивом
+рантайма.</p>
+<h2 id="как-это-устроено">Как это устроено<a class="anchor" href="#как-это-устроено" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code"><pre tabindex="0"><code> DCS World ── мост (DLL + Lua) ──▶ sortied ◀── логика миссии (Rust, крейт sortie)
+                                      ▲
+                                      └─────── генератор sortie-gen (Python): сборка и запуск миссий
+</code></pre></div>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Часть</th><th>Что делает</th><th>Откуда</th></tr></thead><tbody>
+<tr><td>мост</td><td>DLL и Lua-слой внутри DCS. Передаёт движку события и состояние мира, выполняет команды</td><td>архив рантайма</td></tr>
+<tr><td><code>sortied</code></td><td>движок. Держит зеркало мира, планирует команды в DCS, хранит состояние и итоги</td><td>архив рантайма</td></tr>
+<tr><td><code>sortie</code></td><td>утилита: установка в DCS, проверка установки, наблюдение за движком</td><td>архив рантайма</td></tr>
+<tr><td>логика</td><td>ваша программа на Rust с крейтом <code>sortie</code>: что происходит в миссии</td><td>этот SDK</td></tr>
+<tr><td>сценарий</td><td>ваш файл на Python с пакетом <code>sortie-gen</code>: карта, группы, зоны, слоты игроков</td><td>этот SDK</td></tr>
+</tbody></table>
+</div>
+<p>Сценарий описывает, что стоит на карте. Генератор собирает из него <code>.miz</code> и файл
+<code>scenario.lock.json</code> с именами групп, зон и других объектов. Из этого файла логика получает
+типизированные константы: опечатка в имени группы ломает сборку логики, а не миссию в игре.</p>
+<p>При старте миссии DCS вызывает мост, мост подключается к <code>sortied</code>, и движок начинает сессию.
+Логика получает сессию и работает с миром. Чтение мира синхронное и локальное, без задержек.
+Каждая команда в DCS — это <code>async</code>-вызов, который завершается, когда DCS её выполнила.</p>
+<h2 id="что-можно-делать">Что можно делать<a class="anchor" href="#что-можно-делать" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li>ждать условий: «синие в зоне», «от группы никого не осталось», таймер модельного времени;</li>
+<li>читать мир: юниты, группы, игроки, зоны, расстояния;</li>
+<li>отдавать команды: сообщения, дым, флаги, опции ИИ, задачи авиации, спавн групп из шаблонов,
+уничтожение групп;</li>
+<li>добавлять команды в меню F10, общие для коалиции или свои у каждой группы;</li>
+<li>обрабатывать события: гибель, попадания, взлёты, вход игроков в слоты;</li>
+<li>хранить состояние миссии и кампании в движке;</li>
+<li>собирать миссии воспроизводимо: офлайн-сборка одного и того же сценария даёт побайтно тот же
+<code>.miz</code>;</li>
+<li>проверять имена, типы юнитов и правила DCS до запуска миссии;</li>
+<li>перезапускать миссию и смотреть итоги сессии.</li>
+</ul>
+<h2 id="требования">Требования<a class="anchor" href="#требования" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li>Windows 10 или 11, x64.</li>
+<li>DCS World. Проверена версия 2.9.31. Для сервера — DCS World Server.</li>
+<li>Rust stable не ниже 1.89 (<a href="https://rustup.rs">rustup</a>). На Windows Rust нужен линкер MSVC:
+Visual Studio Build Tools с компонентом «Desktop development with C++».</li>
+<li><a href="https://docs.astral.sh/uv/">uv</a> для генератора. Python 3.11 или новее uv поставит сам.</li>
+<li>Git: cargo и uv берут SDK из Git-репозитория.</li>
+<li>Права администратора один раз, при установке рантайма.</li>
+</ul>
+<p>Логику и сценарий можно собирать и на Linux. Рантайм (<code>sortied</code>, мост) работает только на
+Windows рядом с DCS.</p>
+<h2 id="состояние-версии-010">Состояние версии 0.1.0<a class="anchor" href="#состояние-версии-010" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li>В живом DCS 2.9.31 проверены одиночная игра и сетевая игра, где хост — обычный клиент DCS.</li>
+<li>На dedicated server Sortie ещё не запускался. Перезапуск миссии (<code>restart</code>), запуск сборки
+движком (<code>launch</code>) и проверка типов (<code>validate</code>) покрыты тестами, но в живой игре не
+проверялись.</li>
+<li>Тестов без DCS в этой версии нет: они появятся в SDK 0.2. Подробнее — в
+<a href="testing.html">Тестировании</a>.</li>
+</ul>
+<p>Полный список ограничений — в разделе <a href="faq.html">Вопросы и ограничения</a>.</p>
+<h2 id="с-чего-начать">С чего начать<a class="anchor" href="#с-чего-начать" aria-label="Ссылка на этот раздел">#</a></h2>
+<ol>
+<li><a href="install-runtime.html">Установите рантайм</a> в DCS.</li>
+<li>Пройдите <a href="quickstart.html">быстрый старт</a>: от шаблона до первой миссии в игре.</li>
+<li>Читайте по мере надобности: <a href="sdk.html">логика на Rust</a>, <a href="generator.html">сценарий на Python</a>,
+<a href="operations.html">эксплуатация</a>, <a href="troubleshooting.html">диагностика</a>.</li>
+</ol>
+<p>Исходники SDK, шаблон и пример <code>op_north</code> лежат в репозитории
+<a href="https://github.com/lynxr/sortie-sdk">lynxr/sortie-sdk</a>. Инструкции для ИИ-агентов, которые
+пишут миссии на этом SDK, — в папке
+<a href="https://github.com/lynxr/sortie-sdk/tree/v0.1.0/agents">agents</a> репозитория.</p>
+</article>
+<nav class="pager" aria-label="Соседние страницы">
+<a class="pager-next" rel="next" href="install-runtime.html"><span class="pager-dir">Дальше</span><span class="pager-title">Установка рантайма</span></a>
+</nav>
+<p class="page-source"><a href="index.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+error: a mission takes exactly two arguments, `ctx: Ctx<M>` and `start: Start`; found 0
+ --> tests/ui/mission_no_arguments.rs:2:17
+  |
+2 | pub async fn run() -> sortie::Result<()> {
+  |                 ^^
+
+error: #[sortie::mission] goes on the mission's entry point: `async fn run(ctx: Ctx<M>, start: Start) -> sortie::Result<()>`
+ --> tests/ui/mission_no_arguments.rs:7:5
+  |
+7 | pub struct NotAFunction;
+  |     ^^^^^^

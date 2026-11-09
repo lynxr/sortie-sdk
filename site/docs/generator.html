@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Сценарий на Python | Sortie SDK</title>
+<meta name="description" content="Статическая часть миссии описывается на Python пакетом sortie-gen поверх pydcs 1.0.0: карта, время старта, зоны, наземные группы, шаблоны для спавна, аэродромы, слоты игроков,…">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/docs/generator.html">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-doc has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Страницы документации">
+<nav class="toc">
+<a class="toc-home" href="index.html">Документация</a>
+<ul>
+<li><a href="index.html">Обзор</a></li>
+<li><a href="install-runtime.html">Установка рантайма</a></li>
+<li><a href="quickstart.html">Быстрый старт</a></li>
+<li><a href="dependency.html">Подключение SDK</a></li>
+<li><a href="sdk.html">Логика на Rust</a></li>
+<li><a href="generator.html" aria-current="page">Сценарий на Python</a></li>
+<li><a href="testing.html">Тестирование</a></li>
+<li><a href="operations.html">Эксплуатация</a></li>
+<li><a href="troubleshooting.html">Диагностика</a></li>
+<li><a href="faq.html">Вопросы и ограничения</a></li>
+<li><a href="changelog.html">Что нового</a></li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="сценарий-на-python">Сценарий на Python<a class="anchor" href="#сценарий-на-python" aria-label="Ссылка на этот раздел">#</a></h1>
+<p>Статическая часть миссии описывается на Python пакетом <code>sortie-gen</code> поверх
+<a href="https://github.com/pydcs/dcs">pydcs</a> 1.0.0: карта, время старта, зоны, наземные группы, шаблоны
+для спавна, аэродромы, слоты игроков, флаги и меню. Генератор собирает из сценария <code>.miz</code>,
+manifest и <code>scenario.lock.json</code> и проверяет имена так же, как потом их проверят движок и логика.</p>
+<h2 id="сценарий-целиком">Сценарий целиком<a class="anchor" href="#сценарий-целиком" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Это сценарий, на котором построены примеры раздела <a href="sdk.html">Логика на Rust</a>:</p>
+<div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">from dcs import planes, vehicles
+from dcs.terrain import caucasus
+from sortie_gen import Scenario, StartType
+
+sc = Scenario(&quot;my_mission&quot;, schema=1, theatre=caucasus.Caucasus(),
+              start=&quot;2026-06-01T08:00:00Z&quot;, time_limit=&quot;2h&quot;)
+
+target = sc.zone(&quot;Target&quot;, ident=&quot;TARGET&quot;, at=sc.latlon(42.27, 42.90), radius=3_000)
+patrol = sc.zone(&quot;Patrol&quot;, ident=&quot;PATROL&quot;, at=target.center, radius=40_000)
+sc.zone(&quot;Front&quot;, ident=&quot;FRONT&quot;, points=[sc.latlon(42.35, 42.80), sc.latlon(42.35, 43.00),
+                                        sc.latlon(42.20, 43.00), sc.latlon(42.20, 42.80)])
+
+sc.ground_group(&quot;Armor&quot;, ident=&quot;ARMOR&quot;, country=&quot;Russia&quot;, at=target.center,
+                units=[vehicles.Armor.T_72B] * 3 + [vehicles.Armor.BMP_2] * 2,
+                heading=90, formation=&quot;line&quot;, spacing=30, roles={&quot;armor&quot;, &quot;target&quot;})
+sc.ground_group(&quot;SAM&quot;, ident=&quot;SAM&quot;, country=&quot;Russia&quot;, at=sc.latlon(42.285, 42.915),
+                units=[vehicles.AirDefence.Osa_9A33_ln], roles={&quot;sam&quot;})
+sc.ground_group(&quot;AAA&quot;, ident=&quot;AAA&quot;, country=&quot;Russia&quot;, at=sc.latlon(42.26, 42.885),
+                units=[vehicles.AirDefence.ZSU_23_4_Shilka] * 2)
+
+mig = planes.MiG_29S
+sc.air_template(&quot;Red CAP&quot;, mig, ident=&quot;RED_CAP&quot;, country=&quot;Russia&quot;, size=2, airbase=&quot;Nalchik&quot;,
+                payload=[mig.Pylon1.R_73__AA_11_Archer____Infra_Red,
+                         mig.Pylon3.R_27R__AA_10_Alamo_A____Semi_Act_Rdr,
+                         mig.Pylon5.R_27R__AA_10_Alamo_A____Semi_Act_Rdr,
+                         mig.Pylon7.R_73__AA_11_Archer____Infra_Red])
+
+sc.airbase(&quot;Nalchik&quot;, ident=&quot;NALCHIK&quot;, coalition=&quot;red&quot;)
+sc.airbase(&quot;Kutaisi&quot;, ident=&quot;KUTAISI&quot;)   # владельца задаст полёт игроков ниже
+sc.player_flight(&quot;Blue 1&quot;, planes.Su_25T, country=&quot;Georgia&quot;,
+                 airbase=&quot;Kutaisi&quot;, start=StartType.Cold, size=2)
+
+sc.flag(&quot;TARGET_DOWN&quot;)
+sc.menu(&quot;SMOKE_TARGET&quot;, &quot;Дым на цели&quot;, path=[&quot;Цель&quot;])
+sc.menu(&quot;TARGET_INFO&quot;, &quot;Где цель?&quot;, path=[&quot;Цель&quot;])
+
+if __name__ == &quot;__main__&quot;:
+    sc.cli()
+</code></pre></div>
+<p>Сценарий — обычный скрипт. <code>python scenario.py &lt;команда&gt;</code> выполняет команду генератора (см.
+<a href="#%D0%BA%D0%BE%D0%BC%D0%B0%D0%BD%D0%B4%D1%8B-%D1%81%D1%86%D0%B5%D0%BD%D0%B0%D1%80%D0%B8%D1%8F">команды</a>); запускайте его через uv: <code>uv run python scenario.py build</code>.</p>
+<h2 id="заголовок">Заголовок<a class="anchor" href="#заголовок" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">from dcs import planes, vehicles
+from dcs.terrain import caucasus
+from sortie_gen import Scenario, StartType
+
+sc = Scenario(&quot;my_mission&quot;, schema=1, theatre=caucasus.Caucasus(),
+              start=&quot;2026-06-01T08:00:00Z&quot;, time_limit=&quot;2h&quot;)
+</code></pre></div>
+<ul>
+<li>Имя сценария — <code>[a-z][a-z0-9_]*</code>. Из него получаются имя модуля в Rust (<code>my_mission</code>) и маркер
+(<code>MyMission</code>).</li>
+<li><code>schema</code> — номер схемы сценария, целое не меньше 1. Его сверяют bootstrap миссии, движок и
+логика.</li>
+<li><code>theatre</code> — карта pydcs: <code>caucasus.Caucasus()</code>, <code>syria.Syria()</code> и другие.</li>
+<li><code>start</code> — время старта в RFC 3339. Без часового пояса это местное время карты, как в редакторе.</li>
+<li><code>time_limit</code> — лимит сессии: <code>"3h"</code>, <code>"1h30m"</code>, <code>"90m"</code> или число секунд. Когда он истекает,
+движок заканчивает сессию с исходом <code>TimeLimit</code>. Без лимита сессию заканчивает только логика.</li>
+</ul>
+<h2 id="позиции">Позиции<a class="anchor" href="#позиции" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li><code>sc.latlon(широта, долгота)</code> — точка по широте и долготе.</li>
+<li><code>sc.point(север, восток)</code> — точка в координатах редактора: <code>x</code> на север, <code>y</code> на восток, метры.</li>
+<li><code>zone.center</code> — центр объявленной зоны.</li>
+</ul>
+<p>Голый кортеж <code>(x, y)</code> генератор не принимает: по нему не понять, что это за координаты.</p>
+<h2 id="зоны">Зоны<a class="anchor" href="#зоны" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">target = sc.zone(&quot;Target&quot;, ident=&quot;TARGET&quot;, at=sc.latlon(42.27, 42.90), radius=3_000)
+patrol = sc.zone(&quot;Patrol&quot;, ident=&quot;PATROL&quot;, at=target.center, radius=40_000)
+sc.zone(&quot;Front&quot;, ident=&quot;FRONT&quot;, points=[sc.latlon(42.35, 42.80), sc.latlon(42.35, 43.00),
+                                        sc.latlon(42.20, 43.00), sc.latlon(42.20, 42.80)])
+</code></pre></div>
+<p>Зона — круг (<code>at</code> и <code>radius</code> в метрах) или четырёхугольник из четырёх точек (<code>points</code>). С <code>ident</code>
+зона становится символом <code>zones::TARGET</code> в Rust, с геометрией: <code>zones::TARGET.center()</code> и
+<code>contains(..)</code> работают в логике без движка. Без <code>ident</code> зона попадает только в <code>.miz</code>.</p>
+<h2 id="наземные-группы">Наземные группы<a class="anchor" href="#наземные-группы" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">sc.ground_group(&quot;Armor&quot;, ident=&quot;ARMOR&quot;, country=&quot;Russia&quot;, at=target.center,
+                units=[vehicles.Armor.T_72B] * 3 + [vehicles.Armor.BMP_2] * 2,
+                heading=90, formation=&quot;line&quot;, spacing=30, roles={&quot;armor&quot;, &quot;target&quot;})
+sc.ground_group(&quot;SAM&quot;, ident=&quot;SAM&quot;, country=&quot;Russia&quot;, at=sc.latlon(42.285, 42.915),
+                units=[vehicles.AirDefence.Osa_9A33_ln], roles={&quot;sam&quot;})
+sc.ground_group(&quot;AAA&quot;, ident=&quot;AAA&quot;, country=&quot;Russia&quot;, at=sc.latlon(42.26, 42.885),
+                units=[vehicles.AirDefence.ZSU_23_4_Shilka] * 2)
+</code></pre></div>
+<ul>
+<li>Юниты называются <code>&lt;имя группы&gt;-&lt;k&gt;</code>: <code>Armor-1</code>, <code>Armor-2</code> и так далее.</li>
+<li><code>formation</code> — <code>line</code>, <code>star</code>, <code>rectangle</code> или <code>vee</code>; <code>spacing</code> — расстояние между юнитами в
+метрах; первый юнит стоит в <code>at</code>.</li>
+<li>Ещё есть <code>heading</code> (градусы), <code>skill</code>, <code>late_activation</code>, <code>hidden</code>.</li>
+<li><code>roles</code> — метки группы, <code>[a-z][a-z0-9_-]*</code>; они попадают в lock.</li>
+<li>С <code>ident</code> группа становится символом <code>groups::ARMOR</code> типа <code>GroupRef&lt;MyMission, Ground&gt;</code>.</li>
+</ul>
+<h2 id="шаблоны-для-спавна">Шаблоны для спавна<a class="anchor" href="#шаблоны-для-спавна" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">mig = planes.MiG_29S
+sc.air_template(&quot;Red CAP&quot;, mig, ident=&quot;RED_CAP&quot;, country=&quot;Russia&quot;, size=2, airbase=&quot;Nalchik&quot;,
+                payload=[mig.Pylon1.R_73__AA_11_Archer____Infra_Red,
+                         mig.Pylon3.R_27R__AA_10_Alamo_A____Semi_Act_Rdr,
+                         mig.Pylon5.R_27R__AA_10_Alamo_A____Semi_Act_Rdr,
+                         mig.Pylon7.R_73__AA_11_Archer____Infra_Red])
+</code></pre></div>
+<p>Шаблон авиагруппы в <code>.miz</code> не попадает. Он хранится в manifest, и логика спавнит его
+(<code>ctx.spawn_group(templates::RED_CAP)</code>). Параметры: тип самолёта или вертолёта, <code>ident</code>
+(обязателен), страна, <code>size</code>, <code>task</code>, <code>skill</code>, место по умолчанию (<code>at</code> или <code>airbase</code>),
+<code>altitude</code>, <code>speed</code>, <code>payload</code>.</p>
+<p>Подвеска. По умолчанию генератор работает герметично: только с данными, встроенными в pydcs, без
+установленной DCS. Поэтому один и тот же сценарий собирается одинаково на любой машине. Подвесок
+по умолчанию в этом режиме нет, и шаблон без <code>payload</code> появится без оружия; генератор
+предупредит. Перечислите пилоны, как в примере, или задайте переменную окружения
+<code>SORTIE_GEN_DCS_DATA=installed</code>: тогда генератор возьмёт подвески установленной DCS, но сборка
+станет зависеть от машины.</p>
+<h2 id="аэродромы-и-слоты-игроков">Аэродромы и слоты игроков<a class="anchor" href="#аэродромы-и-слоты-игроков" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">sc.airbase(&quot;Nalchik&quot;, ident=&quot;NALCHIK&quot;, coalition=&quot;red&quot;)
+sc.airbase(&quot;Kutaisi&quot;, ident=&quot;KUTAISI&quot;)   # владельца задаст полёт игроков ниже
+sc.player_flight(&quot;Blue 1&quot;, planes.Su_25T, country=&quot;Georgia&quot;,
+                 airbase=&quot;Kutaisi&quot;, start=StartType.Cold, size=2)
+</code></pre></div>
+<ul>
+<li><code>sc.airbase(имя, ident=...)</code> делает аэродром символом <code>airbases::NALCHIK</code> для логики.
+<code>coalition</code> меняет владельца аэродрома в миссии; без него остаётся владелец по умолчанию.</li>
+<li><code>sc.player_flight(..)</code> создаёт клиентские слоты. Старт: <code>StartType.Cold</code>, <code>Hot</code>, <code>Runway</code> или
+<code>Air</code> (тогда нужны <code>at</code> и <code>altitude</code>). Ещё есть <code>task</code>, <code>skill</code>, <code>payload</code>. Полёты игроков
+попадают в manifest, но не в lock: символов для них нет.</li>
+</ul>
+<p><strong>Правило аэродрома.</strong> В сетевой игре DCS даёт занять стоянку только той коалиции, которой
+принадлежит аэродром. На нейтральном или чужом аэродроме слот не занять, и игрок остаётся
+наблюдателем. Поэтому полёт игроков со стартом <code>Cold</code>, <code>Hot</code> или <code>Runway</code> отдаёт свой аэродром
+коалиции полёта. Сборка падает с объяснением, если:</p>
+<ul>
+<li>сценарий объявил этот аэродром за другую коалицию (<code>sc.airbase(..., coalition=...)</code>);</li>
+<li>на одном аэродроме стоят игроки двух коалиций.</li>
+</ul>
+<p>Если хук <code>@sc.pydcs</code> сам ставит клиентскую группу на чужой аэродром, генератор предупредит.</p>
+<h2 id="флаги-и-меню">Флаги и меню<a class="anchor" href="#флаги-и-меню" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">sc.flag(&quot;TARGET_DOWN&quot;)
+sc.menu(&quot;SMOKE_TARGET&quot;, &quot;Дым на цели&quot;, path=[&quot;Цель&quot;])
+sc.menu(&quot;TARGET_INFO&quot;, &quot;Где цель?&quot;, path=[&quot;Цель&quot;])
+</code></pre></div>
+<ul>
+<li><code>sc.flag(ident, name=None, initial=0)</code> — флаг миссии <code>flags::TARGET_DOWN</code>. Имя флага в DCS по
+умолчанию равно <code>ident</code>; начальное значение ставит триггер в <code>.miz</code>.</li>
+<li><code>sc.menu(ident, надпись, path=[...])</code> — команда меню F10 <code>menus::SMOKE_TARGET</code>. <code>path</code> — путь
+подменю. В игре команда появляется, когда её добавит логика.</li>
+</ul>
+<h2 id="статика-погода-и-брифинг">Статика, погода и брифинг<a class="anchor" href="#статика-погода-и-брифинг" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Чего нет в API сценария, делается через pydcs напрямую. Функция с <code>@sc.pydcs</code> получает миссию
+pydcs при каждой сборке, после объявлений Sortie:</p>
+<div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">@sc.pydcs
+def extras(m: dcs.Mission) -&gt; None:
+    # Статический объект: штаб рядом с целью (в .miz, без символа для Rust).
+    hq = dcs.mapping.Point(target.center.x + 800, target.center.y, m.terrain)
+    m.static_group(m.country(&quot;Russia&quot;), &quot;HQ&quot;, dcs.statics.Fortification._Command_Center, hq)
+    # Погода и брифинг.
+    m.weather.clouds_density = 4
+    m.weather.clouds_base = 2_500
+    m.set_description_bluetask_text(&quot;Уничтожить бронегруппу в зоне Target.&quot;)
+</code></pre></div>
+<ul>
+<li>Группы и статика, добавленные хуком, попадают в manifest без <code>ident</code>. Символов для них нет;
+логика находит их по имени через мир и события.</li>
+<li>Генератор проверяет уникальность всех имён и после хуков.</li>
+</ul>
+<p>Свой DO SCRIPT в хуке пишите через <code>sortie_gen.miz.InlineDoScript</code>, а не через <code>DoScript</code> из
+pydcs:</p>
+<div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">@sc.pydcs
+def hello(m: dcs.Mission) -&gt; None:
+    trig = TriggerStart(comment=&quot;hello&quot;)
+    trig.add_action(InlineDoScript(&#39;trigger.action.outText(&quot;Миссия загружена&quot;, 10)&#39;))
+    m.triggerrules.triggers.append(trig)
+</code></pre></div>
+<p><code>DoScript</code> из pydcs хранит код в словаре миссии, а редактор миссий читает такое действие как
+код. Миссия, пересохранённая в редакторе, выполнит имя ключа словаря как Lua и упадёт.
+<code>InlineDoScript</code> пишет код прямо в действие, как это делает сам редактор. Bootstrap Sortie
+устроен так же.</p>
+<h2 id="правила-имён">Правила имён<a class="anchor" href="#правила-имён" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Генератор отказывает сразу, с понятным сообщением:</p>
+<ul>
+<li>имена групп уникальны среди групп, шаблонов и слотов, не длиннее 128 байт, без пробелов по
+краям и управляющих символов;</li>
+<li><code>#</code> в именах групп занят: так движок называет группы, созданные спавном;</li>
+<li><code>ident</code> — <code>[A-Z][A-Z0-9_]*</code>, уникален среди символов своего вида;</li>
+<li>страна, аэродром, тип юнита и задача проверяются по данным pydcs, с подсказкой похожего имени.</li>
+</ul>
+<h2 id="команды-сценария">Команды сценария<a class="anchor" href="#команды-сценария" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code"><pre tabindex="0"><code>python scenario.py lock      [--out FILE] [--check]
+python scenario.py build     [--out DIR] [--stem NAME] [--no-miz] [--build-id ULID] [--lock FILE] [--locked]
+python scenario.py validate  [--engine ADDR] [--token T]
+python scenario.py register  [--out DIR] [--lock FILE] [--locked] [--no-validate] [--engine ADDR] [--token T]
+python scenario.py launch    [--build-id ID] [--out DIR] [--lock FILE] [--locked] [--no-validate] [--engine ADDR] [--token T]
+python scenario.py restart   [--engine ADDR] [--token T]
+python scenario.py watch     [--session S] [--kinds birth,dead,...] [--from-seq N] [--engine ADDR] [--token T]
+python scenario.py results   [--session S] [--json] [--engine ADDR] [--token T]
+</code></pre></div>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Команда</th><th>Что делает</th></tr></thead><tbody>
+<tr><td><code>lock</code></td><td>пишет <code>scenario.lock.json</code>, если изменился набор символов, и говорит, что изменилось; <code>--check</code> только проверяет (код 1, если lock устарел)</td></tr>
+<tr><td><code>build</code></td><td>собирает <code>dist\&lt;build_id&gt;.miz</code>, <code>.manifest.pb</code> и <code>.manifest.json</code> без движка; обновляет lock</td></tr>
+<tr><td><code>validate</code></td><td>спрашивает DCS через движок, знает ли она каждый тип юнита и статики сценария, и печатает таблицу</td></tr>
+<tr><td><code>register</code></td><td>берёт у движка build id, собирает, проверяет типы и регистрирует сборку; движок кладёт <code>.miz</code> в <code>Saved Games\DCS\Missions\Sortie\</code></td></tr>
+<tr><td><code>launch</code></td><td>регистрирует свежую сборку и просит движок загрузить её в DCS; с <code>--build-id</code> загружает уже зарегистрированную</td></tr>
+<tr><td><code>restart</code></td><td>перезагружает миссию, которую сейчас крутит DCS: сессия кончается с причиной <code>restart</code>, начинается новая</td></tr>
+<tr><td><code>watch</code></td><td>печатает состояние движка и события сессии до Ctrl-C</td></tr>
+<tr><td><code>results</code></td><td>итоги последней сессии (или <code>--session</code>); <code>--json</code> — полностью</td></tr>
+</tbody></table>
+</div>
+<ul>
+<li><code>--locked</code> у <code>build</code>, <code>register</code> и <code>launch</code> не переписывает lock, а падает, если он устарел.
+Вместе с <code>lock --check</code> это удобно для CI.</li>
+<li><code>launch</code> и <code>restart</code> загружают миссию серверной функцией DCS <code>net.load_mission</code>. Они для
+dedicated server и хоста сетевой игры, и в живой игре пока не проверялись. В одиночной игре
+миссию открывают и перезапускают из меню DCS; <code>restart</code> там движок отклоняет сразу.</li>
+<li>Адрес движка — <code>--engine</code>, <code>SORTIE_ENGINE</code> или <code>127.0.0.1:50777</code>. Токен роли <code>generator</code> или
+<code>admin</code> — <code>--token</code> или <code>SORTIE_TOKEN</code>; с <code>sortied --dev</code> он не нужен.</li>
+<li>Коды выхода: 0 — готово, 1 — ошибка, 2 — возможность появится в следующей версии.</li>
+</ul>
+<p>Если движок не запущен, команда скажет об этом одной строкой:</p>
+<div class="code"><pre tabindex="0"><code>error: cannot reach the Sortie engine at 127.0.0.1:50777 (...). Is sortied running? Start it with `sortied --dev` for local work, or point --engine / SORTIE_ENGINE at it.
+</code></pre></div>
+<h3 id="проверка-типов">Проверка типов<a class="anchor" href="#проверка-типов" aria-label="Ссылка на этот раздел">#</a></h3>
+<p>pydcs знает типы из своей базы, а DCS на сервере может их не знать: опечатка в типе из хука,
+модуль или мод, которого на сервере нет. Такая миссия загрузится без части юнитов. Поэтому
+<code>register</code> и <code>launch</code> перед регистрацией спрашивают движок о каждом типе сборки. Движок
+спрашивает миссию, которая сейчас идёт в DCS (подойдёт любая миссия с мостом, например lobby).</p>
+<ul>
+<li>Неизвестный тип останавливает команду; в ошибке видно, где он используется. <code>--no-validate</code>
+пропускает проверку.</li>
+<li>Если проверить нельзя (в DCS не идёт миссия, DCS на паузе), команда предупредит и
+зарегистрирует сборку без проверки.</li>
+</ul>
+<h2 id="что-получается-на-выходе">Что получается на выходе<a class="anchor" href="#что-получается-на-выходе" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Файл</th><th>Что это</th></tr></thead><tbody>
+<tr><td><code>&lt;build_id&gt;.miz</code></td><td>миссия pydcs и один триггер MISSION START с bootstrap Sortie</td></tr>
+<tr><td><code>&lt;build_id&gt;.manifest.pb</code></td><td>manifest: группы, юниты, зоны, шаблоны, флаги, аэродромы, меню, слоты</td></tr>
+<tr><td><code>&lt;build_id&gt;.manifest.json</code></td><td>то же для людей</td></tr>
+<tr><td><code>scenario.lock.json</code></td><td>символы сценария и геометрия зон для логики</td></tr>
+</tbody></table>
+</div>
+<p>Bootstrap при старте миссии вызывает мост и передаёт ему имя сценария, build id, digest
+manifest и номер схемы. Движок сверяет их с зарегистрированной сборкой и начинает сессию.</p>
+<p><code>build_id</code> — ULID. Офлайн-сборка выводит его из содержимого, поэтому повторная сборка того же
+сценария даёт побайтно те же файлы. <code>register</code> берёт свежий build id у движка. Файлы пишутся
+атомарно.</p>
+<h2 id="редактор-миссий">Редактор миссий<a class="anchor" href="#редактор-миссий" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Собранную <code>.miz</code> можно открыть в редакторе миссий, пересохранить и запустить оттуда: bootstrap
+останется рабочим. Но если в редакторе поменять группы, юниты или зоны, manifest перестанет им
+соответствовать. Такие правки делайте в сценарии и пересобирайте. Не загружайте и не
+пересохраняйте готовую <code>.miz</code> через pydcs: он вернёт DO SCRIPT в форму со словарём.</p>
+<h2 id="сборка-из-кода">Сборка из кода<a class="anchor" href="#сборка-из-кода" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Сценарий можно собрать без командной строки:</p>
+<div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">def build_to(out_dir: Path) -&gt; Path:
+    b = sc.build()               # в памяти, без движка; build id выводится из содержимого
+    for text in b.warnings:      # те же предупреждения, что печатает `build`
+        print(&quot;warning:&quot;, text)
+    print(b.build_id, b.digest)  # digest = sha256 manifest.pb, его сверяет bootstrap
+    files = b.write(out_dir)     # &lt;build_id&gt;.miz, .manifest.pb, .manifest.json
+    return files[&quot;miz&quot;]
+</code></pre></div>
+<p>У результата <code>sc.build()</code> есть <code>build_id</code>, <code>digest</code>, <code>miz</code> (байты), <code>manifest_pb</code>,
+<code>manifest_json</code>, <code>lock</code>, <code>warnings</code> и <code>type_uses</code> (типы юнитов и где они используются).</p>
+<h2 id="команда-sortie-gen">Команда <code>sortie-gen</code><a class="anchor" href="#команда-sortie-gen" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code"><pre tabindex="0"><code>sortie-gen lobby  [--out missions/sortie-lobby.miz] [--theatre caucasus]
+sortie-gen adopt  my.miz [--json]
+sortie-gen lock|build|validate|register|launch|restart|watch|results &lt;scenario.py&gt; [аргументы]
+</code></pre></div>
+<ul>
+<li><code>lobby</code> — миссия-заглушка для списка миссий dedicated server: без юнитов, с одним сообщением о
+том, загружен ли мост.</li>
+<li><code>adopt</code> — разбор миссии, сделанной в редакторе: коалиции, группы, юниты, зоны, предложенные
+<code>ident</code>, конфликтующие и занятые имена. Помогает перенести миссию в сценарий.</li>
+<li>Команды сценария можно запускать и так: <code>uv run sortie-gen build scenario.py</code>.</li>
+</ul>
+<p><code>sortie-gen worker</code> (цикл кампании) в этой версии не работает и выходит с кодом 2.</p>
+</article>
+<nav class="pager" aria-label="Соседние страницы">
+<a class="pager-prev" rel="prev" href="sdk.html"><span class="pager-dir">Назад</span><span class="pager-title">Логика на Rust</span></a>
+<a class="pager-next" rel="next" href="testing.html"><span class="pager-dir">Дальше</span><span class="pager-title">Тестирование</span></a>
+</nav>
+<p class="page-source"><a href="generator.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

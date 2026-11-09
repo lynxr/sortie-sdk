@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Диагностика | Sortie SDK</title>
+<meta name="description" content="Начинайте с двух команд: sortie doctor проверяет установку, sortie status — движок, мост и сессию. Где лежат логи — в Эксплуатации.">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/docs/troubleshooting.html">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-doc has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Страницы документации">
+<nav class="toc">
+<a class="toc-home" href="index.html">Документация</a>
+<ul>
+<li><a href="index.html">Обзор</a></li>
+<li><a href="install-runtime.html">Установка рантайма</a></li>
+<li><a href="quickstart.html">Быстрый старт</a></li>
+<li><a href="dependency.html">Подключение SDK</a></li>
+<li><a href="sdk.html">Логика на Rust</a></li>
+<li><a href="generator.html">Сценарий на Python</a></li>
+<li><a href="testing.html">Тестирование</a></li>
+<li><a href="operations.html">Эксплуатация</a></li>
+<li><a href="troubleshooting.html" aria-current="page">Диагностика</a></li>
+<li><a href="faq.html">Вопросы и ограничения</a></li>
+<li><a href="changelog.html">Что нового</a></li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="диагностика">Диагностика<a class="anchor" href="#диагностика" aria-label="Ссылка на этот раздел">#</a></h1>
+<p>Начинайте с двух команд: <code>sortie doctor</code> проверяет установку, <code>sortie status</code> — движок, мост и
+сессию. Где лежат логи — в <a href="operations.html#%D0%BB%D0%BE%D0%B3%D0%B8">Эксплуатации</a>.</p>
+<h2 id="на-экране-sortie-bridge-is-not-installed-run-sortie-doctor">На экране «Sortie bridge is not installed: run sortie doctor»<a class="anchor" href="#на-экране-sortie-bridge-is-not-installed-run-sortie-doctor" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Миссия собрана генератором, но мост в среду миссии не загрузился.</p>
+<ul>
+<li>Запустите <code>sortie doctor</code>. Чаще всего обновление DCS стёрло строку в <code>MissionScripting.lua</code>:
+верните её командой <code>sortie doctor --fix</code> от имени администратора.</li>
+<li>Рантайм ставился в другой экземпляр: проверьте <code>--instance</code> у <code>install</code> и папку Saved Games,
+которую использует DCS.</li>
+<li>Ошибка загрузки моста видна в <code>Saved Games\DCS\Logs\dcs.log</code>, в строке с <code>Sortie:</code>.</li>
+</ul>
+<h2 id="мост-не-подключается-к-движку">Мост не подключается к движку<a class="anchor" href="#мост-не-подключается-к-движку" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li><code>sortie status</code> показывает, есть ли связь моста. <code>sortied</code> должен быть запущен с тем же
+экземпляром (<code>--instance</code>), что и <code>sortie install</code>.</li>
+<li>Порядок запуска не важен: мост переподключается сам. Адрес движка он читает из
+<code>Saved Games\DCS\Sortie\link.addr</code>, который пишет <code>sortied</code>.</li>
+<li>После установки или обновления рантайма перезапустите саму DCS, а не только миссию: часть
+моста для среды hooks загружается только при старте DCS. Если она устарела, <code>sortie status</code>
+подскажет перезапустить DCS.</li>
+</ul>
+<h2 id="миссия-идёт-а-сессии-нет">Миссия идёт, а сессии нет<a class="anchor" href="#миссия-идёт-а-сессии-нет" aria-label="Ссылка на этот раздел">#</a></h2>
+<p><code>sortied</code> пишет причину в свой лог.</p>
+<ul>
+<li>«build ... is not registered with this engine» — сборку не регистрировали. Регистрируйте
+миссии через <code>python scenario.py register</code>. Для <code>.miz</code>, собранной <code>build</code> и открытой вручную,
+запустите <code>sortied --manifest &lt;файл.manifest.pb&gt;</code>.</li>
+<li>«the mission's digest ... does not match build ...» — <code>.miz</code> изменили после сборки или она от
+другой сборки. Соберите и зарегистрируйте заново.</li>
+<li>Миссия сделана не генератором (нет bootstrap) — сессии не будет. Перенесите её в сценарий; в
+этом поможет <code>sortie-gen adopt</code>.</li>
+</ul>
+<h2 id="логика-не-подключается-или-выходит">Логика не подключается или выходит<a class="anchor" href="#логика-не-подключается-или-выходит" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li><code>error[sortie::transport]</code> — движок не запущен или слушает другой адрес. Проверьте <code>sortied</code> и
+<code>--engine</code> / <code>SORTIE_ENGINE</code>. Логика повторяет попытки сама.</li>
+<li>Код выхода 2 и «set SORTIE_TOKEN to a token with the <code>logic</code> role» — движок запущен без
+<code>--dev</code>, а токена нет или он неверный. Возьмите токен роли <code>logic</code> из <code>tokens.toml</code>.</li>
+<li>«the engine rejected this logic» и список «missing symbols» — логика собрана с другим
+<code>scenario.lock.json</code>, чем запущенная миссия. Выполните <code>python scenario.py lock</code>, пересоберите
+логику, зарегистрируйте и запустите новую сборку.</li>
+</ul>
+<h2 id="ошибки-в-логике">Ошибки в логике<a class="anchor" href="#ошибки-в-логике" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li><code>Error::UnknownSymbol</code> — то же расхождение lock и миссии, что выше.</li>
+<li><code>Error::NotInWorld</code> у <code>ctx.group(..)</code> — группа есть в сценарии, но живых юнитов сейчас нет:
+её уже уничтожили, или у неё отложенная активация.</li>
+<li><code>Error::Gone</code> — объект погиб раньше, чем дошла команда. Обрабатывайте его, если цель может
+исчезнуть (см. <a href="sdk.html#%D0%BE%D1%88%D0%B8%D0%B1%D0%BA%D0%B8">Ошибки</a>).</li>
+<li><code>Error::Timeout</code> — DCS не ответила вовремя. Увеличьте <code>.timeout(..)</code>; <code>sortie top</code> покажет
+очереди движка.</li>
+<li><code>Error::Invalid</code> с «without <code>.key(..)</code> in dev mode» — <code>sortied --dev</code> требует ключ у спавна и
+уничтожения. Добавьте <code>.key("...")</code>.</li>
+<li><code>e.report()</code> печатает место в коде, Lua traceback и подсказку.</li>
+</ul>
+<h2 id="мир-пустой-события-не-приходят">Мир пустой, события не приходят<a class="anchor" href="#мир-пустой-события-не-приходят" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Связь есть, сессия есть, а <code>ctx.world()</code> пустой. В DCS 2.9.31 <code>Unit:getID()</code> возвращает строку,
+а не число, и мост старых сборок из-за этого не мог передать ни одного юнита. Рантайм
+0.1.0 понимает оба вида. Если вы видите пустой мир, проверьте, что установлен
+рантайм 0.1.0 (<code>sortie status</code> показывает версию моста в строке <code>bridge</code>), и
+перезапустите DCS.</p>
+<h2 id="игроки-не-могут-занять-слоты-в-сетевой-игре">Игроки не могут занять слоты в сетевой игре<a class="anchor" href="#игроки-не-могут-занять-слоты-в-сетевой-игре" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>В сетевой игре DCS даёт место на стоянке только коалиции, которой принадлежит аэродром. Игрок,
+чей слот стоит на нейтральном или чужом аэродроме, остаётся наблюдателем.</p>
+<ul>
+<li><code>player_flight</code> со стартом <code>Cold</code>, <code>Hot</code> или <code>Runway</code> отдаёт аэродром своей коалиции сам.</li>
+<li>Если сценарий объявил аэродром за другую коалицию или поставил на него игроков двух коалиций,
+сборка падает с объяснением.</li>
+<li>Клиентские группы, добавленные хуком <code>@sc.pydcs</code>, генератор не переставляет. На чужом аэродроме
+он только предупреждает.</li>
+</ul>
+<h2 id="редактор-миссий-и-do-script">Редактор миссий и DO SCRIPT<a class="anchor" href="#редактор-миссий-и-do-script" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li>Собранную <code>.miz</code> можно открыть в редакторе, пересохранить и запустить оттуда. Правки групп,
+юнитов и зон в редакторе ломают соответствие manifest: делайте их в сценарии.</li>
+<li>Свой DO SCRIPT в хуке пишите через <code>sortie_gen.miz.InlineDoScript</code>. С <code>DoScript</code> из pydcs
+миссия после редактора падает с ошибкой вида
+<code>[string "DictKey_Translation_5"]:1: '=' expected near '&lt;eof&gt;'</code>.</li>
+<li>Не загружайте и не сохраняйте готовую <code>.miz</code> через pydcs.</li>
+</ul>
+<h2 id="проверка-типов-предупреждает-или-падает">Проверка типов предупреждает или падает<a class="anchor" href="#проверка-типов-предупреждает-или-падает" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li>«unit and static types not checked» — проверить было нельзя: в DCS не идёт миссия или DCS на
+паузе. Сборка зарегистрирована без проверки. Запустите любую миссию с мостом (например,
+lobby) и повторите, если проверка нужна.</li>
+<li>«DCS on the server does not know ... type(s)» — опечатка в типе или на сервере нет модуля или
+мода. Исправьте сценарий или поставьте модуль; <code>--no-validate</code> пропускает проверку.</li>
+</ul>
+<h2 id="restart-отказывает"><code>restart</code> отказывает<a class="anchor" href="#restart-отказывает" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li>В одиночной игре <code>restart</code> не работает: перезапускайте миссию из меню DCS.</li>
+<li>«already asked DCS to reload» — предыдущий перезапуск ещё идёт. Подождите новую сессию.</li>
+<li>Отказ с просьбой перезапустить DCS значит, что часть моста для hooks загружена до установки
+рантайма.</li>
+</ul>
+<h2 id="производительность">Производительность<a class="anchor" href="#производительность" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Замеры DCS под нагрузкой ещё не сделаны: команда <code>sortie probe</code> пока отвечает «lands in M0» и
+выходит с кодом 2. Сколько юнитов и команд в секунду выдерживает связка DCS и Sortie, пока не
+измерено. Мост ограничивает свою работу бюджетом кадра, но сам бюджет ещё не подобран по
+замерам. Если с Sortie проседает FPS, пришлите вывод <code>sortie top</code>, логи и число юнитов в
+миссии.</p>
+<h2 id="что-прислать-в-отчёт-об-ошибке">Что прислать в отчёт об ошибке<a class="anchor" href="#что-прислать-в-отчёт-об-ошибке" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li>версии: вывод <code>sortie status</code> и <code>sortie doctor</code>;</li>
+<li>логи: <code>sortied.log</code>, <code>sortie-bridge.log</code>, <code>dcs.log</code>, вывод логики;</li>
+<li><code>scenario.py</code> и <code>scenario.lock.json</code>, если они не секретные;</li>
+<li>что делали и что ожидали.</li>
+</ul>
+</article>
+<nav class="pager" aria-label="Соседние страницы">
+<a class="pager-prev" rel="prev" href="operations.html"><span class="pager-dir">Назад</span><span class="pager-title">Эксплуатация</span></a>
+<a class="pager-next" rel="next" href="faq.html"><span class="pager-dir">Дальше</span><span class="pager-title">Вопросы и ограничения</span></a>
+</nav>
+<p class="page-source"><a href="troubleshooting.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Подключение SDK | Sortie SDK</title>
+<meta name="description" content="SDK не публикуется на crates.io и PyPI. Cargo и uv берут его прямо из Git-репозитория lynxr/sortie-sdk по тегу выпуска v0.1.0. В шаблоне миссии это уже настроено; ниже — как…">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/docs/dependency.html">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-doc has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Страницы документации">
+<nav class="toc">
+<a class="toc-home" href="index.html">Документация</a>
+<ul>
+<li><a href="index.html">Обзор</a></li>
+<li><a href="install-runtime.html">Установка рантайма</a></li>
+<li><a href="quickstart.html">Быстрый старт</a></li>
+<li><a href="dependency.html" aria-current="page">Подключение SDK</a></li>
+<li><a href="sdk.html">Логика на Rust</a></li>
+<li><a href="generator.html">Сценарий на Python</a></li>
+<li><a href="testing.html">Тестирование</a></li>
+<li><a href="operations.html">Эксплуатация</a></li>
+<li><a href="troubleshooting.html">Диагностика</a></li>
+<li><a href="faq.html">Вопросы и ограничения</a></li>
+<li><a href="changelog.html">Что нового</a></li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="подключение-sdk">Подключение SDK<a class="anchor" href="#подключение-sdk" aria-label="Ссылка на этот раздел">#</a></h1>
+<p>SDK не публикуется на crates.io и PyPI. Cargo и uv берут его прямо из Git-репозитория
+<a href="https://github.com/lynxr/sortie-sdk">lynxr/sortie-sdk</a> по тегу выпуска <code>v0.1.0</code>.
+В шаблоне миссии это уже настроено; ниже — как подключить SDK к своему проекту.</p>
+<h2 id="логика-на-rust">Логика на Rust<a class="anchor" href="#логика-на-rust" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="toml"><pre tabindex="0"><code class="language-toml">[dependencies]
+sortie = { git = &quot;https://github.com/lynxr/sortie-sdk&quot;, tag = &quot;v0.1.0&quot; }
+# Только если логика хранит свои структуры через ctx.state (derive Serialize/Deserialize):
+serde = { version = &quot;1&quot;, features = [&quot;derive&quot;] }
+
+[build-dependencies]
+sortie-build = { git = &quot;https://github.com/lynxr/sortie-sdk&quot;, tag = &quot;v0.1.0&quot; }
+</code></pre></div>
+<ul>
+<li><code>sortie</code> — сам SDK: контекст миссии, команды, мир, события, макросы.</li>
+<li><code>sortie-build</code> — помощник для <code>build.rs</code>: делает из <code>scenario.lock.json</code> модуль с
+типизированными символами сценария.</li>
+<li>Остальные крейты SDK (<code>sortie-macros</code>, <code>sortie-types</code>, <code>sortie-world</code>, <code>sortie-manifest</code>,
+<code>sortie-proto</code>) cargo подтянет сам; отдельно их подключать не нужно.</li>
+</ul>
+<p>Тег закреплён: <code>cargo update</code> не переводит проект на новую версию SDK. Чтобы обновиться,
+поменяйте тег в обеих строках.</p>
+<h2 id="генератор-на-python">Генератор на Python<a class="anchor" href="#генератор-на-python" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Добавьте <code>sortie-gen</code> в свой uv-проект из того же репозитория:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">uv add &quot;sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.1.0#subdirectory=python/sortie-gen&quot;
+</code></pre></div>
+<p>Или из wheel со страницы выпуска <a href="https://github.com/lynxr/sortie-sdk/releases/tag/v0.1.0">v0.1.0</a>,
+если Git недоступен:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">uv add .\sortie_gen-0.1.0-py3-none-any.whl
+</code></pre></div>
+<p><code>sortie-gen</code> требует Python 3.11 или новее и ставит pydcs 1.0.0, grpcio и protobuf. Сценарий
+запускается через uv: <code>uv run python scenario.py build</code>.</p>
+<h2 id="закрытый-репозиторий">Закрытый репозиторий<a class="anchor" href="#закрытый-репозиторий" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Если репозиторий SDK закрытый, cargo и uv должны уметь в него войти. Проще всего отдать это
+Git: в Git для Windows уже есть Git Credential Manager.</p>
+<ol>
+<li>
+<p>Проверьте, что Git сам открывает репозиторий:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">git ls-remote https://github.com/lynxr/sortie-sdk
+</code></pre></div>
+<p>В первый раз откроется окно входа GitHub. После входа Git запомнит учётные данные.</p>
+</li>
+<li>
+<p>Скажите cargo ходить в Git через командную строку Git. Добавьте в <code>.cargo\config.toml</code>
+проекта или в <code>%USERPROFILE%\.cargo\config.toml</code>:</p>
+<div class="code" data-lang="toml"><pre tabindex="0"><code class="language-toml">[net]
+git-fetch-with-cli = true
+</code></pre></div>
+<p>То же можно задать переменной окружения <code>CARGO_NET_GIT_FETCH_WITH_CLI=true</code>.</p>
+</li>
+<li>
+<p>uv и так вызывает Git, поэтому ему хватает шага 1.</p>
+</li>
+</ol>
+<p>Без окна входа (CI, сервер) используйте personal access token GitHub с доступом только на
+чтение содержимого репозитория. Git Credential Manager примет его вместо пароля. Не вписывайте
+токен в <code>Cargo.toml</code>, <code>pyproject.toml</code> или URL: эти файлы попадают в Git.</p>
+<h2 id="версии">Версии<a class="anchor" href="#версии" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Версия SDK, генератора и рантайма одна: 0.1.0. Обновляйте их вместе: новый тег в
+<code>Cargo.toml</code> и <code>pyproject.toml</code> и новый архив рантайма (см.
+<a href="operations.html#%D0%BE%D0%B1%D0%BD%D0%BE%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D0%B5">Эксплуатацию</a>).</p>
+</article>
+<nav class="pager" aria-label="Соседние страницы">
+<a class="pager-prev" rel="prev" href="quickstart.html"><span class="pager-dir">Назад</span><span class="pager-title">Быстрый старт</span></a>
+<a class="pager-next" rel="next" href="sdk.html"><span class="pager-dir">Дальше</span><span class="pager-title">Логика на Rust</span></a>
+</nav>
+<p class="page-source"><a href="dependency.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

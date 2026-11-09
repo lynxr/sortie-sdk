@@ -1,0 +1,31 @@
+// DCS server administration (minimal in v1; players/kick/slot policy come later).
+syntax = "proto3";
+
+package sortie.v1;
+
+service Server {
+  rpc Status(ServerStatusRequest) returns (ServerStatus);
+  rpc SetPaused(SetPausedRequest) returns (SetPausedResponse);
+}
+
+message ServerStatusRequest {}
+
+message ServerStatus {
+  string dcs_version = 1;
+  bool hooks_connected = 2;
+  bool mission_connected = 3;
+  // DCS.getMissionName().
+  string mission_name = 4;
+  string session = 5;
+  bool paused = 6;
+  double model_time = 7;
+  uint32 players = 8;
+}
+
+message SetPausedRequest {
+  bool paused = 1;
+}
+
+message SetPausedResponse {
+  bool paused = 1;
+}

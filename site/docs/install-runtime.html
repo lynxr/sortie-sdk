@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Установка рантайма | Sortie SDK</title>
+<meta name="description" content="Рантайм — это движок sortied, утилита sortie и мост для DCS. Он ставится один раз на машину с DCS. Логику и сценарий вы пишете отдельно, с этим SDK.">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/docs/install-runtime.html">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-doc has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Страницы документации">
+<nav class="toc">
+<a class="toc-home" href="index.html">Документация</a>
+<ul>
+<li><a href="index.html">Обзор</a></li>
+<li><a href="install-runtime.html" aria-current="page">Установка рантайма</a></li>
+<li><a href="quickstart.html">Быстрый старт</a></li>
+<li><a href="dependency.html">Подключение SDK</a></li>
+<li><a href="sdk.html">Логика на Rust</a></li>
+<li><a href="generator.html">Сценарий на Python</a></li>
+<li><a href="testing.html">Тестирование</a></li>
+<li><a href="operations.html">Эксплуатация</a></li>
+<li><a href="troubleshooting.html">Диагностика</a></li>
+<li><a href="faq.html">Вопросы и ограничения</a></li>
+<li><a href="changelog.html">Что нового</a></li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="установка-рантайма">Установка рантайма<a class="anchor" href="#установка-рантайма" aria-label="Ссылка на этот раздел">#</a></h1>
+<p>Рантайм — это движок <code>sortied</code>, утилита <code>sortie</code> и мост для DCS. Он ставится один раз на
+машину с DCS. Логику и сценарий вы пишете отдельно, с этим SDK.</p>
+<h2 id="архив">Архив<a class="anchor" href="#архив" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Скачайте <code>sortie-runtime-0.1.0-win64.zip</code> со страницы выпуска
+<a href="https://github.com/lynxr/sortie-sdk/releases/tag/v0.1.0">v0.1.0</a>. Всё содержимое
+архива лежит в одной папке <code>sortie-runtime-0.1.0-win64</code>. Распакуйте архив и
+перенесите эту папку в постоянное место, например в <code>C:\Sortie</code>:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">Expand-Archive .\sortie-runtime-0.1.0-win64.zip -DestinationPath .
+Move-Item .\sortie-runtime-0.1.0-win64 C:\Sortie
+</code></pre></div>
+<p>Внутри папки:</p>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Файл</th><th>Что это</th></tr></thead><tbody>
+<tr><td><code>bin\sortied.exe</code></td><td>движок</td></tr>
+<tr><td><code>bin\sortie.exe</code></td><td>установка в DCS, проверка установки, наблюдение за движком</td></tr>
+<tr><td><code>Scripts\</code></td><td>мост: DLL <code>sortie_bridge</code> и Lua-слой, разложенные так же, как в Saved Games</td></tr>
+<tr><td><code>install\MissionScripting.snippet.lua</code></td><td>строка, которую <code>install</code> добавляет в <code>MissionScripting.lua</code></td></tr>
+<tr><td><code>README.md</code></td><td>краткая инструкция</td></tr>
+<tr><td><code>LICENSE.txt</code>, <code>THIRD-PARTY-NOTICES.txt</code></td><td>лицензия рантайма и сторонних компонентов</td></tr>
+<tr><td><code>SHA256SUMS</code></td><td>контрольные суммы файлов внутри папки</td></tr>
+</tbody></table>
+</div>
+<p>Сам архив сверяется с файлом <code>SHA256SUMS</code> на странице выпуска (контрольные суммы архива рантайма
+и колеса генератора).</p>
+<p>Windows помечает файлы из интернета. Чтобы SmartScreen не спрашивал при каждом запуске, снимите
+пометку:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">Get-ChildItem C:\Sortie -Recurse | Unblock-File
+</code></pre></div>
+<p>Сверить файл с <code>SHA256SUMS</code> можно так:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">Get-FileHash C:\Sortie\bin\sortied.exe -Algorithm SHA256
+</code></pre></div>
+<h2 id="установка-в-dcs">Установка в DCS<a class="anchor" href="#установка-в-dcs" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Откройте PowerShell от имени администратора и выполните:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">cd C:\Sortie
+.\bin\sortie.exe install
+.\bin\sortie.exe doctor
+</code></pre></div>
+<p><code>install</code> находит DCS и папку Saved Games сам и:</p>
+<ul>
+<li>копирует Lua-слой в <code>Saved Games\DCS\Scripts\Sortie\</code> и хук в
+<code>Saved Games\DCS\Scripts\Hooks\sortie-hook.lua</code>;</li>
+<li>кладёт DLL моста в <code>Scripts\Sortie\bin\</code> с версией в имени. DLL начинает работать при
+следующем запуске DCS;</li>
+<li>создаёт секрет связи <code>Saved Games\DCS\Sortie\link.secret</code> и файл токенов
+<code>Saved Games\DCS\Sortie\tokens.toml</code> с токенами ролей <code>admin</code> и <code>logic</code>;</li>
+<li>добавляет одну строку в <code>&lt;папка DCS&gt;\Scripts\MissionScripting.lua</code>, перед санитайзером. Через
+неё среда миссии загружает мост. Это единственная правка в папке DCS, и ради неё нужны права
+администратора. Прежний файл сохраняется рядом.</li>
+</ul>
+<p>Если запускать от имени администратора нельзя, поставьте всё остальное без правки, а строку
+добавьте позже из консоли администратора:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">.\bin\sortie.exe install --no-patch
+.\bin\sortie.exe doctor --fix
+</code></pre></div>
+<h3 id="флаги">Флаги<a class="anchor" href="#флаги" aria-label="Ссылка на этот раздел">#</a></h3>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Флаг</th><th>Что делает</th></tr></thead><tbody>
+<tr><td><code>--instance &lt;имя&gt;</code></td><td>экземпляр DCS: папка <code>Saved Games\DCS.&lt;имя&gt;</code> (например, <code>server</code> для dedicated server)</td></tr>
+<tr><td><code>--saved-games &lt;папка&gt;</code></td><td>папка Saved Games экземпляра, если её не удаётся найти</td></tr>
+<tr><td><code>--dcs &lt;папка&gt;</code></td><td>папка установки DCS, если их несколько или DCS не находится</td></tr>
+<tr><td><code>--dll &lt;файл&gt;</code></td><td>поставить другую DLL моста</td></tr>
+<tr><td><code>--from &lt;папка&gt;</code></td><td>взять файлы из другой распакованной копии рантайма</td></tr>
+<tr><td><code>--dry-run</code></td><td>только показать, что изменится</td></tr>
+<tr><td><code>--no-patch</code></td><td>не трогать <code>MissionScripting.lua</code></td></tr>
+</tbody></table>
+</div>
+<p>У флагов <code>--instance</code>, <code>--saved-games</code> и <code>--dcs</code> есть переменные окружения: <code>SORTIE_INSTANCE</code>,
+<code>SORTIE_SAVED_GAMES</code>, <code>SORTIE_DCS</code>.</p>
+<p>DCS ищется в реестре (ключи <code>Software\Eagle Dynamics\DCS World</code>, <code>DCS World OpenBeta</code>,
+<code>DCS World Server</code>), затем в <code>Program Files</code> и в библиотеках Steam. Поэтому DCS, поставленная
+на другой диск, находится без флагов. Если установок несколько, команда печатает, какую взяла;
+другую выберите флагом <code>--dcs</code>.</p>
+<h2 id="перезапустите-dcs">Перезапустите DCS<a class="anchor" href="#перезапустите-dcs" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Если DCS была запущена во время установки, закройте её и запустите снова. Перезапуска миссии
+мало: часть моста, которая работает в среде hooks, загружается только при старте самой DCS.
+Новая DLL тоже начинает работать со следующего запуска DCS.</p>
+<h2 id="проверка-sortie-doctor">Проверка: <code>sortie doctor</code><a class="anchor" href="#проверка-sortie-doctor" aria-label="Ссылка на этот раздел">#</a></h2>
+<p><code>doctor</code> печатает таблицу проверок:</p>
+<ul>
+<li>строка в <code>MissionScripting.lua</code> на месте и стоит перед санитайзером;</li>
+<li>хук, Lua-слой и DLL моста установлены и совпадают с тем, что ставил <code>install</code>;</li>
+<li>DLL моста подходит к <code>lua.dll</code> установленной DCS;</li>
+<li>есть секрет связи и токены;</li>
+<li>у dedicated server непустой <code>missionList</code>.</li>
+</ul>
+<p>Код выхода 1 значит, что что-то требует внимания; строка с проблемой подсказывает, что делать.
+Обновление DCS перезаписывает <code>MissionScripting.lua</code> и стирает строку Sortie. После каждого
+обновления DCS запускайте <code>doctor</code>, а если строка пропала — <code>doctor --fix</code> от имени
+администратора.</p>
+<h2 id="запуск-движка">Запуск движка<a class="anchor" href="#запуск-движка" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Для работы на своей машине запускайте движок в режиме разработки:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">C:\Sortie\bin\sortied.exe --dev
+</code></pre></div>
+<ul>
+<li><code>sortied</code> слушает API на <code>127.0.0.1:50777</code>. Логика и генератор подключаются к этому адресу по
+умолчанию.</li>
+<li>Мост находит движок сам. DCS и <code>sortied</code> можно запускать в любом порядке.</li>
+<li>При старте <code>sortied</code> сам выполняет проверки <code>doctor</code> и пишет в лог, что требует внимания.</li>
+<li><code>--dev</code> разрешает локальным программам работать без токена. Взамен он требует ключ <code>.key(..)</code>
+у каждого спавна и уничтожения группы в логике (см. <a href="sdk.html">Логику на Rust</a>).</li>
+</ul>
+<p>Без <code>--dev</code> каждая программа предъявляет токен из <code>Saved Games\DCS\Sortie\tokens.toml</code>:</p>
+<ul>
+<li>логика — токен роли <code>logic</code> в переменной окружения <code>SORTIE_TOKEN</code>;</li>
+<li>генератор (<code>validate</code>, <code>register</code>, <code>launch</code>, <code>restart</code>) — токен роли <code>admin</code> или
+<code>generator</code> во флаге <code>--token</code> или в <code>SORTIE_TOKEN</code>;</li>
+<li><code>sortie status</code> и другие команды утилиты читают <code>tokens.toml</code> сами.</li>
+</ul>
+<p>Роли и формат файла — в <a href="operations.html">Эксплуатации</a>.</p>
+<p>Убедиться, что движок работает и видит мост:</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">C:\Sortie\bin\sortie.exe status
+</code></pre></div>
+<h2 id="удаление">Удаление<a class="anchor" href="#удаление" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Удалите из папки Saved Games экземпляра <code>Scripts\Sortie\</code>, <code>Scripts\Hooks\sortie-hook.lua</code> и
+<code>Sortie\</code> (там же токены, хранилище движка и логи). В <code>&lt;папка DCS&gt;\Scripts\MissionScripting.lua</code>
+удалите блок между строками <code>-- &gt;&gt;&gt; sortie</code> и <code>-- &lt;&lt;&lt; sortie</code> или верните файл через
+восстановление DCS (repair). Зарегистрированные миссии лежат в <code>Missions\Sortie\</code>.</p>
+</article>
+<nav class="pager" aria-label="Соседние страницы">
+<a class="pager-prev" rel="prev" href="index.html"><span class="pager-dir">Назад</span><span class="pager-title">Обзор</span></a>
+<a class="pager-next" rel="next" href="quickstart.html"><span class="pager-dir">Дальше</span><span class="pager-title">Быстрый старт</span></a>
+</nav>
+<p class="page-source"><a href="install-runtime.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,126 @@
+// Mission builds: registration of .miz + manifest, launch, restart and typed results.
+syntax = "proto3";
+
+package sortie.v1;
+
+import "sortie/v1/common.proto";
+import "sortie/v1/logic.proto";
+import "sortie/v1/world.proto";
+
+service Missions {
+  // Client stream: one RegisterHeader, then the .miz bytes in chunks (<= 1 MiB each).
+  rpc Register(stream RegisterRequest) returns (RegisterResponse);
+  // Writes nothing new: loads a registered build via net.load_mission (hooks env).
+  rpc Launch(LaunchRequest) returns (LaunchResponse);
+  // Reloads the running build; the current session ends with END_REASON_RESTART.
+  rpc Restart(RestartRequest) returns (RestartResponse);
+  rpc GetResults(GetResultsRequest) returns (MissionResults);
+}
+
+message RegisterRequest {
+  oneof part {
+    RegisterHeader header = 1;
+    bytes miz_chunk = 2;
+  }
+}
+
+message RegisterHeader {
+  // From Generator.BeginBuild.
+  string build_id = 1;
+  // The exact bytes of manifest.pb. The engine keeps them verbatim:
+  // the bootstrap digest is sha256(manifest_pb).
+  bytes manifest_pb = 2;
+  // Lowercase hex sha256 of the whole .miz, checked after the upload.
+  string miz_sha256 = 3;
+  uint64 miz_size = 4;
+  // File name to use under <writedir>/Missions/Sortie/, e.g. "op_north-01JC6Z....miz".
+  string file_name = 5;
+}
+
+message RegisterResponse {
+  string build_id = 1;
+  // Absolute path the engine wrote.
+  string path = 2;
+  // sha256(manifest_pb), lowercase hex: the value the bootstrap must carry.
+  string digest = 3;
+}
+
+message LaunchRequest {
+  string build_id = 1;
+}
+
+message LaunchResponse {
+  string build_id = 1;
+  string path = 2;
+}
+
+message RestartRequest {}
+
+message RestartResponse {
+  // The session that was ended by the restart.
+  string ended_session = 1;
+}
+
+message GetResultsRequest {
+  // Empty = the most recently ended session.
+  string session = 1;
+}
+
+enum Fate {
+  FATE_UNSPECIFIED = 0;
+  FATE_ALIVE = 1;
+  FATE_DEAD = 2;
+  // Disappeared without a DEAD event (despawned, missing from sweeps).
+  FATE_GONE = 3;
+  // Spawned but never seen alive (e.g. spawn failed later).
+  FATE_NEVER_SEEN = 4;
+}
+
+message EntityFate {
+  uint64 eid = 1;
+  string name = 2;
+  string type_name = 3;
+  string group_name = 4;
+  // Manifest group ident, if the unit belongs to a manifest group.
+  string group_ident = 5;
+  Coalition coalition = 6;
+  Fate fate = 7;
+  optional Vec3 last_pos = 8;
+}
+
+message KillRecord {
+  double model_time = 1;
+  uint64 killer_eid = 2;
+  string killer = 3;
+  string killer_player = 4;
+  uint64 victim_eid = 5;
+  string victim = 6;
+  string weapon = 7;
+}
+
+message PlayerRecord {
+  string name = 1;
+  string ucid = 2;
+  // Unit names the player occupied during the session.
+  repeated string units = 3;
+}
+
+// Typed replacement for Liberation's state.json.
+message MissionResults {
+  string session = 1;
+  string scenario = 2;
+  string build_id = 3;
+  Outcome outcome = 4;
+  string text = 5;
+  EndReason end_reason = 6;
+  double model_time = 7;
+  repeated EntityFate fates = 8;
+  repeated KillRecord kills = 9;
+  // Final user flag values by manifest flag ident.
+  map<string, int32> flags = 10;
+  repeated PlayerRecord players = 11;
+  // ctx.report() entries: key -> JSON value.
+  map<string, string> report_json = 12;
+  // Final world state, for the generator of the next turn.
+  WorldSnapshot final_world = 13;
+}

@@ -1,0 +1,12 @@
+[project]
+name = "my-mission"
+version = "0.1.0"
+description = "Scenario of the my_mission Sortie mission"
+requires-python = ">=3.11"
+dependencies = [
+    "sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.1.0#subdirectory=python/sortie-gen",
+]
+
+[tool.uv]
+# A scenario project, not a package: `uv run python scenario.py ...` only needs its dependencies.
+package = false

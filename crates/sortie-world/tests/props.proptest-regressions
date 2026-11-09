@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 7a863be0879a0153bff4d3e4e348d337e742027c7f63d0eb1843782af9c59a2b # shrinks to rid = 1, name = 0, ty = 0
+cc 66e282adea88d328ce18adb885c7f75b9fd3385e729ac5c1408e785d44d51e7e # shrinks to ops = [Observe { rid: None, name: 0, ty: 0, group: 0, pos: (0, 0), participant: false }, Observe { rid: None, name: 1, ty: 0, group: 0, pos: (0, 0), participant: false }, Observe { rid: Some(2), name: 2, ty: 0, group: 0, pos: (0, 0), participant: false }, Remove(3933766039001051403), DeadEvent(5536794100963845019), Observe { rid: Some(2), name: 2, ty: 0, group: 0, pos: (0, 0), participant: false }]
+cc 8a344af07418e86043d7560f371a19a1da2ef382c99b8c539333123e3d34524d # shrinks to ops = [Group(0), Group(0), Group(0), Group(0), Group(0), Observe { rid: Some(4), name: 0, ty: 1, group: 0, pos: (0, 0), participant: false }, DeadEvent(0), Observe { rid: Some(4), name: 0, ty: 1, group: 0, pos: (0, 0), participant: false }]

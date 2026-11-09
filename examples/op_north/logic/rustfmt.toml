@@ -1,0 +1,2 @@
+# The example keeps the hand alignment of its comments; rustfmt must not touch it.
+disable_all_formatting = true

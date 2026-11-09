@@ -1,0 +1,34 @@
+[package]
+name = "sortie-macros"
+description = "Macros of the Sortie SDK: #[sortie::mission], #[sortie::test], include_scenario!"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[lib]
+proc-macro = true
+
+[features]
+# `#[sortie::test]` expands only with this feature. Its harness, FakeDcs (`sortie-fake`), runs
+# the engine in-process and is not part of the SDK yet; sortie-fake enables the feature.
+# Without it the attribute is a compile error that says so.
+fake-dcs = []
+
+[dependencies]
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }
+
+[dev-dependencies]
+# A dev-dependency cycle (sortie depends on this crate) is fine: the tests use the macros the
+# way users do, through `sortie::`.
+sortie = { workspace = true, features = ["fake-dcs"] }
+sortie-build = { workspace = true }
+tempfile = { workspace = true }
+trybuild = { workspace = true }
+
+[lints]
+workspace = true

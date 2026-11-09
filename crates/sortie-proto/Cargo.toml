@@ -1,0 +1,36 @@
+[package]
+name = "sortie-proto"
+description = "Generated protobuf/gRPC code for sortie.v1 and sortie.manifest.v1, plus small helpers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[features]
+default = ["grpc"]
+# tonic clients and servers for sortie.v1. The bridge DLL disables this (messages only).
+grpc = ["dep:tonic", "dep:tonic-prost"]
+# sortie.link.v1, the private bridge <-> engine link (the engine side only; not in the SDK).
+link = []
+
+[dependencies]
+prost = { workspace = true }
+prost-types = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tonic = { workspace = true, optional = true }
+tonic-prost = { workspace = true, optional = true }
+
+[build-dependencies]
+prost = { workspace = true }
+protox = { workspace = true }
+tonic-prost-build = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[lints]
+workspace = true

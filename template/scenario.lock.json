@@ -1,0 +1,48 @@
+{
+  "format": 1,
+  "generator": "sortie-gen 0.1.0",
+  "geometry": {
+    "zones": {
+      "TARGET": {
+        "circle": {
+          "center": {
+            "east": 717280.017,
+            "north": -270645.234
+          },
+          "radius_m": 3000.0
+        }
+      }
+    }
+  },
+  "scenario": "my_mission",
+  "schema": 1,
+  "schema_sha256": "c950522cf75319d718ae050efe6084d6a8561077befd2e2832900b7849cf8b49",
+  "symbols": {
+    "airbases": [],
+    "flags": [],
+    "groups": [
+      {
+        "ident": "AAA",
+        "kind": "ground",
+        "roles": []
+      },
+      {
+        "ident": "ARMOR",
+        "kind": "ground",
+        "roles": []
+      },
+      {
+        "ident": "SAM",
+        "kind": "ground",
+        "roles": []
+      }
+    ],
+    "menus": [],
+    "templates": [],
+    "zones": [
+      {
+        "ident": "TARGET"
+      }
+    ]
+  }
+}

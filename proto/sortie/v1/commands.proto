@@ -1,0 +1,312 @@
+// Commands: data, never Lua code. Every command has exactly one CommandResult.
+syntax = "proto3";
+
+package sortie.v1;
+
+import "sortie/v1/common.proto";
+
+service Commands {
+  // Executes one command in the current session and waits for its result.
+  rpc Submit(Command) returns (CommandResult);
+}
+
+enum Lane {
+  LANE_UNSPECIFIED = 0;
+  // Hooks environment (server control).
+  LANE_CONTROL = 1;
+  // Small latency-sensitive mission commands (options, messages, flags, tasks).
+  LANE_REALTIME = 2;
+  // Spawns and other heavy work; rate limited.
+  LANE_BULK = 3;
+  // Read-only queries.
+  LANE_QUERY = 4;
+}
+
+// What to do with a command while the simulation is paused.
+enum PausePolicy {
+  PAUSE_POLICY_UNSPECIFIED = 0;
+  // Keep it queued until the simulation resumes (default).
+  PAUSE_POLICY_WAIT = 1;
+  // Fail with ERROR_CODE_PAUSED.
+  PAUSE_POLICY_FAIL = 2;
+}
+
+// Where a command comes from (shown in traces and error messages).
+message Origin {
+  string logic = 1;
+  string build_id = 2;
+  string file = 3;
+  uint32 line = 4;
+  uint32 column = 5;
+}
+
+message Command {
+  // Correlates SDK -> engine -> bridge and names the trace span. The SDK sends
+  // "<session4>-<proc>-<n>": the session id's last 4 characters, a 6-character token drawn once
+  // per logic process, and that process's counter, so ids never repeat across logic processes.
+  // Empty = the engine assigns "api-<n>".
+  string id = 1;
+  // Idempotency key within the session: a repeat returns the stored result.
+  string key = 2;
+  // UNSPECIFIED = engine picks the lane from the body.
+  Lane lane = 3;
+  // 0 = engine default.
+  uint32 timeout_ms = 4;
+  PausePolicy on_pause = 5;
+  // Id of a command that must complete (successfully) before this one starts.
+  string after = 6;
+  Origin origin = 7;
+  // Target session; empty = current. A stale session yields ERROR_CODE_SESSION_ENDED.
+  string session = 8;
+  oneof body {
+    SpawnGroup spawn_group = 10;
+    Destroy destroy = 12;
+    SetTask set_task = 14;
+    SetOption set_option = 16;
+    Message message = 20;
+    Effect effect = 21;
+    Flag flag = 22;
+    Menu menu = 23;
+    MarkCommand mark = 24;
+    EndSession end_session = 25;
+    Query query = 30;
+    ServerControl server = 32;
+    DevEval dev_eval = 99;
+  }
+}
+
+message CommandResult {
+  string id = 1;
+  double model_time = 2;
+  // Time spent inside DCS executing the command, microseconds.
+  uint32 cost_us = 3;
+  oneof outcome {
+    LuaValue ok = 4;
+    CommandError err = 5;
+  }
+  // Eid of the object the command created (SpawnGroup: the group), 0 otherwise.
+  // Eids never travel inside LuaValue (doubles cannot hold every uint64).
+  uint64 eid = 6;
+}
+
+// Selects a group: by Eid (preferred), DCS name, or manifest symbol.
+message GroupSel {
+  oneof sel {
+    uint64 eid = 1;
+    string name = 2;
+    string ident = 3;
+  }
+}
+
+// Selects a unit: by Eid (preferred) or DCS name.
+message UnitSel {
+  oneof sel {
+    uint64 eid = 1;
+    string name = 2;
+  }
+}
+
+// Spawn a group from a manifest template (templates are kept out of the .miz).
+// Result: ok = { name = <group name>, units = { <unit name>, ... } }, CommandResult.eid = group eid.
+message SpawnGroup {
+  // Template ident from the manifest, e.g. "RED_CAP".
+  string template = 1;
+  // Explicit group name; must be unique. Default: <template name>#<session4>-<n>.
+  optional string name = 2;
+  oneof placement {
+    FromAirbase from_airbase = 3;
+    SpawnAt at = 4;
+  }
+  // If neither placement is set, the template's own position and route are used.
+}
+
+message FromAirbase {
+  // Airbase ident from the manifest, e.g. "MAYKOP_KHANSKAYA".
+  string airbase = 1;
+  StartType start = 2;
+}
+
+message SpawnAt {
+  Vec3 position = 1;
+  double heading_rad = 2;
+}
+
+message Destroy {
+  oneof target {
+    GroupSel group = 1;
+    UnitSel unit = 2;
+  }
+}
+
+message SetTask {
+  GroupSel group = 1;
+  // true = pushTask (keep the current task stack), false = setTask (replace).
+  bool push = 2;
+  oneof task {
+    CapTask cap = 10;
+    OrbitTask orbit = 11;
+    RtbTask rtb = 12;
+    // A raw DCS task table, passed through unchanged.
+    LuaValue raw = 99;
+  }
+}
+
+message CapTask {
+  // Zone ident from the manifest.
+  string zone = 1;
+  double altitude_m = 2;
+  double speed_mps = 3;
+}
+
+enum OrbitPattern {
+  ORBIT_PATTERN_UNSPECIFIED = 0;
+  ORBIT_PATTERN_CIRCLE = 1;
+  ORBIT_PATTERN_RACE_TRACK = 2;
+}
+
+message OrbitTask {
+  MapPoint center = 1;
+  double altitude_m = 2;
+  double speed_mps = 3;
+  OrbitPattern pattern = 4;
+  // Second point for ORBIT_PATTERN_RACE_TRACK.
+  MapPoint second = 5;
+}
+
+message RtbTask {
+  // Airbase ident from the manifest; empty = nearest friendly airbase.
+  string airbase = 1;
+}
+
+message SetOption {
+  GroupSel group = 1;
+  oneof option {
+    AlarmState alarm_state = 2;
+    Roe roe = 3;
+  }
+}
+
+message Message {
+  oneof to {
+    Coalition coalition = 1;
+    GroupSel group = 2;
+    bool all = 3;
+  }
+  string text = 4;
+  // Display time; 0 = engine default (10 s).
+  uint32 seconds = 5;
+  bool clear_view = 6;
+}
+
+message Effect {
+  oneof kind {
+    Smoke smoke = 1;
+  }
+}
+
+message Smoke {
+  Vec3 at = 1;
+  SmokeColor color = 2;
+  // true: ignore at.y and use the terrain height at (x, z).
+  bool at_ground_level = 3;
+}
+
+// Set a user flag declared in the manifest.
+message Flag {
+  // Flag ident from the manifest, e.g. "SAM_NORTH_DOWN".
+  string ident = 1;
+  int32 value = 2;
+}
+
+enum MenuScope {
+  MENU_SCOPE_UNSPECIFIED = 0;
+  // One shared F10 entry per coalition; presses do not tell who pressed.
+  MENU_SCOPE_COALITION = 1;
+  // One entry per group of the coalition (added on BIRTH); presses carry the group.
+  MENU_SCOPE_PER_GROUP = 2;
+}
+
+// Add (or remove) an F10 radio menu command declared in the manifest.
+message Menu {
+  MenuScope scope = 1;
+  Coalition coalition = 2;
+  // Menu ident from the manifest, e.g. "SMOKE_OBJECTIVE".
+  string ident = 3;
+  // Label override; empty = manifest label.
+  string label = 4;
+  // Sub-menu path; empty = manifest path.
+  repeated string path = 5;
+  bool remove = 6;
+}
+
+// Add (or remove) an F10 map mark. (Named MarkCommand to keep `Mark` for the event.)
+message MarkCommand {
+  // Caller-chosen stable name; the engine maps it to a DCS mark id.
+  string name = 1;
+  string text = 2;
+  Vec3 at = 3;
+  oneof to {
+    Coalition coalition = 4;
+    GroupSel group = 5;
+    bool all = 6;
+  }
+  bool read_only = 7;
+  bool remove = 8;
+}
+
+// End the session (turn). The engine computes MissionResults and notifies the generator.
+message EndSession {
+  Outcome outcome = 1;
+  string text = 2;
+}
+
+message Query {
+  oneof kind {
+    DescByType desc_by_type = 1;
+    LandHeight land_height = 2;
+    FlagValue flag_value = 3;
+  }
+}
+
+// Unit.getDescByName(type_name); ok = the desc table or nil.
+message DescByType {
+  string type_name = 1;
+}
+
+// land.getHeight; ok = number.
+message LandHeight {
+  MapPoint at = 1;
+}
+
+// trigger.misc.getUserFlag; ok = number.
+message FlagValue {
+  string ident = 1;
+}
+
+// Hooks-environment server control (LANE_CONTROL).
+message ServerControl {
+  oneof action {
+    SetPause set_pause = 1;
+    LoadMission load_mission = 2;
+    SendChat send_chat = 3;
+  }
+}
+
+message SetPause {
+  bool paused = 1;
+}
+
+message LoadMission {
+  // Absolute path of a .miz the engine registered (under <writedir>/Missions/Sortie/).
+  string path = 1;
+}
+
+message SendChat {
+  string text = 1;
+}
+
+// Execute Lua. Only accepted when the engine runs with --dev-eval.
+message DevEval {
+  string code = 1;
+  Env env = 2;
+}

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent instructions: a Sortie mission repository | Sortie SDK</title>
+<meta name="description" content="This repository is one DCS World mission built on the Sortie SDK 0.1.0 (https://github.com/lynxr/sortie-sdk, tag v0.1.0). It has two halves:">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/agents/AGENTS.html">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-agent has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="../docs/quickstart.html">Быстрый старт</a><a href="../docs/index.html">Документация</a><a href="../agents.html" aria-current="true">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Файлы для агентов">
+<nav class="toc">
+<a class="toc-home" href="../agents.html">Для агентов</a>
+<ul>
+<li><a href="AGENTS.html" aria-current="page">AGENTS.md</a></li>
+<li><a href="README.html">README.md</a></li>
+</ul>
+<p class="toc-part">Навыки</p>
+<ul>
+<li><a href="sortie-live-debugging/SKILL.html"><code>sortie-live-debugging</code></a>
+<ul>
+<li><a href="sortie-live-debugging/references/failures.html">references/failures.md</a></li>
+</ul>
+</li>
+<li><a href="sortie-mission-logic/SKILL.html"><code>sortie-mission-logic</code></a>
+<ul>
+<li><a href="sortie-mission-logic/references/api.html">references/api.md</a></li>
+<li><a href="sortie-mission-logic/references/errors.html">references/errors.md</a></li>
+<li><a href="sortie-mission-logic/references/patterns.html">references/patterns.md</a></li>
+</ul>
+</li>
+<li><a href="sortie-scenario/SKILL.html"><code>sortie-scenario</code></a>
+<ul>
+<li><a href="sortie-scenario/references/reference.html">references/reference.md</a></li>
+</ul>
+</li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<p class="lang-note">Инструкции и навыки для агентов написаны на английском.</p>
+<article class="prose" lang="en">
+<h1 id="agent-instructions-a-sortie-mission-repository">Agent instructions: a Sortie mission repository<a class="anchor" href="#agent-instructions-a-sortie-mission-repository" aria-label="Ссылка на этот раздел">#</a></h1>
+<p>This repository is one DCS World mission built on the Sortie SDK 0.1.0
+(<code>https://github.com/lynxr/sortie-sdk</code>, tag <code>v0.1.0</code>). It has two halves:</p>
+<ul>
+<li><code>scenario.py</code>: the static mission in Python (sortie-gen over pydcs). It builds the <code>.miz</code>,
+its manifest and <code>scenario.lock.json</code>, the list of symbols the logic may use.</li>
+<li>the Rust crate: the mission logic, a separate process that attaches to the Sortie engine
+<code>sortied</code> running next to DCS. It reads a replica of the DCS world and sends commands.</li>
+</ul>
+<p>The SDK is new: its API is not in your training data. Read the matching skill (below) before
+you change code, and take every name from it or from the SDK source.</p>
+<h2 id="layout">Layout<a class="anchor" href="#layout" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code"><pre tabindex="0"><code>Cargo.toml, build.rs     the logic crate; build.rs turns scenario.lock.json into typed symbols
+src/lib.rs               sortie::include_scenario!(..) and the #[sortie::mission] function
+src/main.rs              sortie::main!(&lt;crate&gt;::run);
+scenario.py              the scenario; `ident=` makes a symbol for the logic
+scenario.lock.json       generated by `scenario.py lock`; committed, never edited by hand
+pyproject.toml           uv project with the sortie-gen dependency
+dist/                    offline builds (not committed)
+</code></pre></div>
+<h2 id="commands">Commands<a class="anchor" href="#commands" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">uv sync                                       # Python environment with sortie-gen
+uv run python scenario.py lock                # after adding, renaming or removing an ident
+uv run python scenario.py build               # offline build into dist/ (no engine needed)
+cargo build --release                         # the logic (build.rs reads scenario.lock.json)
+cargo clippy --all-targets -- -D warnings
+cargo test                                    # plain unit tests only (see Rules)
+uv run python scenario.py lock --check        # CI: fails if the lock is stale
+</code></pre></div>
+<p>In DCS (the Sortie runtime installed with <code>sortie install</code>, DCS restarted afterwards):</p>
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">sortied --dev                                 # the engine; no token needed locally
+uv run python scenario.py register            # a new build (= a new turn) for the engine
+cargo run --release -- --dev                  # the logic; attaches and waits for the mission
+uv run python scenario.py watch               # live events; `results` after the session
+</code></pre></div>
+<h2 id="rules">Rules<a class="anchor" href="#rules" aria-label="Ссылка на этот раздел">#</a></h2>
+<ol>
+<li><strong>Symbols come from the scenario.</strong> A new group, zone, template, flag, airbase or menu for
+the logic: add it with <code>ident=</code> in <code>scenario.py</code>, run <code>lock</code>, then <code>cargo build</code>. A logic
+built from another lock is refused by the running mission.</li>
+<li><strong>Key commands by step.</strong> <code>spawn_group</code> and <code>destroy</code> always get <code>.key("step-name")</code> (they
+are refused without one under <code>--dev</code>); so does any command a replay must not repeat. A key
+is stable across runs (a literal or a deterministic counter) and belongs to one command.</li>
+<li><strong>The mission function replays.</strong> After a restart of the logic process it runs again from
+the top in the same session. Wait on world state (<code>ctx.wait_until</code>), delay with named
+timers (<code>ctx.timer</code>), run one-time steps in <code>ctx.once</code> and campaign changes in
+<code>ctx.once_per_turn</code>.</li>
+<li><strong>One thread, short borrows.</strong> No blocking calls; background work through <code>ctx.spawn</code>;
+<code>ctx.world()</code> and <code>StateDoc::get()</code> are dropped before the next <code>.await</code>.</li>
+<li><strong>No tests without DCS in SDK 0.1.0.</strong> FakeDcs and <code>#[sortie::test]</code> arrive in
+SDK 0.2 (<code>#[sortie::test]</code> is a compile error until then). Unit-test plain functions with
+<code>#[test]</code>; test the mission in DCS with <code>sortied --dev</code>.</li>
+<li><strong>The <code>.miz</code> comes from <code>scenario.py</code>.</strong> Change groups, units and zones there, not in the
+Mission Editor. A DO SCRIPT added in a <code>@sc.pydcs</code> hook uses
+<code>sortie_gen.miz.InlineDoScript</code>; a built <code>.miz</code> is never loaded and saved again with pydcs.</li>
+<li><strong>Multiplayer slots:</strong> a player flight starts at an airfield of its own coalition
+(<code>player_flight</code> sets the owner; a hook that adds client groups must do it too).</li>
+</ol>
+<h2 id="docs-and-skills">Docs and skills<a class="anchor" href="#docs-and-skills" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li>Skills, one per task: <code>sortie-mission-logic</code> (the Rust logic), <code>sortie-scenario</code>
+(<code>scenario.py</code> and its commands), <code>sortie-live-debugging</code> (install, logs, failures in DCS).
+They are in the <code>agents/</code> folder of the SDK repository and in
+<a href="sortie-agent-skills-0.1.0.zip">the skills zip</a>; online:
+<a href="sortie-mission-logic/SKILL.html">mission logic</a>,
+<a href="sortie-scenario/SKILL.html">scenario</a>,
+<a href="sortie-live-debugging/SKILL.html">live debugging</a>.</li>
+<li>Docs (Russian): https://lynxr.github.io/sortie-sdk/. For agents: <a href="../llms.txt">llms.txt</a> (an index)
+and <a href="../llms-full.txt">llms-full.txt</a> (all docs and skills in one file).</li>
+<li>The SDK source at the tag: <code>crates/sortie</code> (the API), <code>examples/op_north</code> (a complete
+mission), <code>python/sortie-gen</code> (the generator).</li>
+</ul>
+</article>
+<p class="page-source"><a href="AGENTS.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

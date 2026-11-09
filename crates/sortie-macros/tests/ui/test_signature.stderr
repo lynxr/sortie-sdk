@@ -1,0 +1,23 @@
+error: #[sortie::test] functions must be `async fn`: `async fn my_test(dcs: FakeDcs<M>)`
+ --> tests/ui/test_signature.rs:4:1
+  |
+4 | fn not_async(_h: Harness) {}
+  | ^^
+
+error: #[sortie::test] functions take the harness as their only argument: `async fn my_test(dcs: FakeDcs<M>)`
+ --> tests/ui/test_signature.rs:7:20
+  |
+7 | async fn no_harness() {}
+  |                    ^^
+
+error: #[sortie::test] functions return `()`; check results with `.unwrap()`, `.expect(..)` or assertions
+  --> tests/ui/test_signature.rs:10:42
+   |
+10 | async fn returns_a_value(_h: Harness) -> u32 {
+   |                                          ^^^
+
+error: #[sortie::test] already makes this a test; remove this attribute
+  --> tests/ui/test_signature.rs:15:1
+   |
+15 | #[test]
+   | ^^^^^^^

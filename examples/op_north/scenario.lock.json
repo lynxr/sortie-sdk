@@ -1,0 +1,71 @@
+{
+  "format": 1,
+  "generator": "sortie-gen 0.1.0",
+  "geometry": {
+    "zones": {
+      "OBJECTIVE": {
+        "circle": {
+          "center": {
+            "east": 463776.327,
+            "north": -32798.016
+          },
+          "radius_m": 500.0
+        }
+      },
+      "SAM_RING": {
+        "circle": {
+          "center": {
+            "east": 463776.327,
+            "north": -32798.016
+          },
+          "radius_m": 60000.0
+        }
+      }
+    }
+  },
+  "scenario": "op_north",
+  "schema": 3,
+  "schema_sha256": "066934cb939700310641d6371b1f6140cfc86c2c3e04757d5a10f8a4664f270b",
+  "symbols": {
+    "airbases": [
+      {
+        "ident": "MAYKOP_KHANSKAYA"
+      }
+    ],
+    "flags": [
+      {
+        "ident": "SAM_NORTH_DOWN"
+      }
+    ],
+    "groups": [
+      {
+        "ident": "SAM_NORTH",
+        "kind": "ground",
+        "roles": [
+          "north",
+          "sam"
+        ]
+      }
+    ],
+    "menus": [
+      {
+        "ident": "SMOKE_OBJECTIVE"
+      }
+    ],
+    "templates": [
+      {
+        "ident": "RED_CAP",
+        "kind": "air",
+        "roles": []
+      }
+    ],
+    "zones": [
+      {
+        "ident": "OBJECTIVE"
+      },
+      {
+        "ident": "SAM_RING"
+      }
+    ]
+  }
+}

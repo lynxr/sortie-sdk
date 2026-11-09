@@ -1,0 +1,163 @@
+// Shared vocabulary of the public Sortie API (package sortie.v1).
+//
+// Rules for every file under proto/sortie/v1:
+// - changes are additive only (buf breaking runs in CI); a breaking change means sortie.v2;
+// - every enum starts with <ENUM>_UNSPECIFIED = 0 and prefixes its values;
+// - DCS numbers never appear here: the engine (DcsCodec) translates them using the
+//   number tables the bridge captures at mission start;
+// - entity ids are Eids: uint64 = generation << 32 | index, 0 means "none".
+syntax = "proto3";
+
+package sortie.v1;
+
+// A point in DCS runtime axes: x = north (m), y = up (m, above sea level), z = east (m).
+// Note: in mission-editor tables "y" is east; Vec3 always uses the runtime convention.
+message Vec3 {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+// A 2D map point with explicit names (editor x = north, editor y = east), in metres.
+message MapPoint {
+  double north = 1;
+  double east = 2;
+}
+
+// WGS84 latitude/longitude in degrees.
+message LatLon {
+  double lat = 1;
+  double lon = 2;
+}
+
+enum Coalition {
+  COALITION_UNSPECIFIED = 0;
+  COALITION_NEUTRAL = 1;
+  COALITION_RED = 2;
+  COALITION_BLUE = 3;
+}
+
+// Object category, normalised from DCS Object.Category (class) and Unit.Category (desc).
+enum Category {
+  CATEGORY_UNSPECIFIED = 0;
+  CATEGORY_AIRPLANE = 1;
+  CATEGORY_HELICOPTER = 2;
+  CATEGORY_GROUND_UNIT = 3;
+  CATEGORY_SHIP = 4;
+  CATEGORY_STRUCTURE = 5;
+  CATEGORY_STATIC = 6;
+  CATEGORY_WEAPON = 7;
+  CATEGORY_SCENERY = 8;
+  CATEGORY_BASE = 9;
+  CATEGORY_CARGO = 10;
+}
+
+// DCS Lua environment.
+enum Env {
+  ENV_UNSPECIFIED = 0;
+  ENV_HOOKS = 1;
+  ENV_MISSION = 2;
+}
+
+enum Outcome {
+  OUTCOME_UNSPECIFIED = 0;
+  OUTCOME_BLUE_WIN = 1;
+  OUTCOME_RED_WIN = 2;
+  OUTCOME_DRAW = 3;
+  OUTCOME_ABORTED = 4;
+  OUTCOME_TIME_LIMIT = 5;
+}
+
+enum StartType {
+  START_TYPE_UNSPECIFIED = 0;
+  START_TYPE_RUNWAY = 1;
+  START_TYPE_HOT = 2;
+  START_TYPE_COLD = 3;
+  START_TYPE_AIR = 4;
+}
+
+enum AlarmState {
+  ALARM_STATE_UNSPECIFIED = 0;
+  ALARM_STATE_AUTO = 1;
+  ALARM_STATE_GREEN = 2;
+  ALARM_STATE_RED = 3;
+}
+
+enum Roe {
+  ROE_UNSPECIFIED = 0;
+  ROE_WEAPON_FREE = 1;
+  ROE_OPEN_FIRE_WEAPON_FREE = 2;
+  ROE_OPEN_FIRE = 3;
+  ROE_RETURN_FIRE = 4;
+  ROE_WEAPON_HOLD = 5;
+}
+
+enum SmokeColor {
+  SMOKE_COLOR_UNSPECIFIED = 0;
+  SMOKE_COLOR_GREEN = 1;
+  SMOKE_COLOR_RED = 2;
+  SMOKE_COLOR_WHITE = 3;
+  SMOKE_COLOR_ORANGE = 4;
+  SMOKE_COLOR_BLUE = 5;
+}
+
+// Error codes shared by command results, state results and attach rejections.
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  // The target object no longer exists in DCS (or its Eid generation is stale).
+  ERROR_CODE_GONE = 1;
+  // The deadline (timeout_ms) passed before the command ran or finished.
+  ERROR_CODE_TIMEOUT = 2;
+  // The Lua layer raised an error; see lua_traceback.
+  ERROR_CODE_LUA_ERROR = 3;
+  // The bridge caught a panic or the op kind is disabled after repeated faults.
+  ERROR_CODE_BRIDGE_FAULT = 4;
+  // The engine refused the command (policy, mode, quota, missing --dev-eval, ...).
+  ERROR_CODE_REJECTED = 5;
+  // The session the command belongs to has ended.
+  ERROR_CODE_SESSION_ENDED = 6;
+  // The command is malformed or references unknown symbols.
+  ERROR_CODE_INVALID = 7;
+  // The feature or the bridge is not available right now. Messages for features that are
+  // deliberately out of scope name the milestone, e.g. "hot reload lands in M4".
+  ERROR_CODE_UNAVAILABLE = 8;
+  // A spawn would reuse the name of an existing group/unit.
+  ERROR_CODE_NAME_CONFLICT = 9;
+  // The simulation is paused and the command asked to fail on pause.
+  ERROR_CODE_PAUSED = 10;
+  // The command kind is quarantined after it was running when DCS crashed.
+  ERROR_CODE_QUARANTINED = 11;
+  // Compare-and-swap failed (state documents).
+  ERROR_CODE_CONFLICT = 12;
+}
+
+message CommandError {
+  ErrorCode code = 1;
+  string message = 2;
+  // Lua traceback when code = ERROR_CODE_LUA_ERROR, otherwise empty.
+  string lua_traceback = 3;
+}
+
+// A Lua value as it crosses the bridge. An unset `kind` is nil as well.
+// Lua strings are carried as UTF-8; the bridge converts invalid sequences lossily.
+message LuaValue {
+  oneof kind {
+    LuaNil nil = 1;
+    bool boolean = 2;
+    double number = 3;
+    string string = 4;
+    LuaTable table = 5;
+  }
+}
+
+message LuaNil {}
+
+// A Lua table as an ordered list of pairs. Arrays use number keys 1..n in order.
+message LuaTable {
+  repeated LuaPair pairs = 1;
+}
+
+message LuaPair {
+  LuaValue key = 1;
+  LuaValue value = 2;
+}

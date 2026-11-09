@@ -1,0 +1,53 @@
+// Persistent state documents (SQLite in the engine) with compare-and-swap.
+syntax = "proto3";
+
+package sortie.v1;
+
+service State {
+  rpc Get(GetStateRequest) returns (StateDoc);
+  // Fails with FAILED_PRECONDITION when expected_revision does not match.
+  rpc Put(PutStateRequest) returns (PutStateResponse);
+}
+
+enum StateScope {
+  STATE_SCOPE_UNSPECIFIED = 0;
+  // Lives as long as the session; a mission restart starts over.
+  STATE_SCOPE_SESSION = 1;
+  // Lives for one campaign turn (= one build_id); survives restarts of that build.
+  STATE_SCOPE_TURN = 2;
+  // Lives across turns of the scenario; the generator reads it for the next turn.
+  STATE_SCOPE_CAMPAIGN = 3;
+}
+
+message StateDoc {
+  string scenario = 1;
+  StateScope scope = 2;
+  string name = 3;
+  // 0 = the document does not exist yet (json is empty).
+  uint64 revision = 4;
+  // UTF-8 JSON (serde_json in Rust, json in Python).
+  bytes json = 5;
+  // Session id (SESSION scope) or build id (TURN scope); empty for CAMPAIGN.
+  string scope_key = 6;
+}
+
+message GetStateRequest {
+  string scenario = 1;
+  StateScope scope = 2;
+  string name = 3;
+  string scope_key = 4;
+}
+
+message PutStateRequest {
+  string scenario = 1;
+  StateScope scope = 2;
+  string name = 3;
+  string scope_key = 4;
+  // 0 = create; must match the stored revision otherwise.
+  uint64 expected_revision = 5;
+  bytes json = 6;
+}
+
+message PutStateResponse {
+  uint64 revision = 1;
+}

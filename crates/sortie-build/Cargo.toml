@@ -1,0 +1,27 @@
+[package]
+name = "sortie-build"
+description = "build.rs helper: scenario.lock.json -> typed scenario handles (groups::SAM_NORTH, zones::SAM_RING, ...)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+heck = { workspace = true }
+prettyplease = { workspace = true }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+sortie-manifest = { workspace = true }
+sortie-types = { workspace = true }
+syn = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sortie SDK: миссии для DCS World на Rust и Python</title>
+<meta name="description" content="Sortie — внешний движок миссий для DCS World. Логика миссии пишется на Rust и работает вне игры, сама миссия собирается на Python.">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/">
+<link rel="stylesheet" href="assets/style.css">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-index">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="docs/quickstart.html">Быстрый старт</a><a href="docs/index.html">Документация</a><a href="agents.html">Для агентов</a><a href="downloads.html">Загрузки</a><a href="changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<main id="content" class="main" tabindex="-1">
+<div class="home">
+<section class="hero" aria-labelledby="top">
+<h1 id="top">Sortie <small>Миссии для DCS World: логика на Rust, сценарий на Python</small></h1>
+<p class="lead">Sortie — внешний движок миссий для DCS World. Поведение миссии — обычная асинхронная программа на Rust, которая работает рядом с игрой, а не внутри неё. Сама миссия собирается на Python. В DCS остаётся только тонкий мост.</p>
+<p class="actions"><a class="button primary" href="docs/quickstart.html">Быстрый старт</a><a class="button" href="downloads.html">Загрузки</a><a class="button" href="docs/index.html">Документация</a></p>
+</section>
+
+<figure class="route" aria-labelledby="route-caption">
+<div class="route-line">
+<div class="wp">
+<svg class="wp-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+<p class="wp-name">DCS World</p>
+<p class="wp-text">Мост: DLL и Lua-слой внутри игры. Передаёт события и состояние мира, выполняет команды.</p>
+</div>
+<div class="leg"><span>события, мир, команды</span></div>
+<div class="wp">
+<svg class="wp-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>
+<p class="wp-name">sortied</p>
+<p class="wp-text">Движок: зеркало мира, очередь команд, таймеры и состояние кампании.</p>
+</div>
+<div class="leg"><span>gRPC</span></div>
+<div class="wp">
+<svg class="wp-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M12 3.5 20.5 12 12 20.5 3.5 12z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+<p class="wp-name">Логика миссии</p>
+<p class="wp-text">Ваш крейт на Rust с SDK <code>sortie</code>: решает, что и когда делать.</p>
+</div>
+</div>
+<figcaption id="route-caption">Так миссия работает во время игры. Мост ничего не решает сам, движок держит общее зеркало мира, а решения принимает ваша логика.</figcaption>
+</figure>
+
+<section aria-labelledby="how">
+<h2 id="how">Как это устроено</h2>
+<ol class="steps">
+<li><strong>Сценарий.</strong> На Python с генератором <code>sortie-gen</code> (поверх pydcs) вы описываете карту, время, группы, зоны, флаги, команды F10-меню и слоты игроков. Генератор собирает <code>.miz</code>, manifest и <code>scenario.lock.json</code>.</li>
+<li><strong>Логика.</strong> Крейт на Rust с SDK <code>sortie</code>. Из lock-файла <code>sortie-build</code> делает типизированные символы сценария, поэтому опечатка в имени группы или зоны — это ошибка компиляции, а не сбой посреди миссии.</li>
+<li><strong>Регистрация.</strong> Генератор отдаёт миссию движку <code>sortied</code>, и тот кладёт её в папку миссий DCS.</li>
+<li><strong>Игра.</strong> Мост передаёт движку события и состояние мира и выполняет его команды. Логика читает мир из локальной копии и получает результат каждой команды из DCS.</li>
+</ol>
+</section>
+
+<section aria-labelledby="can">
+<h2 id="can">Что умеет SDK</h2>
+<dl class="can">
+<div><dt>Сценарий в типах</dt><dd>Группы, зоны, шаблоны, флаги, аэродромы и команды меню из сценария становятся константами Rust. Группа чужого сценария или приказ не того типа не скомпилируются.</dd></div>
+<div><dt>Команды с ответом</dt><dd>Сообщения, дым, флаги, F10-меню, спавн по шаблону, опции и задачи ИИ. Каждая команда возвращает результат из DCS, а <code>.key()</code> не даст выполнить её дважды после переподключения.</dd></div>
+<div><dt>Ожидание по времени и миру</dt><dd><code>ctx.sleep</code>, <code>ctx.timer</code> (таймер хранится в движке), <code>ctx.wait_until</code> с условием на мир и потоки событий.</dd></div>
+<div><dt>Состояние и итог</dt><dd>Документ кампании <code>ctx.state</code>, действия один раз за сессию или за ход, отчёт и исход сессии.</dd></div>
+<div><dt>Логика вне игры</dt><dd>Логика — отдельный процесс. Если она упала, её можно запустить снова, не перезапуская миссию.</dd></div>
+<div><dt>Миссия из кода</dt><dd>Генератор проверяет имена при сборке и через движок регистрирует, запускает и перезапускает миссию, а потом забирает результаты.</dd></div>
+</dl>
+</section>
+
+<section aria-labelledby="need">
+<h2 id="need">Что нужно</h2>
+<ul class="plain">
+<li>Windows 10 или 11 (x64) с DCS World 2.9 или DCS World Server.</li>
+<li>Рантайм Sortie: архив <code>sortie-runtime-0.1.0-win64.zip</code> с движком <code>sortied</code>, CLI <code>sortie</code>, мостом и Lua-слоем (<a href="downloads.html">загрузки</a>).</li>
+<li>Rust 1.89 или новее. На Windows нужны инструменты сборки MSVC.</li>
+<li>Python 3.11 или новее и <a href="https://docs.astral.sh/uv/">uv</a> для генератора.</li>
+<li>Доступ к репозиторию SDK на GitHub: <a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a>.</li>
+</ul>
+<p class="note">В версии 0.1.0 нет тестов логики без DCS: они появятся в SDK 0.2.</p>
+</section>
+
+<section aria-labelledby="next">
+<h2 id="next">С чего начать</h2>
+<ul class="plain">
+<li><a href="docs/quickstart.html">Быстрый старт</a>: установка рантайма и первая миссия.</li>
+<li><a href="docs/index.html">Документация</a>: SDK, генератор, работа с движком.</li>
+<li><a href="agents.html">Для агентов</a>: навыки и инструкции для ИИ-агентов, которые пишут миссии.</li>
+<li><a href="changelog.html">Изменения</a> в версии 0.1.0.</li>
+</ul>
+</section>
+</div>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>
