@@ -1,5 +1,6 @@
 from google.protobuf import field_mask_pb2 as _field_mask_pb2
 from sortie_gen._proto.sortie.v1 import common_pb2 as _common_pb2
+from sortie_gen._proto.sortie.v1 import resources_pb2 as _resources_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
@@ -65,20 +66,24 @@ class GroupSnap(_message.Message):
     def __init__(self, eid: _Optional[int] = ..., name: _Optional[str] = ..., ident: _Optional[str] = ..., coalition: _Optional[_Union[_common_pb2.Coalition, str]] = ..., category: _Optional[_Union[_common_pb2.Category, str]] = ..., units: _Optional[_Iterable[int]] = ..., group_id: _Optional[int] = ..., country: _Optional[str] = ...) -> None: ...
 
 class AirbaseSnap(_message.Message):
-    __slots__ = ("eid", "name", "ident", "coalition", "pos", "airbase_id")
+    __slots__ = ("eid", "name", "ident", "coalition", "pos", "airbase_id", "host_eid", "dead")
     EID_FIELD_NUMBER: _ClassVar[int]
     NAME_FIELD_NUMBER: _ClassVar[int]
     IDENT_FIELD_NUMBER: _ClassVar[int]
     COALITION_FIELD_NUMBER: _ClassVar[int]
     POS_FIELD_NUMBER: _ClassVar[int]
     AIRBASE_ID_FIELD_NUMBER: _ClassVar[int]
+    HOST_EID_FIELD_NUMBER: _ClassVar[int]
+    DEAD_FIELD_NUMBER: _ClassVar[int]
     eid: int
     name: str
     ident: str
     coalition: _common_pb2.Coalition
     pos: _common_pb2.Vec3
     airbase_id: int
-    def __init__(self, eid: _Optional[int] = ..., name: _Optional[str] = ..., ident: _Optional[str] = ..., coalition: _Optional[_Union[_common_pb2.Coalition, str]] = ..., pos: _Optional[_Union[_common_pb2.Vec3, _Mapping]] = ..., airbase_id: _Optional[int] = ...) -> None: ...
+    host_eid: int
+    dead: bool
+    def __init__(self, eid: _Optional[int] = ..., name: _Optional[str] = ..., ident: _Optional[str] = ..., coalition: _Optional[_Union[_common_pb2.Coalition, str]] = ..., pos: _Optional[_Union[_common_pb2.Vec3, _Mapping]] = ..., airbase_id: _Optional[int] = ..., host_eid: _Optional[int] = ..., dead: _Optional[bool] = ...) -> None: ...
 
 class WeaponSnap(_message.Message):
     __slots__ = ("eid", "type_name", "name", "pos")
@@ -93,23 +98,25 @@ class WeaponSnap(_message.Message):
     def __init__(self, eid: _Optional[int] = ..., type_name: _Optional[str] = ..., name: _Optional[str] = ..., pos: _Optional[_Union[_common_pb2.Vec3, _Mapping]] = ...) -> None: ...
 
 class WorldSnapshot(_message.Message):
-    __slots__ = ("session", "rev", "model_time", "groups", "entities", "airbases")
+    __slots__ = ("session", "rev", "model_time", "groups", "entities", "airbases", "resources")
     SESSION_FIELD_NUMBER: _ClassVar[int]
     REV_FIELD_NUMBER: _ClassVar[int]
     MODEL_TIME_FIELD_NUMBER: _ClassVar[int]
     GROUPS_FIELD_NUMBER: _ClassVar[int]
     ENTITIES_FIELD_NUMBER: _ClassVar[int]
     AIRBASES_FIELD_NUMBER: _ClassVar[int]
+    RESOURCES_FIELD_NUMBER: _ClassVar[int]
     session: str
     rev: int
     model_time: float
     groups: _containers.RepeatedCompositeFieldContainer[GroupSnap]
     entities: _containers.RepeatedCompositeFieldContainer[EntitySnap]
     airbases: _containers.RepeatedCompositeFieldContainer[AirbaseSnap]
-    def __init__(self, session: _Optional[str] = ..., rev: _Optional[int] = ..., model_time: _Optional[float] = ..., groups: _Optional[_Iterable[_Union[GroupSnap, _Mapping]]] = ..., entities: _Optional[_Iterable[_Union[EntitySnap, _Mapping]]] = ..., airbases: _Optional[_Iterable[_Union[AirbaseSnap, _Mapping]]] = ...) -> None: ...
+    resources: _containers.RepeatedCompositeFieldContainer[_resources_pb2.ResourceSnap]
+    def __init__(self, session: _Optional[str] = ..., rev: _Optional[int] = ..., model_time: _Optional[float] = ..., groups: _Optional[_Iterable[_Union[GroupSnap, _Mapping]]] = ..., entities: _Optional[_Iterable[_Union[EntitySnap, _Mapping]]] = ..., airbases: _Optional[_Iterable[_Union[AirbaseSnap, _Mapping]]] = ..., resources: _Optional[_Iterable[_Union[_resources_pb2.ResourceSnap, _Mapping]]] = ...) -> None: ...
 
 class WorldDelta(_message.Message):
-    __slots__ = ("from_rev", "rev", "model_time", "upserts", "removals", "group_upserts", "group_removals", "airbase_upserts")
+    __slots__ = ("from_rev", "rev", "model_time", "upserts", "removals", "group_upserts", "group_removals", "airbase_upserts", "resource_upserts", "resource_removals", "airbase_removals")
     FROM_REV_FIELD_NUMBER: _ClassVar[int]
     REV_FIELD_NUMBER: _ClassVar[int]
     MODEL_TIME_FIELD_NUMBER: _ClassVar[int]
@@ -118,6 +125,9 @@ class WorldDelta(_message.Message):
     GROUP_UPSERTS_FIELD_NUMBER: _ClassVar[int]
     GROUP_REMOVALS_FIELD_NUMBER: _ClassVar[int]
     AIRBASE_UPSERTS_FIELD_NUMBER: _ClassVar[int]
+    RESOURCE_UPSERTS_FIELD_NUMBER: _ClassVar[int]
+    RESOURCE_REMOVALS_FIELD_NUMBER: _ClassVar[int]
+    AIRBASE_REMOVALS_FIELD_NUMBER: _ClassVar[int]
     from_rev: int
     rev: int
     model_time: float
@@ -126,13 +136,18 @@ class WorldDelta(_message.Message):
     group_upserts: _containers.RepeatedCompositeFieldContainer[GroupSnap]
     group_removals: _containers.RepeatedScalarFieldContainer[int]
     airbase_upserts: _containers.RepeatedCompositeFieldContainer[AirbaseSnap]
-    def __init__(self, from_rev: _Optional[int] = ..., rev: _Optional[int] = ..., model_time: _Optional[float] = ..., upserts: _Optional[_Iterable[_Union[EntitySnap, _Mapping]]] = ..., removals: _Optional[_Iterable[int]] = ..., group_upserts: _Optional[_Iterable[_Union[GroupSnap, _Mapping]]] = ..., group_removals: _Optional[_Iterable[int]] = ..., airbase_upserts: _Optional[_Iterable[_Union[AirbaseSnap, _Mapping]]] = ...) -> None: ...
+    resource_upserts: _containers.RepeatedCompositeFieldContainer[_resources_pb2.ResourceSnap]
+    resource_removals: _containers.RepeatedCompositeFieldContainer[_resources_pb2.ResourceKey]
+    airbase_removals: _containers.RepeatedScalarFieldContainer[int]
+    def __init__(self, from_rev: _Optional[int] = ..., rev: _Optional[int] = ..., model_time: _Optional[float] = ..., upserts: _Optional[_Iterable[_Union[EntitySnap, _Mapping]]] = ..., removals: _Optional[_Iterable[int]] = ..., group_upserts: _Optional[_Iterable[_Union[GroupSnap, _Mapping]]] = ..., group_removals: _Optional[_Iterable[int]] = ..., airbase_upserts: _Optional[_Iterable[_Union[AirbaseSnap, _Mapping]]] = ..., resource_upserts: _Optional[_Iterable[_Union[_resources_pb2.ResourceSnap, _Mapping]]] = ..., resource_removals: _Optional[_Iterable[_Union[_resources_pb2.ResourceKey, _Mapping]]] = ..., airbase_removals: _Optional[_Iterable[int]] = ...) -> None: ...
 
 class GetSnapshotRequest(_message.Message):
-    __slots__ = ("session",)
+    __slots__ = ("session", "api_rev")
     SESSION_FIELD_NUMBER: _ClassVar[int]
+    API_REV_FIELD_NUMBER: _ClassVar[int]
     session: str
-    def __init__(self, session: _Optional[str] = ...) -> None: ...
+    api_rev: int
+    def __init__(self, session: _Optional[str] = ..., api_rev: _Optional[int] = ...) -> None: ...
 
 class WorldQuery(_message.Message):
     __slots__ = ("coalitions", "categories", "group_names", "zones", "players_only")
@@ -149,13 +164,15 @@ class WorldQuery(_message.Message):
     def __init__(self, coalitions: _Optional[_Iterable[_Union[_common_pb2.Coalition, str]]] = ..., categories: _Optional[_Iterable[_Union[_common_pb2.Category, str]]] = ..., group_names: _Optional[_Iterable[str]] = ..., zones: _Optional[_Iterable[str]] = ..., players_only: _Optional[bool] = ...) -> None: ...
 
 class SubscribeWorldRequest(_message.Message):
-    __slots__ = ("session", "from_revision", "query", "field_mask")
+    __slots__ = ("session", "from_revision", "query", "field_mask", "api_rev")
     SESSION_FIELD_NUMBER: _ClassVar[int]
     FROM_REVISION_FIELD_NUMBER: _ClassVar[int]
     QUERY_FIELD_NUMBER: _ClassVar[int]
     FIELD_MASK_FIELD_NUMBER: _ClassVar[int]
+    API_REV_FIELD_NUMBER: _ClassVar[int]
     session: str
     from_revision: int
     query: WorldQuery
     field_mask: _field_mask_pb2.FieldMask
-    def __init__(self, session: _Optional[str] = ..., from_revision: _Optional[int] = ..., query: _Optional[_Union[WorldQuery, _Mapping]] = ..., field_mask: _Optional[_Union[_field_mask_pb2.FieldMask, _Mapping]] = ...) -> None: ...
+    api_rev: int
+    def __init__(self, session: _Optional[str] = ..., from_revision: _Optional[int] = ..., query: _Optional[_Union[WorldQuery, _Mapping]] = ..., field_mask: _Optional[_Union[_field_mask_pb2.FieldMask, _Mapping]] = ..., api_rev: _Optional[int] = ...) -> None: ...

@@ -24,7 +24,7 @@
 <a class="skip" href="#content">Перейти к содержанию</a>
 <header class="topbar">
 <div class="topbar-inner">
-<a class="brand" href="index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<a class="brand" href="index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.2.0</span></a>
 <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
 <nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="docs/quickstart.html">Быстрый старт</a><a href="docs/index.html">Документация</a><a href="agents.html">Для агентов</a><a href="downloads.html">Загрузки</a><a href="changelog.html" aria-current="page">Изменения</a></nav>
 <div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
@@ -37,6 +37,352 @@
 <p>Формат — <a href="https://keepachangelog.com/ru/1.1.0/">Keep a Changelog</a>, версии — по
 <a href="https://semver.org/lang/ru/">SemVer</a>. До 1.0 API может меняться между минорными версиями; каждое
 такое изменение описано здесь.</p>
+<h2 id="020--2026-11-17">[0.2.0] — 2026-11-17<a class="anchor" href="#020--2026-11-17" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Основа широкого API (волна 1, ревизия API 1). Логика 0.1.0 работает без изменений.</p>
+<h3 id="добавлено">Добавлено<a class="anchor" href="#добавлено" aria-label="Ссылка на этот раздел">#</a></h3>
+<ul>
+<li>
+<p>Общий словарь в <code>sortie.v1</code> (<code>common.proto</code>): селекторы <code>ObjSel</code>, <code>AirbaseSel</code>, <code>PlayerSel</code>,
+<code>WarehouseSel</code>, <code>ZoneSel</code>, <code>ControllerSel</code>, <code>Audience</code>, место <code>Anchor</code>, области <code>MapArea</code> и
+объёмы <code>Volume</code>, <code>Rgba</code>, <code>Modulation</code>, <code>NameConflict</code>, описание возможностей <code>Capability</code>.
+В SDK — модуль <code>sortie::sel</code> с <code>From</code> из уже знакомых ручек (<code>Eid</code>, <code>&amp;Group&lt;K&gt;</code>,
+<code>GroupRef</code>, <code>AirbaseRef</code>, <code>ZoneRef</code>, <code>Vec3</code>, <code>MapPoint</code>, <code>Coalition</code>).</p>
+</li>
+<li>
+<p>Типизированный ответ команды: <code>CommandResult.reply</code> (снимки созданного и удалённого),
+<code>world_rev</code> (ревизия мира с эффектом команды) и <code>replayed</code> (ответ на повтор по ключу).
+SDK кладёт снимки ответа в реплику сразу: после <code>spawn_group(..).await?</code> группа видна в
+<code>ctx.world()</code> до следующего тика.</p>
+</li>
+<li>
+<p>Ревизии объявляет логика: <code>#[sortie::mission(api_rev = 1, event_rev = 0)]</code> (по умолчанию 0 и
+0 — поведение 0.1.0). <code>ctx.engine_api_rev()</code>, <code>ctx.event_rev()</code>, <code>ctx.writer()</code> говорят, что
+ответил движок. Операция новее объявленной ревизии — <code>Error::Revision</code>, новее движка —
+<code>Error::EngineTooOld</code>; в обоих случаях ничего не отправлено.</p>
+</li>
+<li>
+<p><code>Engine.Version</code> отдаёт <code>api_rev</code>.</p>
+</li>
+<li>
+<p>Вызовы DCS (ревизия API 1): каталог DCS API <code>catalog/dcs_api.toml</code> и типизированные обёртки
+из него — <code>ctx.dcs().land().surface_type(p)</code>, <code>ctx.dcs().airbase(a).set_coalition(c)</code>,
+<code>ctx.dcs().warehouse(w).add_item(..)</code>, лазерные пятна, звуки из <code>.miz</code>, чтения хуков <code>net.*</code>
+(страница <a href="docs/dcs.html">Вызовы DCS</a>, список — <a href="docs/dcs-catalog.html">справочник каталога</a>).
+Движок проверяет каждый вызов по каталогу до DCS; изменяющие функции выключены, пока владелец
+движка не включит их в <code>&lt;Saved Games&gt;/Sortie/engine.toml</code> (<code>[calls]</code>) или не запустит
+<code>sortied --dev</code>. Чтение не берёт ключ. Команды <code>DcsCall</code> и <code>DcsBatch</code>, ответ <code>Reply.call</code> /
+<code>Reply.batch</code>. Вызов по строке пути и пакеты — за cargo-фичей <code>dcs-raw</code>. В Python — модуль
+<code>sortie_gen.dcs_api</code> поверх <code>EngineClient.dcs_call</code>. Метод объекта выполняется через таблицу
+класса самого объекта, как <code>unit:getCoalition()</code>: класс <code>CoalitionObject</code> есть только в
+документации DCS, в игре такой таблицы нет, поэтому <code>coalition()</code> и <code>country()</code> работают у
+юнита, статика, аэродрома и оружия. <code>land().profile(a, b)</code> берёт два <code>Vec3</code> (DCS читает у
+них <code>x</code> и <code>z</code>). Число, которое DCS вернул строкой (id объекта в 2.9.31), приходит числом:
+<code>static_object(..).id()</code>, <code>airbase(..).id()</code>, <code>group(..).id()</code>.
+<code>static_object(..).cargo_display_name()</code>, как и <code>cargo_weight()</code>, движок выполняет только
+для груза (<code>Error::Invalid</code> для другого статика: по описанию DCS на нём падает).
+Повтор вызова с ключом возвращает сохранённый результат вместе с объектами и дескрипторами:
+<code>spots().create_laser(..).key("lase-1")</code> после перезапуска логики в той же сессии отдаёт тот
+же <code>Handle</code> (раньше повтор заканчивался <code>Error::Invalid</code>, и пятно нельзя было убрать до
+конца сессии). Состояние объектов в ответе на повтор читается из мира заново. Под ключом не
+хранятся только значения результата больше 64 КиБ: повтор такого вызова — новая ошибка
+<code>Error::ResultNotKept</code> (<code>sortie::result_not_kept</code>), в Python — <code>errors.ResultNotKept</code>.
+Аргумент-объект, его id или имя проверяется на класс параметра и тогда, когда он задан
+дескриптором или результатом предыдущего вызова пакета: <code>Spot.createLaser</code> с пятном вместо
+источника или id юнита там, где нужен id группы, — <code>Error::Invalid</code>, DCS не вызывается
+(раньше такой вызов уходил в DCS). Таблица в результате приходит целиком или значением
+<code>Value::Cut(n)</code> с <code>truncated</code>; ответ одной команды, все вызовы пакета вместе, — не больше
+150 000 значений (раньше большой пакет чтений терял все результаты с ошибкой
+<code>sortie::bridge_fault</code> «does not decode»).</p>
+</li>
+<li>
+<p>Объекты (ревизия API 1, страница <a href="docs/objects.html">Объекты</a>): <code>ctx.spawn_static(тип, страна)</code>
+— статик, груз или рабочий FARP (<code>.heliport(..)</code>), с политикой имени <code>.on_conflict(..)</code>
+(<code>Fail</code>, <code>Keep</code>, <code>Replace</code>); категорию и модель DCS движок берёт из таблицы типов
+<code>catalog/static_types.toml</code> (её генерирует sortie-gen из базы pydcs). Статик сразу в мире,
+событие <code>Birth</code> с <code>synthesised = true</code>. <code>ctx.destroy(obj)</code> уничтожает любой юнит, статик или
+груз; юнит с игроком — только с <code>.allow_player()</code> (так же <code>group.destroy()</code> при ревизии 1).
+<code>ctx.remove_junk(объёмы)</code> убирает обломки и воронки. Протокол: <code>SpawnStatic</code>,
+<code>Destroy.object</code> / <code>allow_player</code>, <code>RemoveJunk</code>, <code>Reply.junk</code>, <code>Birth.synthesised</code>,
+<code>GONE_REASON_REPLACED</code>. Обёртки <code>object(..).destroy()</code> и <code>world().remove_junk(..)</code> каталога
+помечены устаревшими в пользу этих операций. <code>Keep</code> для FARP возвращает и его аэродром
+(<code>SpawnedStatic::airbase</code>), как при постановке. После <code>destroy()</code> статика или груза слой
+Lua в следующих кадрах DCS (не дольше десяти) смотрит, исчез ли объект: по сообщениям, DCS не убирает FARP
+(не измерено). Если объект остался, <code>ctx.destroy(..)</code> и <code>Replace</code> отвечают <code>Error::Lua</code>
+(«DCS did not remove …»), мир считает статик и его аэродром живыми, второй FARP поверх
+первого не ставится. Ответ на уничтожение статика приходит, когда объект исчез (обычно на кадр позже); юниты,
+группы и оружие — как раньше. В FakeDcs — <code>dcs.survives_destroy(имя, true)</code>. Юнит с категорией
+<code>Structure</code> (вооружённое строение в наземной группе) адресуется по Eid как юнит:
+раньше <code>ctx.destroy(eid)</code>, якорь и получатель вызова отвечали <code>Error::Gone</code>, а <code>UnitSel</code> —
+<code>Error::Invalid</code>.</p>
+</li>
+<li>
+<p>Пакет спавнов (ревизия API 1, страница <a href="docs/objects.html#%D0%BF%D0%B0%D0%BA%D0%B5%D1%82-%D1%81%D0%BF%D0%B0%D0%B2%D0%BD%D0%BE%D0%B2">Объекты</a>):
+<code>ctx.spawn_batch()</code> — много групп и статиков одной командой с одним ключом (восстановление
+кампании). Движок проверяет весь пакет до отправки (имя, занятое в мире, — ошибка
+<code>NAME_CONFLICT</code> только этого элемента), ограничитель спавна раздаёт элементы по времени по
+очереди с другими спавнами, ничего не откатывается; <code>.stop_on_error()</code>, типизированный результат элемента
+<code>out.get(&amp;slot)</code>. Повтор после обрыва связи с тем же ключом продолжает пакет: найденные по
+имени элементы помечены <code>settled</code>, ни один не ставится дважды. Протокол: <code>SpawnBatch</code>
+(<code>Command.body.spawn_batch = 35</code>), <code>SpawnItem</code>, <code>SpawnResult</code>, <code>Reply.spawns</code>; возможность
+<code>spawn_batch</code>.</p>
+</li>
+<li>
+<p>Реестр ресурсов и рисунки на карте (ревизия API 1): <code>ctx.map()</code> — метки с текстом, линии,
+ломаные, многоугольники, круги, прямоугольники, стрелки и надписи по имени (страница
+<a href="docs/map.html">Рисование на карте</a>). Повтор с тем же описанием не идёт в DCS, цвет, заливка,
+радиус, текст и крайние точки меняются на месте, остальное перерисовывается. Команды
+<code>ResourcePut</code> / <code>ResourceRemove</code> (<code>resources.proto</code>), ответ <code>Reply.resource</code>, реестр в мире
+(<code>WorldSnapshot.resources</code>, <code>WorldDelta.resource_upserts</code> / <code>resource_removals</code>,
+<code>ctx.world().resources()</code>), событие <code>ResourceEnded</code> (ревизия событий 1), у событий <code>Mark</code>
+поля <code>name</code> и <code>own</code>. Движок отдаёт ревизию событий 1.</p>
+</li>
+<li>
+<p>Деревья меню F10 (ревизия API 1, страница <a href="docs/menus.html">Деревья меню F10</a>):
+<code>ctx.menus().tree(имя)</code> — пункты и подменю для всех, коалиции или одной группы, по имени.
+Повтор того же дерева не идёт в DCS, при изменении движок убирает и добавляет только
+изменённые пункты. Меню группы следует за слотом: пока в группе нет игрока, дерево
+приостановлено (<code>SUSPENDED</code>), движок ставит его, когда игрок занял слот, убирает, когда слот
+опустел, и ставит заново для нового id группы (динамические слоты). Двух пунктов с одной
+надписью на уровне быть не может. Нажатие несёт дерево, <code>id</code> пункта и его <code>arg</code>
+(<code>MenuPressed.tree</code>, <code>item</code>, <code>arg</code>, ревизия событий 1). Протокол: <code>MenuTree</code>, <code>MenuNode</code>,
+<code>MenuOverflow</code>, <code>ResourcePut.spec.menu_tree</code>.</p>
+</li>
+<li>
+<p>Страницы меню (<code>MENU_OVERFLOW_PAGE</code>, по умолчанию): уровень дерева длиннее 10 пунктов DCS
+показывает как 9 пунктов и подменю <code>More...</code> с остальными, и так дальше. Страница
+корневого уровня дерева называется <code>More... (&lt;имя дерева&gt;)</code>: этот уровень дерево делит с
+другими деревьями и командами меню из сценария, а DCS находит пункт по пути из надписей,
+поэтому у страниц двух деревьев на одном уровне разные надписи. Страницу нельзя
+нажать; нажатие пункта на странице несёт его собственные <code>id</code> и <code>arg</code>. Страницы не считаются
+в 200 узлов дерева (их не больше 22). Билдер <code>.overflow(Overflow::Reject)</code>
+(<code>sortie::menu_tree::Overflow</code>) оставляет отказ <code>Error::Invalid</code> для такого уровня. В
+FakeDcs — <code>tree_level</code>, <code>press_tree_at</code> (нажатие по пути надписей), <code>FakeTreeEntry.page</code> и
+<code>menu_level</code> (что DCS показывает на уровне: пункты всех деревьев; FakeDcs, как DCS, находит
+пункт дерева по пути из надписей).</p>
+</li>
+<li>
+<p>Возможности движка (страница <a href="docs/capabilities.html">Возможности движка</a>): одна таблица из
+типизированных операций, функций каталога DCS API (<code>call:&lt;env&gt;:&lt;путь&gt;</code>), результата пробника
+запущенной сборки DCS (<code>MISSING_IN_DCS</code>), выключателей владельца (<code>engine.toml [operations]</code>) и карантина. Она в <code>Start.capabilities</code>, в <code>Engine.Capabilities</code> и в
+<code>ctx.capabilities()</code> (одна запись — <code>ctx.capability(имя)</code>); изменения после <code>Start</code> приходят
+событием <code>CapabilityChanged</code> (ревизия событий 1). Имена — <code>sortie::caps</code>
+(<code>caps::SPAWN_STATIC</code>, <code>caps::call::mission::LAND_GET_HEIGHT</code>).
+<code>#[sortie::mission(requires = [..])]</code> — логика не подключится там, где нужного нет
+(<code>AttachRejected.missing_capabilities</code>). <code>Error::capability()</code> называет возможность отказа.
+Вид операции, во время которой упал DCS, уходит на карантин до снятия владельцем
+(<code>sortie caps --release</code>, <code>Engine.ReleaseQuarantine</code>); у универсального вызова на карантин
+уходит одна функция каталога (следующий пункт), она остаётся на карантине и на новой сборке
+DCS. Карантин типизированной операции снимает и
+другая сборка DCS, и он действует только на команды ревизии API 1: логика 0.1.0 его не
+замечает. Сборка DCS одна на процесс DCS: её называет связь хуков, иначе связь миссии;
+слово <code>unknown</code> (в окружении нет глобала с версией) сборкой не считается, поэтому оно не
+снимает карантин и не мешает ему появиться, когда второе окружение сборку знает; ту же
+сборку процесса отдают <code>Engine.Capabilities</code>, <code>Engine.Version</code> и <code>ServerStatus</code>. Слой Lua
+старше движка (без <code>sortie install</code>) показывает операции волны 1 как
+<code>NOT_IMPLEMENTED</code>. В Python — <code>EngineClient.capabilities</code> и <code>release_quarantine</code>.</p>
+</li>
+<li>
+<p>Журнал сбоев моста и карантин функции каталога: перед каждым вызовом каталога (и внутри
+пакета) мост записывает <code>call:&lt;env&gt;:&lt;путь&gt;</code> в <code>Logs/sortie-bridge.journal</code>; если DCS упал,
+на карантин уходит только эта функция (<code>Error::capability()</code> = <code>"call:mission:&lt;путь&gt;"</code>),
+без записи в журнале — функции пакета, который выполнялся; три сбоя моста на одной функции
+тоже. Медленный вызов — не падение: если мост отключил функцию только из-за вызовов дольше
+секунды, отказ действует до перезапуска DCS (заметка <code>Slow, not a crash</code>) и в хранилище
+ничего не записывается. Идентификатор команды может быть любым (длинный или с переводом
+строки журнал записывает в сокращённом виде с хешем), а процесс DCS движок отличает по
+<code>pid</code> и метке запуска моста, потому что Windows выдаёт <code>pid</code> повторно. Если DCS упал внутри
+испытания, журнал называет его, и больше ничего на карантин не уходит.
+<code>dcs_call</code>, другие функции и типизированные операции остаются <code>AVAILABLE</code>.
+Документированную функцию чтения без получателя движок при следующем старте миссии один раз
+вызывает с каноническими аргументами каталога (поле <code>canonical</code>): ответ снимает карантин.
+Испытание даётся один раз: движок хранит запись о пройденном испытании (она переживает его
+перезапуск), и функция, которая после этого снова дала сбой, остаётся на карантине без
+второго испытания, пока владелец не снимет его (снятие стирает и запись). Испытание не
+отправляется, пока универсальный вызов выключен владельцем, пока на карантине весь
+<code>dcs_call</code>, пока мост отказывает в вызове до перезапуска DCS и пока функции нет в этой
+сборке DCS; ответ, из которого видно, что DCS вызов не выполнял, ничего не решает, и
+испытание повторится при следующем старте миссии.
+Снимает его и <code>sortie caps --release call:mission:&lt;путь&gt;</code> (имя принимается и тогда, когда
+функции уже нет в каталоге, но её карантин записан). FakeDcs:
+<code>dcs.crash_inside("Object.getPoint")</code> роняет поддельный DCS внутри вызова. Нужны новые DLL
+моста и слой Lua (<code>sortie install</code>) и перезапуск DCS; старый мост работает, но без журнала
+(тогда на карантин уходит весь пакет).</p>
+</li>
+<li>
+<p>Карантин функции каталога, перенесённый с прежней сборки DCS (новая сборка его не снимает:
+сервер не должен второй раз упасть на том же вызове без решения человека), виден: заметка
+возможности называет сборку, на которой он записан («recorded on DCS …, carried over to the
+running build …»), <code>Engine.Health</code> перечисляет такие карантины в заметке и в новом поле
+<code>HealthResponse.carried_over_quarantines</code>. Снять их все — <code>sortie caps --release-carried-over</code>, новое поле <code>ReleaseQuarantineRequest.carried_over</code> (Python —
+<code>EngineClient.release_carried_over()</code>). Владелец движка может вернуть правило спецификации:
+<code>engine.toml [quarantine] clear_calls_on_new_build = true</code> (по умолчанию <code>false</code>) — тогда
+новая сборка DCS снимает и эти карантины.</p>
+</li>
+<li>
+<p><code>engine.toml</code> задаёт и скорость спавна: <code>spawn_gate = { groups_per_s = 2, units_per_s = 24 }</code>
+(значения по умолчанию прежние).</p>
+</li>
+<li>
+<p>Защита каталога <code>span_300km</code> допустима только у записи ровно с двумя обязательными
+аргументами <code>vec2</code> или <code>vec3</code>; у другой записи (<code>[[calls.call]]</code> владельца в том числе) это
+ошибка при старте <code>sortied</code>. Вызов с такой защитой не уходит в DCS неизмеренным.</p>
+</li>
+<li>
+<p>Генератор: <code>sc.airbase(имя, ident=..., munitions={wsType: количество})</code> ограничивает боезапас
+склада аэродрома и задаёт начальный запас (wsType — четыре числа из <code>wsTypes.lua</code> игры,
+например <code>(4, 4, 7, 106)</code> для AIM-120C). Без <code>munitions</code> склад безлимитный, как раньше, а
+на безлимитном складе, по сообщениям, <code>add_item</code>, <code>remove_item</code> и <code>set_item</code> не меняют счёт
+(не измерено). Страница <a href="docs/generator.html#%D0%B0%D1%8D%D1%80%D0%BE%D0%B4%D1%80%D0%BE%D0%BC%D1%8B-%D0%B8-%D1%81%D0%BB%D0%BE%D1%82%D1%8B-%D0%B8%D0%B3%D1%80%D0%BE%D0%BA%D0%BE%D0%B2">Сценарий на Python</a>.</p>
+</li>
+<li>
+<p><code>THIRD-PARTY-NOTICES.txt</code> в корне репозитория SDK и <code>catalog/THIRD-PARTY-pydcs.txt</code>: таблица
+<code>catalog/static_types.toml</code> содержит только факты из базы pydcs 1.0.0 (LGPL-3.0-or-later):
+имя типа, категорию и модель; файл делает только генератор
+<code>python/sortie-gen/scripts/gen_static_types.py</code>, CI проверяет его ключом <code>--check</code>.</p>
+</li>
+<li>
+<p><code>BatchReturn.cost_us</code>: время DCS, которое занял весь пакет <code>ctx.dcs().batch()</code> (один кадр).</p>
+</li>
+<li>
+<p>Общая форма событий (страница <a href="docs/sdk.html">Логика на Rust</a>, «События»): каждое событие из DCS
+называет свою запись <code>world.event</code> — <code>Event.dcs_event</code> (<code>v1::DcsEvent</code>), а запись, которой
+нет в перечислении, — <code>Event.dcs_name</code>. Так <code>S_EVENT_DEAD</code>, <code>S_EVENT_CRASH</code> и
+<code>S_EVENT_PILOT_DEAD</code> (все три — <code>Dead</code>) и <code>S_EVENT_TAKEOFF</code> / <code>S_EVENT_RUNWAY_TAKEOFF</code> (оба —
+<code>Takeoff</code>) различимы без новой ревизии событий. Фильтр <code>TypedEvents::from_dcs(..)</code> и
+<code>next_with_dcs_event()</code>. Событие DCS без своего типа (<code>Unknown</code>) несёт <code>ctx</code>
+(<code>v1::EventContext</code>): участники как снимки с Eid, место, тип оружия, текст, все остальные
+ключи DCS (<code>extra</code>) и объекты под другими ключами (<code>extra_objects</code>); <code>foreign</code> — событие
+другого скрипта миссии (<code>world.onEvent</code>). Фильтры <code>in_group</code> и <code>coalition</code> у <code>Unknown</code>
+смотрят на <code>ctx.initiator</code>. Слой Lua копирует все ключи события (раньше — 12) и читает
+участников облегчённо, по кэшу id. Палуба корабля как место события (<code>place</code>) — объект
+класса <code>Airbase</code> с id самого корабля: слой отдаёт её как аэродром и не кладёт в кэш, а
+<code>ctx.place</code> называет аэродром корабля и не меняет сам корабль (раньше после такого события
+корабль в мире становился наземным юнитом без группы). В FakeDcs —
+<code>FakeDcs::raise_event(FakeEvent::..)</code>.</p>
+</li>
+<li>
+<p>Eid оружия и катапультировавшихся пилотов (страница <a href="docs/sdk.html">Логика на Rust</a>, «Оружие и
+катапультировавшиеся пилоты»): <code>WeaponSnap.eid</code> в <code>Shot</code>, <code>Hit</code> и <code>Kill</code> одного оружия —
+один Eid; пилот и кресло в <code>Unknown.ctx</code> событий катапультирования — снимки с Eid. Они не
+сущности мира. <code>ctx.destroy(..)</code> убирает ракету в полёте и пилота по Eid (<code>Obj::weapon</code>,
+<code>Obj::snap</code>; возможность <code>destroy.weapon</code> теперь <code>AVAILABLE</code>). Универсальный вызов принимает
+оружие как получателя (чтения <code>Object.*</code>). В FakeDcs — <code>FakeDcs::{shoot, weapon_hit, eject, crew_landed, weapons, crew}</code>.</p>
+</li>
+<li>
+<p><code>ctx.take_command_timings()</code> (модуль <code>sortie::timing</code>): сколько стоила каждая команда —
+<code>cost_us</code> внутри DCS и время от отправки до ответа (страница <a href="docs/dcs.html">Вызовы DCS</a>).</p>
+</li>
+<li>
+<p><code>Engine.Health</code>: у каждой связи <code>LinkHealth.fps</code> и <code>pump_p99_us</code> из последнего heartbeat моста
+(частота кадров и 99-й процентиль работы Sortie за один pump, мкс).</p>
+</li>
+</ul>
+<h3 id="совместимость">Совместимость<a class="anchor" href="#совместимость" aria-label="Ссылка на этот раздел">#</a></h3>
+<ul>
+<li>Движок этой версии работает только с мостом и слоем Lua этой версии (версия связи 1.1):
+после обновления <code>sortied</code> выполните <code>sortie install</code> и перезапустите DCS. Старый мост
+получает отказ с этой подсказкой при подключении, а не ошибки команд потом.</li>
+<li>Удаление метки <code>MarkCommand</code> логикой ревизии 0 после того, как метку удалил игрок на карте
+F10 (или движок не нашёл её после переподключения), снова успех, как в 0.1.0; <code>sortie::invalid</code>
+— только для имени, которое не ставилось или уже удалено командой. Текст ошибки — тот же, что у
+0.1.0 (<code>invalid command: mark ... has no DCS id yet</code>).</li>
+<li>Имена <code>MarkCommand</code> и <code>Menu</code> снова общие для сессии, как в 0.1.0: их удаление снимает запись,
+кто бы её ни поставил (логика или клиент <code>Commands.Submit</code>).</li>
+<li><code>MarkCommand</code> теперь регистрируется как рисунок: повтор с тем же текстом и местом ничего не
+делает в DCS (0.1.0 вызывал <code>markToAll</code> ещё раз с тем же id), изменённый заменяет метку с
+новым id. Удаление несуществующей метки — успех (<code>ABSENT</code>) для логики, объявившей
+<code>api_rev = 1</code>; логика 0.1.0 (ревизия 0) получает <code>sortie::invalid</code>, как раньше. Метки и рисунки
+убираются при конце сессии, если в ней реестром пользовалась команда ревизии 1 или новее;
+сессия только логик 0.1.0 оставляет метки и меню, как 0.1.0.</li>
+<li>Логика 0.1.0 видит события и команды в DCS как раньше (проверка CMP-1): <code>UnitGone</code> с причиной
+<code>GONE_REASON_REPLACED</code> приходит ей как <code>GONE_REASON_DESPAWNED</code>; поток команд в DCS для
+<code>examples/op_north</code> совпадает с 0.1.0 побайтно.</li>
+<li>Мир: гибель пилота (<code>S_EVENT_PILOT_DEAD</code>) больше не делает юнит мёртвым — DCS присылает её,
+пока самолёт ещё летит; событие по-прежнему <code>Dead</code>. Логике API ревизии 0 (по умолчанию у
+<code>#[sortie::mission]</code>) оно приходит с <code>dead = true</code>, как в 0.1.0, и её мир (<code>ctx.world()</code>)
+держит юнит мёртвым, как в 0.1.0; живым его видит логика ревизии 1 и подписка на мир. Выход игрока из юнита (<code>S_EVENT_PLAYER_LEAVE_UNIT</code>) убирает игрока из
+<code>EntitySnap.player</code>: юнит пропадает из <code>players()</code> и из подписки на мир «только игроки», а
+<code>UnitGone.last_known</code> после выхода игрока не называет. Это видно и логике 0.1.0.</li>
+<li><code>Unknown.fields</code> сохраняет вид 0.1.0: только прежние двенадцать ключей. Ключи DCS сверх них
+(<code>comment</code>, ключи новых сборок, объекты под другими ключами) есть только в <code>ctx</code>.</li>
+<li><code>WeaponSnap.eid</code> больше не 0 (это видно и логике 0.1.0): по нему сопоставляются <code>Shot</code>, <code>Hit</code> и
+<code>Kill</code> одного оружия. Безымянный участник события, которого нет в мире (катапультировавшийся
+пилот, кресло), больше не попадает в мир движка; его снимок несёт Eid пилота. Реплика SDK
+этой версии не добавляет в мир ни оружие, ни такие объекты из событий.</li>
+<li>У <code>TypedEvents::of::&lt;v1::Unknown&gt;()</code> фильтры <code>in_group</code> и <code>coalition</code> теперь находят события
+(раньше у <code>Unknown</code> не было субъекта, и они не пропускали ничего).</li>
+<li><code>Menu</code> (<code>ctx.menu(..)</code>) тоже регистрируется: в реплике мира — дерево из одного пункта с
+именем <code>sortie:menu/&lt;ident&gt;/..</code>; повтор ничего не делает, как и раньше; изменённая надпись
+заменяет пункт; ключ команды не используется. Исправлено:
+копия команды <code>.per_group()</code> снимается, когда слот группы пустеет, и ставится следующему
+игроку, в том числе в динамический слот с новым id группы (раньше слой Lua помнил каждый id
+группы навсегда и не ставил команду заново).</li>
+<li><code>sortie::Failure</code> получил поле <code>capability</code>: код, который собирает <code>Failure { .. }</code> без
+<code>..Failure::default()</code>, должен его добавить.</li>
+<li>Сырые вызовы <code>trigger.action.markTo*</code> / <code>*ToAll</code> / <code>setMarkup*</code> / <code>removeMark</code> есть в
+каталоге, но устарели в пользу <code>ctx.map()</code> и отклоняют id от 7 100 000.</li>
+<li><code>GroupSel</code> и <code>UnitSel</code> переехали из <code>commands.proto</code> в <code>common.proto</code> (пакет <code>sortie.v1</code>,
+номера полей те же, проводной формат не изменился). В Rust пути прежние
+(<code>sortie::proto::v1::GroupSel</code>); в Python стабы теперь в <code>common_pb2</code>, а не в <code>commands_pb2</code>.
+<code>buf breaking</code> проверяет совместимость на уровне пакета.</li>
+</ul>
+<h3 id="безопасность">Безопасность<a class="anchor" href="#безопасность" aria-label="Ссылка на этот раздел">#</a></h3>
+<ul>
+<li>
+<p>Слой Lua при старте миссии выключает модальное окно ошибок Lua DCS
+(<code>env.setErrorMessageBoxEnabled(false)</code>): ошибка в любом скрипте миссии больше не
+останавливает выделенный сервер до щелчка по окну.</p>
+</li>
+<li>
+<p>Вызовы DCS: ключи перечислений проверяются везде, где стоят, и внутри таблиц: форма
+<code>&lt;таблица&gt;.&lt;КЛЮЧ&gt;</code>, таблица — одна из названных каталогом (<code>world.VolumeType</code> для объёмов);
+у параметра <code>any</code> ключей нет; в окружении хуков — только таблицы слоя <code>sortie.*</code>. Слой
+принимает путь только целиком. Пакет <code>ctx.dcs().batch()</code> оплачивает в лимите писателя каждый
+вызов. Предел в 256 созданных объектов (лазерных пятен) на сессию проверяется до вызова DCS:
+отклонённый вызов не оставляет в DCS пятна, которое никто не снимет.</p>
+</li>
+<li>
+<p>Запись <code>[[calls.call]]</code> владельца с классом <code>heavy</code> и именем не из get/is/has считается
+изменяющей и выключена, пока её не включат (<code>enabled = true</code> или <code>sortied --dev</code>).
+<code>sortied --dev</code> теперь действительно включает изменяющие записи владельца (раньше включал
+только встроенные, а отказ советовал <code>--dev</code>); <code>enabled = false</code> записи и список <code>disable</code>
+сильнее <code>--dev</code>.</p>
+</li>
+<li>
+<p><code>net().player_info(id, атрибут)</code> принимает только атрибуты <code>id</code>, <code>name</code>, <code>side</code>, <code>slot</code>,
+<code>ping</code>, <code>ucid</code>, <code>lang</code>: другое имя — <code>Error::Invalid</code>, <code>ipaddr</code> — по-прежнему
+<code>Error::Rejected</code>. Раньше отклонялась одна точная строка <code>ipaddr</code>, а строка вроде
+<code>"ipaddr\0"</code> доходила до DCS; как DCS читает такое имя, неизвестно.</p>
+</li>
+<li>
+<p><code>engine.toml</code> <code>[calls]</code>: в <code>enable</code> и <code>disable</code> метод называется путём своей записи каталога
+(<code>Object.destroy</code>). Имя через класс-наследник (<code>Unit.destroy</code>, <code>Weapon.destroy</code>) раньше молча
+переключало запись для всех классов; теперь это ошибка при старте <code>sortied</code>, в сообщении
+названа запись.</p>
+</li>
+<li>
+<p>Мост не передаёт результат, который не смог преобразовать целиком (больше 200 000 значений
+или 16 МиБ строк): команда получает <code>sortie::bridge_fault</code> с этим объяснением, а не
+результат с пропусками. Нужны новые DLL моста и слой Lua (<code>sortie install</code>, перезапуск DCS).</p>
+</li>
+<li>
+<p>Сырые таблицы больше не несут код в DCS. <code>Task::raw(..)</code>, <code>.raw(..)</code> статика и аргументы
+<code>ctx.dcs()</code> с <code>id = "Script"</code> / <code>"ScriptFile"</code>, строкой <code>condition</code> (условие
+<code>ControlledTask</code>), строкой <code>command</code> в <code>params</code> или строкой <code>file</code> отклоняются с
+<code>sortie::rejected</code>, <code>capability = "dev_eval"</code>, и путём внутри таблицы. Это касается и логик
+0.1.0: в 0.1.0 такая задача выполняла Lua в DCS без <code>--dev-eval</code>. NaN и бесконечность в сырых
+таблицах и в числах команд 0.1.0 (точка спавна, орбита, дым, метка, высота земли) теперь
+<code>sortie::invalid</code> (раньше молча превращались в <code>null</code> или в значение по умолчанию). С
+<code>sortied --dev-eval</code> код из команды токена <code>admin</code> проходит с предупреждением в журнале
+(<a href="docs/operations.html#%D0%BF%D1%80%D0%BE%D0%B2%D0%B5%D1%80%D0%BA%D0%B0-%D1%81%D1%8B%D1%80%D1%8B%D1%85-%D1%82%D0%B0%D0%B1%D0%BB%D0%B8%D1%86">Проверка сырых таблиц</a>).</p>
+</li>
+<li>
+<p><code>engine.toml</code> <code>[calls]</code> строже: нельзя расширить встроенный <code>clamp</code>, поменять поля, из которых
+генерируются обёртки, закрыть унаследованный метод новой записью (<code>Unit.destroy</code>) и добавить
+путь не от таблиц DCS (<code>_G</code>, <code>string</code>); <code>_G</code> в списке NEVER. Такой файл останавливает
+<code>sortied</code> при старте.</p>
+</li>
+</ul>
 <h2 id="010--2026-11-09">[0.1.0] — 2026-11-09<a class="anchor" href="#010--2026-11-09" aria-label="Ссылка на этот раздел">#</a></h2>
 <p>Первый выпуск Sortie SDK.</p>
 <h3 id="что-есть">Что есть<a class="anchor" href="#что-есть" aria-label="Ссылка на этот раздел">#</a></h3>
@@ -63,7 +409,7 @@
 <code>sortied --dev</code>.</li>
 <li>Горячей перезагрузки логики (<code>sortie dev</code>).</li>
 </ul>
-<h3 id="совместимость">Совместимость<a class="anchor" href="#совместимость" aria-label="Ссылка на этот раздел">#</a></h3>
+<h3 id="совместимость-1">Совместимость<a class="anchor" href="#совместимость-1" aria-label="Ссылка на этот раздел">#</a></h3>
 <ul>
 <li>Движок поставляется отдельно: архив <code>sortie-runtime-0.1.0-win64.zip</code> в релизе <code>v0.1.0</code>.
 Используйте SDK и движок одной версии. Там же колесо генератора
@@ -76,7 +422,7 @@
 </div>
 <footer class="footer">
 <div class="footer-inner">
-<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p>Sortie SDK 0.2.0. Лицензия SDK: MIT OR Apache-2.0.</p>
 <p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
 </div>
 </footer>

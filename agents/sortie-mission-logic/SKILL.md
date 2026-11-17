@@ -46,11 +46,11 @@ edition = "2024"
 rust-version = "1.89"
 
 [dependencies]
-sortie = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.1.0" }
+sortie = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.2.0" }
 serde = { version = "1", features = ["derive"] }   # only for state documents
 
 [build-dependencies]
-sortie-build = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.1.0" }
+sortie-build = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.2.0" }
 
 [lints.clippy]
 await_holding_refcell_ref = "deny"   # catches a world borrow held across .await
@@ -119,7 +119,7 @@ site; the session goes on.
 2. **Write the step replay-safe** (rules below), then `cargo build` and `cargo clippy`.
    Done when both pass and every `spawn_group` and `destroy` in the diff carries `.key(..)`.
 3. **Run it in DCS** with `sortied --dev` and the logic's `--dev` (see the
-   sortie-live-debugging skill). SDK 0.1.0 has no tests without DCS: FakeDcs
+   sortie-live-debugging skill). SDK 0.2.0 has no tests without DCS: FakeDcs
    arrives in SDK 0.2, and `#[sortie::test]` is a compile error until then. Put pure decisions
    (which wave, which target) in plain functions and test them with ordinary `#[test]`.
 
@@ -201,9 +201,11 @@ A replay-safe mission needs no branch on `Start` except for player-facing extras
 | wait | `ctx.wait_until(pred)`, `ctx.timer(name, dur)`, `ctx.sleep(dur)`, `ctx.until_session_end()` |
 | react | `ctx.events().of::<v1::Dead>().in_group(&g)`; `use sortie::proto::v1;` |
 | F10 menu | `ctx.menu(Coalition::Blue).per_group().command(menus::X).key(..).await?`, then `.presses()` |
+| F10 menu tree (one group, sub-menus) | `ctx.menus().tree("jtac").to(Audience::group(..)).command(id, label).submenu(label, \|s\| ..).await?`, then `.presses()`; needs `#[sortie::mission(api_rev = 1, event_rev = 1)]`; a level of more than 10 entries pages itself (`More...`; on the tree's root level `More... (<tree name>)`) unless `.overflow(Overflow::Reject)` |
 | flags | `ctx.flag(flags::X).set(true)`, `.get()` → `i32` |
 | remember | `ctx.state::<T>("name")` (campaign), `ctx.state_in::<T>(v1::StateScope::Turn, ..)`, `ctx.once`, `ctx.once_per_turn` |
 | results | `ctx.report().set("key", value)`, `ctx.end_session(Outcome::BlueWin).text(..)` |
+| a DCS function with no typed operation | `ctx.dcs().land().surface_type(p)`, `ctx.dcs().airbase(airbases::X).set_coalition(..)`, `ctx.dcs().warehouse(..).add_item(..)`; needs `#[sortie::mission(api_rev = 1)]` |
 
 Signatures, defaults and an example for each: [references/api.md](references/api.md).
 

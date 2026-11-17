@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Возможности движка | Sortie SDK</title>
+<meta name="description" content="Не каждая операция работает везде: функции DCS появляются и пропадают между сборками, слой Lua может быть старше движка, владелец движка может что-то выключить, а операция, во…">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/docs/capabilities.html">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-doc has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.2.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Страницы документации">
+<nav class="toc">
+<a class="toc-home" href="index.html">Документация</a>
+<ul>
+<li><a href="index.html">Обзор</a></li>
+<li><a href="install-runtime.html">Установка рантайма</a></li>
+<li><a href="quickstart.html">Быстрый старт</a></li>
+<li><a href="dependency.html">Подключение SDK</a></li>
+<li><a href="sdk.html">Логика на Rust</a><ul>
+<li><a href="objects.html">Объекты: статики, уничтожение, мусор</a></li>
+<li><a href="map.html">Рисование на карте</a></li>
+<li><a href="menus.html">Деревья меню F10</a></li>
+<li><a href="dcs.html">Вызовы DCS</a></li>
+<li><a href="dcs-catalog.html">Справочник каталога DCS API</a></li>
+<li><a href="capabilities.html" aria-current="page">Возможности движка</a></li>
+</ul>
+</li>
+<li><a href="generator.html">Сценарий на Python</a></li>
+<li><a href="testing.html">Тестирование</a></li>
+<li><a href="operations.html">Эксплуатация</a></li>
+<li><a href="troubleshooting.html">Диагностика</a></li>
+<li><a href="faq.html">Вопросы и ограничения</a></li>
+<li><a href="changelog.html">Что нового</a></li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="возможности-движка">Возможности движка<a class="anchor" href="#возможности-движка" aria-label="Ссылка на этот раздел">#</a></h1>
+<p>Не каждая операция работает везде: функции DCS появляются и пропадают между сборками, слой Lua
+может быть старше движка, владелец движка может что-то выключить, а операция, во время которой
+упал DCS, уходит на карантин. Движок сводит всё это в одну таблицу возможностей. Логика получает
+её в <code>Start</code>, читает через <code>ctx.capabilities()</code> и может потребовать нужное заранее: тогда она
+не запустится там, где этого нет, вместо того чтобы упасть в редкой ветке посреди миссии.</p>
+<h2 id="имена">Имена<a class="anchor" href="#имена" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Имена — константы <code>sortie::caps</code>:</p>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Имя</th><th>Что это</th></tr></thead><tbody>
+<tr><td><code>caps::SPAWN_STATIC</code>, <code>caps::DRAW</code>, <code>caps::MENU_TREE</code>, <code>caps::REMOVE_JUNK</code>, <code>caps::DESTROY</code>, ...</td><td>типизированные операции (<code>caps::MENU</code> — меню F10 из 0.1.0, <code>caps::MENU_TREE</code> — <a href="menus.html">деревья меню</a>)</td></tr>
+<tr><td><code>caps::SPAWN_BATCH</code></td><td><a href="objects.html#%D0%BF%D0%B0%D0%BA%D0%B5%D1%82-%D1%81%D0%BF%D0%B0%D0%B2%D0%BD%D0%BE%D0%B2">пакет спавнов</a>: группы и статики одной командой; владелец, выключивший <code>spawn_static</code> или <code>spawn_group</code>, отказывает и пакету с таким элементом</td></tr>
+<tr><td><code>caps::DESTROY_WEAPON</code></td><td><code>destroy</code> оружия в полёте и катапультировавшегося пилота по Eid</td></tr>
+<tr><td><code>caps::DESTROY_SCENERY</code></td><td><code>destroy</code> объекта карты: не сделано (<code>NOT_IMPLEMENTED</code>)</td></tr>
+<tr><td><code>caps::QUERY_LAND_HEIGHT</code>, <code>caps::SERVER_SEND_CHAT</code>, ...</td><td>виды запросов и управления сервером</td></tr>
+<tr><td><code>caps::DCS_CALL</code>, <code>caps::DCS_BATCH</code></td><td>универсальный вызов DCS целиком (<a href="dcs.html">Вызовы DCS</a>)</td></tr>
+<tr><td><code>caps::call::mission::LAND_GET_HEIGHT</code> = <code>"call:mission:land.getHeight"</code></td><td>одна функция каталога DCS API; генерируются из каталога</td></tr>
+</tbody></table>
+</div>
+<h2 id="состояния">Состояния<a class="anchor" href="#состояния" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Состояние</th><th>Значит</th></tr></thead><tbody>
+<tr><td><code>AVAILABLE</code></td><td>работает</td></tr>
+<tr><td><code>NOT_IMPLEMENTED</code></td><td>объявлено, но не сделано; или слой Lua в DCS старше движка (<code>sortie install</code>)</td></tr>
+<tr><td><code>MISSING_IN_DCS</code></td><td>нужной функции нет в запущенной сборке DCS</td></tr>
+<tr><td><code>DISABLED</code></td><td>выключено владельцем движка (<code>engine.toml</code>), выключено по умолчанию (мутаторы каталога, <code>dev_eval</code> без <code>--dev-eval</code>) или это непроверенное чтение каталога</td></tr>
+<tr><td><code>QUARANTINED</code></td><td>DCS упал, пока выполнялась операция этого вида (у универсального вызова — эта функция каталога), или мост отключил её после трёх сбоев</td></tr>
+</tbody></table>
+</div>
+<p>У каждой записи есть <code>note</code> — почему она не <code>AVAILABLE</code>. Поле <code>live</code> пока везде <code>UNVERIFIED</code>:
+автоматические проверки на живом DCS ещё не записывают результатов, поэтому «есть в сборке»
+не значит «проверено в бою».</p>
+<h2 id="требовать-заранее">Требовать заранее<a class="anchor" href="#требовать-заранее" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">#[sortie::mission(api_rev = 1, requires = [caps::SPAWN_STATIC, caps::DRAW])]
+pub async fn needs_statics(ctx: Ctx&lt;MyMission&gt;, _start: Start) -&gt; sortie::Result&lt;()&gt; {
+    // Сюда логика попадает, только если обе возможности AVAILABLE: иначе движок отказал в
+    // Attach (AttachRejected.missing_capabilities), и миссия-функция не запускалась.
+    ctx.end_session(Outcome::Draw).await
+}
+</code></pre></div>
+<p><code>requires</code> уходит в <code>Attach.required_capabilities</code>. Движок проверяет список при подключении и
+ещё раз перед <code>Start</code> (пробник новой сборки DCS мог что-то убрать). Отказ называет каждую
+недостающую возможность с её состоянием. Против движка 0.1.0, который таблицы не знает, логика
+с <code>requires</code> не запускает миссию-функцию и записывает ошибку.</p>
+<h2 id="читать-таблицу">Читать таблицу<a class="anchor" href="#читать-таблицу" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let t = ctx.capabilities();
+let junk = t.is_available(caps::REMOVE_JUNK);
+// Почему нет (MISSING_IN_DCS, DISABLED, QUARANTINED...): заметка движка.
+let why = t.note(caps::REMOVE_JUNK).to_owned();
+let height = t.state(caps::call::mission::LAND_GET_HEIGHT);
+let quarantined: Vec&lt;&amp;str&gt; = t
+    .in_state(v1::CapabilityState::Quarantined)
+    .map(|c| c.name.as_str())
+    .collect();
+</code></pre></div>
+<p><code>ctx.capabilities()</code> — копия таблицы на этот момент: таблица из <code>Start</code>, обновлённая событиями
+<code>CapabilityChanged</code>. Эти события приходят логике с <code>event_rev = 1</code>; с <code>event_rev = 0</code> таблица
+остаётся такой, какой была в <code>Start</code>. Имя, которого движок не знает, читается как
+<code>NOT_IMPLEMENTED</code>. Одна запись без копии всей таблицы — <code>ctx.capability(имя)</code>:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">if let Some(c) = ctx.capability(caps::MENU_TREE) {
+    // Состояние, заметка, id живых проверок (PLY-LC1, ...), с какой ревизии API.
+    let _ = (c.state, c.note, c.live_checks, c.since_api_rev);
+}
+</code></pre></div>
+<p>Отказ по возможности несёт её имя в <code>Error::capability()</code>:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">match ctx.dcs().land().height(MapPoint::new(0.0, 0.0)).await {
+    Ok(h) =&gt; Ok(Some(h)),
+    // Этот путь на карантине после падения DCS: capability() = Some(&quot;call:mission:...&quot;).
+    Err(e @ sortie::Error::Quarantined(_))
+        if e.capability() == Some(caps::call::mission::LAND_GET_HEIGHT) =&gt;
+    {
+        Ok(None)
+    }
+    Err(e) =&gt; Err(e),
+}
+</code></pre></div>
+<h2 id="откуда-движок-это-знает">Откуда движок это знает<a class="anchor" href="#откуда-движок-это-знает" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li><strong>Пробник.</strong> Когда слой Lua в DCS присылает таблицы чисел, движок спрашивает его, какие
+функции каталога и функции типизированных операций есть в этой сборке и какие операции слоя
+загружены. Ничего не вызывается, только поиск по имени. Отсутствующее становится
+<code>MISSING_IN_DCS</code>, недостающая операция слоя — <code>NOT_IMPLEMENTED</code>. Слой старше пробника (в
+Saved Games остался прежний слой, <code>sortie install</code> не запускали) отвечает, что такой операции
+нет; движок считает его слоем 0.1.0, и все операции волны 1 (<code>spawn_static</code>, <code>draw</code>,
+<code>menu_tree</code>, <code>remove_junk</code>, <code>dcs_call</code>, <code>dcs_batch</code>, все <code>call:*</code>) — <code>NOT_IMPLEMENTED</code> с
+подсказкой «run <code>sortie install</code>». Логика с <code>requires = [...]</code> получает отказ при
+подключении, а не ошибку на первой команде.</li>
+<li><strong>Владелец движка.</strong> <code>engine.toml</code>: <code>[calls]</code> включает и выключает функции каталога,
+<code>[operations] disable = ["remove_junk"]</code> выключает типизированные операции (они <code>DISABLED</code>,
+команда — <code>Error::Rejected</code> с <code>capability()</code>).</li>
+<li><strong>Карантин.</strong> Если связь с DCS оборвалась без прощания, пока выполнялись команды, а следующий
+мост пришёл от другого процесса DCS (то есть DCS упал и его запустили снова), вид операции,
+которая выполнялась, уходит на карантин (у универсального вызова — одна функция каталога,
+см. ниже). Считаются и команды логики, и собственные задания
+реестра движка: перенос дерева меню за слотом группы, снятие рисунка по <code>ttl</code>. Подозрение
+записывается в базу сразу при обрыве, поэтому перезапуск движка до возвращения DCS его не
+теряет. Карантин хранится в базе движка, переживает перезапуск движка, виден в <code>sortie status</code> (заметка <code>quarantine</code> в <code>Engine.Health</code>) и снимается владельцем: <code>sortie caps --release &lt;имя&gt;</code> (токен admin) или <code>Engine.ReleaseQuarantine</code>. Если тот же процесс DCS просто
+переподключился, карантина нет. Операция, которую мост сам отключил после трёх сбоев за 10
+минут, тоже <code>QUARANTINED</code>, но только до перезапуска DCS (так её отключает и мост); снять её
+командой нельзя, и <code>sortie caps --release</code> так и пишет: «still QUARANTINED …: … back after
+DCS restarts».</li>
+<li><strong>Типизированные операции на карантине.</strong> Карантин <code>message</code>, <code>set_task</code>, <code>spawn_static</code>,
+<code>draw</code>, <code>menu_tree</code> и других — до снятия владельцем или до другой сборки DCS (обновление DCS
+снимает его само). Сборка DCS одна на процесс DCS: движок берёт её у связи хуков, а если та
+её не назвала — у связи миссии. Окружение, в котором нет глобала с версией, сообщает
+<code>unknown</code>; это слово сборкой не считается, поэтому такая связь карантин не снимает и не
+мешает ему появиться (какие глобалы есть в каждом окружении настоящего DCS, не измерено).
+Ту же сборку процесса отдают <code>Engine.Capabilities</code>, <code>Engine.Version</code> и <code>sortie status</code>
+(<code>unknown</code> там — только пока ни одна связь процесса сборку не назвала).
+Он действует только на команды ревизии API 1 и новее: в 0.1.0 карантина
+после падения не было, поэтому команды логики 0.1.0 (ревизия 0) его и не вызывают, и не
+получают отказа. Пока вид на карантине, реестр ничего не делает в DCS сам: дерево меню не
+переезжает за слотом и остаётся <code>SUSPENDED</code>, рисунок с истёкшим <code>ttl</code> остаётся
+зарегистрированным, а запись реестра этого вида (даже такая, что не требует вызова DCS,
+например дерево для группы без игроков) получает <code>Error::Quarantined</code>.</li>
+</ul>
+<h3 id="карантин-функции-каталога">Карантин функции каталога<a class="anchor" href="#карантин-функции-каталога" aria-label="Ссылка на этот раздел">#</a></h3>
+<p>У универсального вызова карантин — по функции DCS, а не по виду операции. Перед каждым вызовом
+(и внутри пакета) слой Lua записывает его ключ <code>call:&lt;окружение&gt;:&lt;путь&gt;</code> в журнал сбоев моста
+(<code>Logs/sortie-bridge.journal</code> в Saved Games), и мост успевает записать его на диск до самого
+вызова. Если DCS упал, мост следующего процесса DCS передаёт движку последний ключ журнала, и
+на карантин уходит только эта функция: <code>call:mission:land.getHeight</code> становится
+<code>QUARANTINED</code>, логика получает один <code>CapabilityChanged</code>, а вызов этой функции (один или в
+пакете) отклоняется с <code>Error::Quarantined</code>, <code>capability() = Some("call:mission:...")</code>, не
+доходя до DCS. <code>dcs_call</code>, <code>dcs_batch</code>, другие функции каталога и типизированные операции
+остаются <code>AVAILABLE</code>. Если журнал не назвал вызов (DCS упал до первой записи, файл не удалось
+записать, мост старше журнала), на карантин уходят все функции пакетов, которые выполнялись;
+заметка говорит почему. Это касается и пакета, на который DCS уже ответил, если ответ ещё не
+дошёл до движка: запись журнала «вызова нет» не называет команду, и отличить такой пакет
+движок не может. Журнал называет и вызов-испытание, который делает сам движок (о нём ниже):
+если DCS упал внутри него, испытание считается проваленным, а всё остальное, что было в
+полёте, на карантин не уходит. Три сбоя моста на одной функции за 10
+минут (ошибка мимо <code>pcall</code> слоя, паника моста, вызов дольше секунды) тоже отправляют её на
+карантин, а мост отказывает в ней до перезапуска DCS.</p>
+<p>Медленный вызов — не падение. Если все три сбоя — только вызовы дольше секунды (сторожевой
+таймер моста считает время от записи в журнал до возврата, вместе с упаковкой ответа и
+чужими обработчиками событий внутри вызова), мост и движок отказывают в этой функции лишь до
+конца этого процесса DCS: возможность <code>QUARANTINED</code>, заметка говорит <code>Slow, not a crash</code>, в
+хранилище ничего не записывается. После перезапуска DCS функция снова доступна сама, снимать
+ничего не нужно. Поэтому тяжёлое чтение (<code>coalition.getGroups</code>, <code>world.getAirbases</code>), для
+которого испытания нет, не останется на карантине из-за одной медленной минуты на
+загруженном сервере. Сколько на самом деле занимают самые медленные чтения, ещё не измерено
+(живая проверка UC-6).</p>
+<p>Идентификатор команды может быть любой строкой: длинный или с переводом строки журнал
+записывает в сокращённом виде с хешем, и вызов такой команды называется журналом так же, как
+любой другой. Процесс DCS движок отличает по <code>pid</code> и по метке запуска, которую мост создаёт
+один раз на процесс (Windows выдаёт <code>pid</code> повторно): перезапущенный DCS с тем же <code>pid</code> — это
+другой процесс, а не обрыв связи. Мост без метки сравнивается только по <code>pid</code>, как раньше.</p>
+<p>Ни перезапуск DCS, ни новая сборка DCS, ни перезапуск движка такой карантин не снимают — только
+владелец: <code>sortie caps --release call:mission:land.getHeight</code>. Исключение — испытание: при
+следующем старте миссии документированная функция чтения без получателя (<code>land.getHeight</code>,
+<code>timer.getTime</code>, ...) вызывается один раз с каноническими аргументами каталога; ответ снимает
+карантин (заметка <code>AVAILABLE</code> об этом говорит), ошибка или повторное падение DCS оставляют его
+до решения владельца. Для мутаторов, тяжёлых и админских вызовов, методов объектов и функций с
+пробой испытания нет; заметка называет причину.</p>
+<p>Испытание даётся один раз. Движок запоминает, что функция его прошла, и эта запись переживает
+перезапуск движка. Если та же функция потом снова роняет DCS или мост снова её отключает, она
+остаётся на карантине уже без испытания, пока владелец его не снимет; заметка говорит
+<code>no probation: the path faulted again after it passed a probation …</code>. Снятие карантина
+владельцем стирает и запись (<code>sortie caps --release &lt;имя&gt;</code> стирает её и тогда, когда функция
+сейчас не на карантине), после этого сбой снова считается первым.</p>
+<p>Испытание обходит только карантин своей функции. Оно не отправляется, пока владелец выключил
+универсальный вызов (<code>[operations] disable = ["dcs_call"]</code>), пока на карантине весь
+<code>dcs_call</code>, пока мост отключил его или саму функцию до перезапуска DCS, и пока проба
+показывает, что функции нет в этой сборке DCS. Функция остаётся на карантине, испытание за
+ней сохраняется (<code>probation waits: …</code> в заметке) и пройдёт при первом старте миссии, когда
+вызов возможен. Ответ, из которого видно, что DCS вызов не выполнял (мост ответил <code>DISABLED</code>,
+срок вышел раньше, чем вызов дошёл до DCS), ничего не решает: испытание повторится.</p>
+<p>Почему новая сборка не снимает карантин: сервер, который работает без человека, не должен
+второй раз упасть на том же вызове, пока человек не решил; вызов на карантине вместо этого
+получает понятную ошибку. Чтобы такой карантин не остался незамеченным после обновления DCS,
+движок называет его перенесённым: заметка говорит «recorded on DCS &lt;прежняя сборка&gt;, carried
+over to the running build &lt;текущая&gt;», <code>sortie status</code> (<code>Engine.Health</code>) перечисляет все
+перенесённые карантины, проба <code>wide_probe</code> — тоже (строки <code>UC-6</code>). Все они снимаются одной
+командой <code>sortie caps --release-carried-over</code> (<code>Engine.ReleaseQuarantine</code> с <code>carried_over = true</code>, Python — <code>EngineClient.release_carried_over()</code>). Владелец может вернуть правило
+спецификации: <code>engine.toml [quarantine] clear_calls_on_new_build = true</code> — тогда новая сборка
+DCS снимает и карантин функции каталога (см. <a href="operations.html">Эксплуатация</a>).</p>
+<h2 id="посмотреть">Посмотреть<a class="anchor" href="#посмотреть" aria-label="Ссылка на этот раздел">#</a></h2>
+<p><code>sortie caps</code> печатает всё, что не <code>AVAILABLE</code>, с причиной; <code>--all</code> — всю таблицу, <code>--prefix call:mission:</code> — только часть. Python: <code>EngineClient(...).capabilities(prefix)</code>.</p>
+<p>В тестах FakeDcs: <code>dcs.remove_dcs_function("world.removeJunk")</code> делает сборку DCS без этой
+функции; со следующей загрузки миссии (<code>dcs.restart()</code>) возможность <code>remove_junk</code> —
+<code>MISSING_IN_DCS</code>.</p>
+</article>
+<nav class="pager" aria-label="Соседние страницы">
+<a class="pager-prev" rel="prev" href="dcs-catalog.html"><span class="pager-dir">Назад</span><span class="pager-title">Справочник каталога DCS API</span></a>
+<a class="pager-next" rel="next" href="generator.html"><span class="pager-dir">Дальше</span><span class="pager-title">Сценарий на Python</span></a>
+</nav>
+<p class="page-source"><a href="capabilities.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.2.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import dcs
 import pytest
 
+import sortie_gen
 from sortie_gen import manifest as manifestmod
 from sortie_gen import miz as mizmod
 from sortie_gen._proto.sortie.manifest.v1 import manifest_pb2 as mpb
@@ -118,7 +119,7 @@ def test_manifest_decodes_and_names_every_ident(op_north_build):
     assert [(p.name, p.size, p.airbase) for p in m.player_flights] == [("Blue 1", 2, "Senaki-Kolkhi")]
     assert m.player_flights[0].start == common_pb2.START_TYPE_COLD
     assert m.max_ids.group_id == 2 and m.max_ids.unit_id == 9
-    assert m.tools.generator == "sortie-gen 0.1.0" and m.tools.pydcs == "1.0.0"
+    assert m.tools.generator == f"sortie-gen {sortie_gen.__version__}" and m.tools.pydcs == "1.0.0"
 
 
 def test_manifest_json_and_pb_agree(op_north_build):

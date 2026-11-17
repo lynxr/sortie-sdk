@@ -1,7 +1,7 @@
 //! Both sides: snapshots, deltas, diffs and events.
 
 use sortie_proto::v1;
-use sortie_types::{Coalition, Eid};
+use sortie_types::{Category, Coalition, Eid};
 
 use crate::model::{Airbase, Entity, GroupEntry};
 use crate::{Role, World, WorldError};
@@ -17,6 +17,7 @@ impl World {
             groups: self.groups.values().map(GroupEntry::to_snap).collect(),
             entities: self.entities.values().map(Entity::to_snap).collect(),
             airbases: self.airbases.values().map(Airbase::to_snap).collect(),
+            resources: self.resources().cloned().collect(),
         }
     }
 
@@ -56,6 +57,7 @@ impl World {
             .filter_map(|a| Airbase::from_snap(a, snap.rev))
             .map(|a| (a.eid, a))
             .collect();
+        self.load_resources(&snap.resources, snap.rev);
         self.reindex();
     }
 
@@ -92,6 +94,23 @@ impl World {
                 .filter(|a| a.rev > from_rev)
                 .map(Airbase::to_snap)
                 .collect(),
+            airbase_removals: removed(&self.history.airbases),
+            resource_upserts: self
+                .resources
+                .values()
+                .filter(|r| r.rev > from_rev)
+                .map(|r| r.snap.clone())
+                .collect(),
+            resource_removals: {
+                let log = &self.history.resources;
+                let start = log.partition_point(|(r, _)| *r <= from_rev);
+                log[start..]
+                    .iter()
+                    // A name put again after its removal is in the upserts too: removals are
+                    // applied first, so listing it here is still right.
+                    .map(|(_, id)| crate::resources::key_of(id))
+                    .collect()
+            },
         }
     }
 
@@ -176,6 +195,19 @@ impl World {
                 Airbase::same_state,
                 Airbase::to_snap,
             ),
+            airbase_removals: gone(&self.airbases, &target.airbases),
+            resource_upserts: target
+                .resources
+                .iter()
+                .filter(|(id, r)| self.resources.get(*id).is_none_or(|o| o.snap != r.snap))
+                .map(|(_, r)| r.snap.clone())
+                .collect(),
+            resource_removals: self
+                .resources
+                .keys()
+                .filter(|id| !target.resources.contains_key(*id))
+                .map(crate::resources::key_of)
+                .collect(),
         }
     }
 
@@ -186,7 +218,10 @@ impl World {
             && d.removals.is_empty()
             && d.group_upserts.is_empty()
             && d.group_removals.is_empty()
-            && d.airbase_upserts.is_empty();
+            && d.airbase_upserts.is_empty()
+            && d.airbase_removals.is_empty()
+            && d.resource_upserts.is_empty()
+            && d.resource_removals.is_empty();
         if d.from_rev != self.rev && !empty {
             return Err(WorldError::RevisionMismatch {
                 have: self.rev,
@@ -215,12 +250,64 @@ impl World {
                 self.take_group(eid);
             }
         }
+        // Removals first: an airbase name can be used again by a later spawn in one delta.
+        for r in &d.airbase_removals {
+            if let Some(eid) = Eid::from_u64(*r) {
+                self.take_airbase(eid);
+            }
+        }
         for a in &d.airbase_upserts {
             if let Some(a) = Airbase::from_snap(a, rev) {
                 self.put_airbase(a);
             }
         }
+        self.apply_resource_delta(d, rev);
         Ok(())
+    }
+
+    /// Applies the snaps of a command's `Reply` (taken by the engine at mirror revision
+    /// `world_rev`) as observations: state changes, the revision does not move, and nothing is
+    /// applied when this world is already at or past `world_rev` (its state is newer). Only a
+    /// replica takes replies; on the mirror this does nothing. Returns whether anything
+    /// changed. This is what makes `spawn().await?` followed by a world lookup work before
+    /// the next tick.
+    pub fn apply_reply(&mut self, reply: &v1::Reply, world_rev: u64) -> bool {
+        if self.role != Role::Replica || world_rev == 0 || self.rev >= world_rev {
+            return false;
+        }
+        let rev = self.rev;
+        let mut changed = false;
+        for g in &reply.groups {
+            if let Some(g) = GroupEntry::from_snap(g, rev)
+                && self.groups.get(&g.eid).is_none_or(|o| !o.same_state(&g))
+            {
+                self.put_group(g);
+                changed = true;
+            }
+        }
+        for s in &reply.entities {
+            if let Some((_, c)) = self.upsert_snap(s, rev) {
+                changed |= c;
+            }
+        }
+        for a in &reply.airbases {
+            if let Some(a) = Airbase::from_snap(a, rev)
+                && self.airbases.get(&a.eid).is_none_or(|o| !o.same_state(&a))
+            {
+                self.put_airbase(a);
+                changed = true;
+            }
+        }
+        // A registry command's resource as it is after the command, or what a remove took.
+        if let Some(a) = &reply.resource {
+            for k in &a.removed {
+                changed |= self.resources.remove(&(k.kind, k.name.clone())).is_some();
+            }
+            if let Some(r) = &a.resource {
+                changed |= self.observe_resource(r, rev);
+            }
+        }
+        changed
     }
 
     /// Inserts or replaces an entity from a snap (Eid as given), keeping death final and the
@@ -253,9 +340,12 @@ impl World {
     }
 
     /// Applies an event to the world: participants are upserted from their snaps, Dead /
-    /// UnitLost / Kill (target) / UnitGone mark the entity dead, BaseCaptured changes the
-    /// airbase owner, PlayerEnteredUnit records the player. On a replica this never changes
-    /// the revision (the engine's next delta carries the same facts); on the mirror it bumps
+    /// UnitLost / Kill (target) / UnitGone mark the entity dead (a `Dead` from
+    /// `S_EVENT_PILOT_DEAD` does not: `Event.dcs_event`), BaseCaptured changes the airbase
+    /// owner, PlayerEnteredUnit records the player and an `Unknown` from
+    /// `S_EVENT_PLAYER_LEAVE_UNIT` forgets it (its `ctx.initiator`). Weapons and nameless objects
+    /// the world does not hold (ejected crew) are never added. On a replica this never
+    /// changes the revision (the engine's next delta carries the same facts); on the mirror it bumps
     /// it when something changed. The SDK calls this before user code sees the event.
     pub fn apply_event(&mut self, ev: &v1::Event) {
         use v1::event::Kind;
@@ -263,18 +353,37 @@ impl World {
         let rev = self.change_rev();
         let mut changed = false;
         let mut upsert = |w: &mut World, s: &Option<v1::EntitySnap>| -> Option<Eid> {
-            let (eid, c) = w.upsert_snap(s.as_ref()?, rev)?;
+            let s = s.as_ref()?;
+            // Weapons and ejected crew (nameless objects the world does not hold) are no
+            // entities: the engine names them in its identity table only (spec 5.1).
+            if s.category == Category::Weapon.as_i32()
+                || (s.name.is_empty()
+                    && Eid::from_u64(s.eid).is_none_or(|e| !w.entities.contains_key(&e)))
+            {
+                return None;
+            }
+            let (eid, c) = w.upsert_snap(s, rev)?;
             changed |= c;
             Some(eid)
         };
         let mut deaths = Vec::new();
         let mut place = None;
+        let mut left = None;
         match &ev.kind {
             Some(Kind::Birth(b)) => {
                 upsert(self, &b.initiator);
                 place = b.place.clone();
             }
+            // S_EVENT_PILOT_DEAD is still a `Dead` below event revision 4, but the airframe
+            // lives on: a mirror fact for every client (spec 7.3), so no death here.
+            Some(Kind::Dead(d)) if ev.dcs_event == v1::DcsEvent::PilotDead as i32 => {
+                upsert(self, &d.initiator);
+            }
             Some(Kind::Dead(d)) => deaths.extend(upsert(self, &d.initiator)),
+            // The generic form: a player who left a unit is no longer in it (spec 7.3).
+            Some(Kind::Unknown(u)) if ev.dcs_event == v1::DcsEvent::PlayerLeaveUnit as i32 => {
+                left = u.ctx.as_ref().and_then(|c| upsert(self, &c.initiator));
+            }
             Some(Kind::UnitLost(d)) => deaths.extend(upsert(self, &d.initiator)),
             Some(Kind::Kill(k)) => {
                 upsert(self, &k.initiator);
@@ -304,6 +413,10 @@ impl World {
             Some(Kind::Shot(s)) => {
                 upsert(self, &s.initiator);
             }
+            // The resource is gone; on the mirror the engine has removed it already.
+            Some(Kind::ResourceEnded(e)) if self.role == Role::Replica => {
+                changed |= self.resources.remove(&(e.kind, e.name.clone())).is_some();
+            }
             Some(Kind::Takeoff(t)) => {
                 upsert(self, &t.initiator);
                 place = t.place.clone();
@@ -332,6 +445,14 @@ impl World {
         }
         if let Some(a) = &place {
             self.ensure_airbase(a, rev, &mut changed);
+        }
+        if let Some(eid) = left
+            && let Some(e) = self.entities.get_mut(&eid)
+            && e.player.is_some()
+        {
+            e.player = None;
+            e.rev = rev;
+            changed = true;
         }
         let t = self.model_time;
         for eid in deaths {

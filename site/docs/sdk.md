@@ -6,7 +6,7 @@
 возвращают результат из игры.
 
 Готовый проект — шаблон из [быстрого старта](quickstart.md). Большой пример —
-[examples/op_north](https://github.com/lynxr/sortie-sdk/tree/v0.1.0/examples/op_north)
+[examples/op_north](https://github.com/lynxr/sortie-sdk/tree/v0.2.0/examples/op_north)
 в репозитории SDK.
 
 ## Крейт логики
@@ -237,7 +237,7 @@ cap.push_task(Task::rtb(airbases::NALCHIK)).await?;
 | `Task::cap(зона)` | патруль над зоной; по умолчанию 6000 м и 420 узлов, меняется `.altitude(..)` и `.speed(..)` |
 | `Task::orbit(точка)` | круг над точкой; `.race_track(вторая)` — «ипподром»; по умолчанию 6000 м и 350 узлов |
 | `Task::rtb(аэродром)` | возврат на аэродром |
-| `Task::raw(таблица)` | сырая таблица задачи DCS, без проверок |
+| `Task::raw(таблица)` | сырая таблица задачи DCS; движок отклоняет в ней код Lua, имена файлов и NaN ([проверка сырых таблиц](operations.md#проверка-сырых-таблиц)) |
 
 `push_task` кладёт задачу поверх текущих (`Controller.pushTask`), `set_task` заменяет их
 (`Controller.setTask`). Обе есть только у воздушных групп.
@@ -342,7 +342,8 @@ while let Some(dead) = deaths.next().await {
 `.filter(..)`. Типы событий лежат в `sortie::proto::v1`: `Birth`, `Dead`, `UnitLost`, `Kill`,
 `Hit`, `Shot`, `Takeoff`, `Land`, `BaseCaptured`, `Mark`, `PlayerEnteredUnit`, `UnitGone`,
 `PlayerConnected`, `PlayerDisconnected`, `PlayerChangedSlot`, `ChatMessage`,
-`SimulationPaused`, `SimulationResumed`, `Gap`.
+`SimulationPaused`, `SimulationResumed`, `Gap`, `Unknown` (событие DCS без своего типа, см.
+ниже).
 
 ```rust
 let mut entered = ctx
@@ -385,6 +386,115 @@ while let Some(event) = events.next().await {
 
 `Gap` значит, что часть событий потеряна; мир при этом остаётся точным. Подписчик, который
 отстал больше чем на 1024 события, пропускает самые старые и пишет предупреждение в лог.
+Пропуски в `event.seq` не значат потерю: `seq` — номер в журнале сессии, а подписчик с фильтром
+или с меньшей ревизией событий видит только часть журнала. О потере говорит только `Gap`.
+
+### Какое событие DCS это было
+
+Движок ревизии API 1 называет у каждого события из DCS его запись `world.event`:
+`event.dcs_event()` (`v1::DcsEvent`). Так логика отличает `S_EVENT_DEAD`, `S_EVENT_CRASH` и
+`S_EVENT_PILOT_DEAD` (все три — `Dead`) и `S_EVENT_TAKEOFF` от `S_EVENT_RUNWAY_TAKEOFF` (оба —
+`Takeoff`) без новой ревизии событий. Запись, которой нет в перечислении (новая сборка DCS), —
+`DcsEvent::Unspecified` и её имя в `event.dcs_name`. События движка и хуков — `Unspecified`.
+
+```rust
+// Только обломки: гибель пилота DCS тоже присылает как Dead, а самолёт ещё летит.
+let mut wrecks = ctx
+    .events()
+    .of::<v1::Dead>()
+    .from_dcs(v1::DcsEvent::Dead)
+    .from_dcs(v1::DcsEvent::Crash);
+while let Some((dead, entry)) = wrecks.next_with_dcs_event().await {
+    let name = dead.initiator.map(|u| u.name).unwrap_or_default();
+    eprintln!("{name}: {entry:?}");
+}
+```
+
+`.from_dcs(..)` можно звать несколько раз (подходит любая из записей); против движка 0.1.0
+он не пропустит ничего (там записей нет) и пишет предупреждение.
+
+С API ревизии 1 (`#[sortie::mission(api_rev = 1)]`) гибель пилота больше не делает юнит мёртвым
+в мире логики: DCS присылает её, пока самолёт ещё летит. На ревизии 0 (по умолчанию у макроса)
+`Dead` гибели пилота приходит с `dead = true`, как в 0.1.0, и мир логики считает юнит мёртвым
+навсегда (в мире движка он жив). Выход игрока из юнита (`S_EVENT_PLAYER_LEAVE_UNIT`) убирает
+игрока из `EntitySnap.player` на любой ревизии.
+
+### Остальные события DCS
+
+Событие DCS без своего типа приходит как `v1::Unknown` с полем `ctx` (`v1::EventContext`):
+участники как снимки с Eid (`initiator`, `target`, `weapon`, `place`), `weapon_type`, `text`
+(или комментарий), `pos`, `coalition`, `group_eid`, `idx`, все остальные ключи DCS в `extra`
+(данные, два уровня) и объекты под другими ключами в `extra_objects`. Фильтры `.in_group` и
+`.coalition` смотрят на `ctx.initiator`. `place` — аэродром (`airbase`) или объект (`entity`);
+палуба корабля приходит как аэродром с именем корабля. `foreign = true` — событие поднял
+другой скрипт миссии (например, MOOSE) через `world.onEvent`: в нём только данные, участники
+найдены по их `id_` в мире. `Unknown.fields` — сырая таблица в виде 0.1.0, только прежние ключи
+(новые — в `ctx`).
+
+```rust
+let mut starts = ctx
+    .events()
+    .of::<v1::Unknown>()
+    .from_dcs(v1::DcsEvent::EngineStartup)
+    .coalition(Coalition::Blue);
+while let Some(start) = starts.next().await {
+    let ctx_ = start.ctx.unwrap_or_default();
+    let unit = ctx_.initiator.map(|u| u.name).unwrap_or_default();
+    // Ключи DCS без своего поля — в `extra`, как DCS их прислал.
+    let sub = ctx_
+        .extra
+        .as_ref()
+        .and_then(|x| x.get("subPlace"))
+        .and_then(|v| v.as_f64());
+    eprintln!("{unit} запустил двигатели (subPlace {sub:?})");
+}
+```
+
+В FakeDcs такие события поднимает `dcs.raise_event(FakeEvent::dcs("S_EVENT_ENGINE_STARTUP")
+.initiator("Viper-1").key("comment", ".."))`, событие другого скрипта —
+`FakeEvent::foreign(id)`.
+
+### Оружие и катапультировавшиеся пилоты
+
+Оружие в полёте и катапультировавшиеся пилоты — не сущности мира: их нет в `ctx.world()`, но
+у каждого есть Eid. Ракета, бомба или снаряд получает Eid в первом событии, где DCS её назвала
+(`Shot`), и тот же Eid приходит в `Hit` и `Kill` этого оружия (`weapon.eid`; 0 — в событии нет
+объекта оружия, только `weapon_type`, или в слоте оружия юнит при столкновении). Пилот и
+кресло в `Unknown.ctx` событий катапультирования (`S_EVENT_EJECTION`,
+`S_EVENT_LANDING_AFTER_EJECTION`) — снимки с Eid; кресло и пилот — разные объекты DCS с разными
+Eid. Пока DCS ещё знает объект, `ctx.destroy(..)` убирает его по Eid (`Obj::weapon(&w)`,
+`Obj::snap(&s)`; возможность `caps::DESTROY_WEAPON`); потом — `Error::Gone`. Eid оружия
+действует до 30 с после первого попадания (и до 30 мин без событий), Eid пилота — пока его не
+убрали.
+
+```rust
+let mut shots = ctx.events().of::<v1::Shot>();
+let mut hits = ctx.events().of::<v1::Hit>();
+let Some(shot) = shots.next().await else {
+    return Ok(());
+};
+let missile = shot.weapon.unwrap_or_default();
+// Тот же Eid в Hit и Kill этой ракеты.
+while let Some(hit) = hits.next().await {
+    if hit.weapon.as_ref().is_some_and(|w| w.eid == missile.eid) {
+        eprintln!("{} попала", missile.type_name);
+        break;
+    }
+}
+// Следующую ракету — убрать в полёте (учебная тревога).
+if let Some(next) = shots.next().await
+    && let Some(obj) = next.weapon.as_ref().and_then(Obj::weapon)
+{
+    match ctx.destroy(obj).key("drill-missile").await {
+        Ok(()) | Err(Error::Gone(_)) => {} // Gone: уже взорвалась
+        Err(e) => return Err(e),
+    }
+}
+```
+
+Это видно и логике 0.1.0: `WeaponSnap.eid` больше не 0. В FakeDcs — `dcs.shoot(юнит, тип)`
+(возвращает `id_` оружия), `dcs.weapon_hit(id_, цель)`, `dcs.eject(юнит)`,
+`dcs.crew_landed(id_)`, `dcs.weapons()`, `dcs.crew()`.
 
 ## Меню F10
 
@@ -428,7 +538,8 @@ ctx.spawn(async move |ctx| {
 ```
 
 Нажатия копятся с момента, когда движок подтвердил команду меню, поэтому ранние нажатия не
-теряются. Убрать команду:
+теряются. Меню из нескольких пунктов и подменю, в том числе для одной группы, строит
+`ctx.menus()` (ревизия API 1, страница [Деревья меню F10](menus.md)). Убрать команду:
 
 ```rust
 info.remove().await?;
@@ -596,6 +707,8 @@ my_mission_logic [--engine <url>] [--build-id <id>] [--logic <name>] [--dev]
 | символы | `sortie::include_scenario!(name)`, `build.rs` с `sortie_build::scenario(..)` |
 | группы | `ctx.group(..)`, `group.set_option(..)`, `push_task`, `set_task`, `destroy` |
 | спавн | `ctx.spawn_group(templates::X)`, `.named`, `.from_airbase`, `.at` |
+| статики, уничтожение, мусор (ревизия 1) | `ctx.spawn_static(тип, страна)`, `ctx.destroy(obj)`, `ctx.remove_junk(объёмы)` ([Объекты](objects.md)) |
+| пакет спавнов (ревизия 1) | `ctx.spawn_batch()`, `.group(..)`, `.static_object(..)`, `.add_group(..)`, `.add_static(..)`, `.stop_on_error()` ([Объекты](objects.md#пакет-спавнов)) |
 | сообщения, дым, флаги | `ctx.message(..)`, `ctx.smoke(..)`, `ctx.flag(..).set(..)` / `.get()` |
 | меню | `ctx.menu(coalition)`, `.per_group()`, `.command(menus::X)`, `presses()`, `remove()` |
 | время | `ctx.sleep`, `ctx.timer`, `ctx.model_time`, `ctx.paused` |
@@ -604,4 +717,5 @@ my_mission_logic [--engine <url>] [--build-id <id>] [--logic <name>] [--dev]
 | задачи | `ctx.spawn(..)` |
 | состояние | `ctx.state`, `ctx.state_in`, `ctx.once`, `ctx.once_per_turn` |
 | итоги | `ctx.report().set(..)`, `ctx.end_session(..)`, `ctx.until_session_end()` |
-| ошибки | `sortie::Error`, `code()`, `help()`, `report()` |
+| ошибки | `sortie::Error`, `code()`, `help()`, `report()`, `capability()` |
+| возможности (ревизия 1) | `ctx.capabilities()`, `#[sortie::mission(requires = [caps::X])]`, `sortie::caps` ([Возможности движка](capabilities.md)) |

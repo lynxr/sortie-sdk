@@ -138,6 +138,7 @@ fn apply(w: &mut World, op: &Op) -> Option<v1::Event> {
                     kind: Some(v1::event::Kind::Birth(v1::Birth {
                         initiator: Some(snap),
                         place: None,
+                        synthesised: false,
                     })),
                     ..Default::default()
                 });

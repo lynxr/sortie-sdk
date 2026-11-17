@@ -67,7 +67,7 @@ Tasks (`Task` is in the prelude):
 | `Task::cap(zones::X).altitude(Length).speed(Speed)` | 6000 m, 420 kt |
 | `Task::orbit(MapPoint).altitude(..).speed(..).race_track(MapPoint)` | 6000 m, 350 kt, a circle without `race_track` |
 | `Task::rtb(airbases::X)` | |
-| `Task::raw(sortie::proto::LuaValue)` | a DCS task table, not checked |
+| `Task::raw(sortie::proto::LuaValue)` | a DCS task table; the engine refuses Lua code in it (`Script`, `ScriptFile`, a `condition` string, a `file` string: `sortie::rejected`, capability `dev_eval`) and NaN or infinities (`sortie::invalid`) |
 
 Units and geometry: `m`, `km`, `ft`, `nm` → `Length`; `kts`, `mps`, `kmh` → `Speed`; `secs`,
 `mins`, `hours` → `Duration`. `MapPoint { north, east }` (metres, map axes): `.alt(Length)` →
@@ -212,7 +212,58 @@ ctx.spawn(async move |ctx| {
 - Each event is applied to the replica before your code sees it: in a `Dead` handler the unit
   already counts as dead.
 - A stream sees events from the moment it was created. A stream that falls more than 1024
-  events behind skips the oldest and logs a warning.
+  events behind skips the oldest and logs a warning. Holes in `ev.seq` are not losses (a
+  filtered stream sees part of the journal); only `Gap` reports a loss.
+- Which DCS event it was (engine API revision 1): `ev.dcs_event()` (`v1::DcsEvent`, the
+  `world.event` entry by name; `Unspecified` for engine and hook events, and for an entry the
+  enum lacks, which `ev.dcs_name` then names). `Dead` comes from DEAD, CRASH and PILOT_DEAD,
+  `Takeoff` from TAKEOFF and RUNWAY_TAKEOFF, `Land` from LAND and RUNWAY_TOUCH: pick with
+  `.from_dcs(v1::DcsEvent::Crash)` (repeatable: any of) and read the entry with
+  `.next_with_dcs_event()` → `Option<(E, v1::DcsEvent)>`. Against a 0.1.0 engine
+  `.from_dcs` matches nothing. From API revision 1 (`#[sortie::mission(api_rev = 1)]`) a
+  pilot's death no longer kills the unit in the world; at revision 0 (the macro's default) the
+  `Dead` of PILOT_DEAD reads `dead = true` as in 0.1.0 and the logic's world holds the unit
+  dead for good. A player leaving a unit clears `EntitySnap.player` (every revision).
+- Weapons and ejected crew are no world entities but have Eids (engine API revision 1, every
+  revision of the logic): `Shot`, `Hit` and `Kill` of one weapon carry the same `weapon.eid`
+  (0: no weapon object, only `weapon_type`, or a unit in a collision); pilots and seats in the
+  `ctx` of `S_EVENT_EJECTION` / `S_EVENT_LANDING_AFTER_EJECTION` are snaps with Eids (seat and
+  pilot differ). `Obj::weapon(&w)` / `Obj::snap(&s)` (`Option<Obj>`, `None` for Eid 0) select
+  one for `ctx.destroy(..)` while DCS still has it (`caps::DESTROY_WEAPON`); afterwards, or 30 s
+  after a weapon's first hit, `Error::Gone`. No `UnitGone` follows.
+- Every other DCS event is `v1::Unknown` with `ctx: Option<v1::EventContext>`: `initiator`,
+  `target` (snaps with Eids; Eid 0 for an object the engine cannot name), `weapon`, `place`
+  (`airbase`, also for a ship's deck, or `entity`), `weapon_type`, `text` (or the comment),
+  `pos`, `coalition`,
+  `group_eid`, `idx`, `extra` (every other key as data, two levels), `extra_objects` (objects
+  under other keys), `foreign` (another script raised it through `world.onEvent`: data only).
+  `.in_group` / `.coalition` test `ctx.initiator`. `fields` is the raw table in the 0.1.0
+  shape, the 0.1.0 keys only: read new keys from `ctx`.
+
+<!-- snippet: skills-logic-events-dcs -->
+```rust
+// Wrecks only: DCS also sends the pilot's death as a Dead while the aircraft still flies.
+let mut wrecks = ctx
+    .events()
+    .of::<v1::Dead>()
+    .from_dcs(v1::DcsEvent::Dead)
+    .from_dcs(v1::DcsEvent::Crash);
+let mut starts = ctx
+    .events()
+    .of::<v1::Unknown>()
+    .from_dcs(v1::DcsEvent::EngineStartup);
+if let Some((dead, entry)) = wrecks.next_with_dcs_event().await {
+    let name = dead.initiator.map(|u| u.name).unwrap_or_default();
+    eprintln!("{name}: {entry:?}");
+}
+if let Some(start) = starts.next().await {
+    let who = start.ctx.and_then(|c| c.initiator).map(|u| u.name);
+    eprintln!("engines started: {who:?}");
+}
+```
+
+- FakeDcs: `dcs.raise_event(FakeEvent::dcs("S_EVENT_ENGINE_STARTUP").initiator("Viper-1")
+  .key("comment", ".."))`; another script's event: `FakeEvent::foreign(id)`.
 
 ## Menus
 
@@ -264,6 +315,74 @@ ctx.spawn(async move |ctx| {
   `Presses` stream. `menu.remove()` removes the command. Adding the same command twice changes
   nothing in DCS.
 
+## Menu trees
+
+`ctx.menus()` builds F10 radio menu trees by name (API revision 1): commands and sub-menus for
+everyone (the default), a coalition or one group. A tree is a resource of the session like a
+drawing; a put with an existing name brings that tree to the new spec.
+
+<!-- snippet: skills-api-menu-trees -->
+```rust
+#[sortie::mission(api_rev = 1, event_rev = 1)] // trees: API rev 1; their presses: event rev 1
+pub async fn run(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
+    // One group's tree: SUSPENDED until a player takes a slot of "Viper 1"; the engine installs
+    // it for the group's id, removes it when the slot empties and follows a dynamic slot.
+    let jtac = ctx
+        .menus()
+        .tree("jtac/viper-1")
+        .to(Audience::group(GroupSel::name("Viper 1")))
+        .under(["JTAC"])
+        .command("check-in", "Check in")
+        .submenu("Smoke", |s| {
+            s.command_arg("smoke-red", "Red", "red")
+                .command_arg("smoke-green", "Green", "green")
+        })
+        .await?;
+    let mut presses = jtac.presses();
+    while let Some(p) = presses.next().await {
+        if p.item.starts_with("smoke-") {
+            let color = if p.arg == "red" {
+                SmokeColor::Red
+            } else {
+                SmokeColor::Green
+            };
+            ctx.smoke(zones::OBJECTIVE.center(), color).await?;
+        }
+        if let Some(group) = p.group {
+            ctx.message(group).text("Copy").await?;
+        }
+    }
+    ctx.menus().remove("jtac/viper-1").await?;
+    ctx.end_session(Outcome::Draw).await
+}
+```
+
+- `tree(name)` then `.to(..)`, `.under([..])`, `.command(id, label)`, `.command_arg(id, label,
+  arg)`, `.manifest_command(id, menus::X)`, `.submenu(label, |s| ..)`, `.overflow(..)`,
+  `.ttl(..)`; the result is `MenuTree { change, dcs_calls, resource, warnings }` with
+  `.presses()` and `.is_suspended()`. A press is `TreePress { tree, item, arg, ident, group,
+  coalition, model_time }`; `ctx.menus().presses(name)` reads presses of any tree.
+- DCS shows 10 entries per level. A longer level of the tree is paged by default
+  (`sortie::menu_tree::Overflow::Page`): 9 entries and a sub-menu `More...` with the rest,
+  paged the same way. The page of the tree's root level reads `More... (<tree name>)`: that
+  level is shared with other trees and DCS finds an entry by its label path, so each tree's
+  page there needs its own label; pick tree names a player can read. Do not split a long list
+  into sub-menus by hand for that, and do not look for the page in presses: a press of an
+  entry on a page carries that entry's own `item` and `arg`. Pages cost DCS calls, not nodes.
+  `.overflow(Overflow::Reject)` refuses such a level instead.
+- `Error::Invalid`: two entries with one label on one level, an entry labelled like a page
+  of its level (`More...`, on the root level also `More... (<tree name>)`) on a level that
+  pages, more than 10 entries on a level with `Overflow::Reject`, more than 200 nodes, a
+  command without an id.
+- `change`: `Unchanged` (equal, no DCS call), `Updated` (only the changed entries and the ones
+  after them on their level are sent again), `Replaced` (another audience or `under`).
+- A group tree follows the slot: SUSPENDED while nobody occupies the group, installed by the
+  engine when a player takes a slot, removed when it empties, installed again for a dynamic
+  slot's new group id. A group given by Eid ends with `ResourceEnded{SOURCE_GONE}` with the
+  group.
+- `remove(name)`, `remove_prefix(p)`, `clear()`; menus go when the session ends. The 0.1.0
+  `ctx.menu(..)` commands are registered too (`sortie:menu/..` in `ctx.world().resources()`).
+
 ## Flags
 
 <!-- snippet: skills-logic-flags -->
@@ -307,6 +426,327 @@ and the generator reads them.
 
 `ctx.report().set(key, value)` writes a key of the session's results (`scenario.py results`);
 it does not wait, and a failure shows up as a logic error.
+
+## DCS calls
+
+`ctx.dcs()` reaches the DCS functions of the DCS API catalog (`catalog/dcs_api.toml` in the
+SDK repository; the full list is `docs/dcs-catalog.md`) through generated, typed wrappers, for
+what has no typed operation yet. The logic declares `#[sortie::mission(api_rev = 1)]`, else
+every call is `Error::Revision` and nothing is sent.
+
+<!-- snippet: skills-api-dcs -->
+```rust
+#[sortie::mission(api_rev = 1)] // ctx.dcs() is API revision 1
+pub async fn run(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
+    let dcs = ctx.dcs();
+    // Reads: no key (a key on a read is Error::Invalid).
+    let surface = dcs.land().surface_type(zones::OBJECTIVE.center()).await?; // "ROAD"
+    let sam: Vec<DcsObject> = dcs.group(groups::SAM_NORTH).units().await?;
+    let fuel = dcs.unit(&sam[0]).fuel().await?;
+    // Mutators: off until the engine owner enables them; always keyed.
+    match dcs
+        .airbase(airbases::MAYKOP)
+        .set_coalition(Coalition::Blue)
+        .key("maykop-blue")
+        .await
+    {
+        Ok(()) | Err(Error::Rejected(_)) => {} // Rejected: switched off in engine.toml
+        Err(e) => return Err(e),
+    }
+    let lase: Handle = dcs
+        .spots()
+        .create_laser(
+            &sam[0],
+            None,
+            zones::OBJECTIVE.center().alt(m(0)),
+            Some(1688.0),
+        )
+        .key("lase-1")
+        .await?;
+    dcs.spot(lase).destroy().key("lase-1-off").await?;
+    let _ = (surface, fuel);
+    ctx.end_session(Outcome::Draw).await
+}
+```
+
+- Families: `land()`, `atmosphere()`, `timer()`, `coord()`, `coalition()`, `world()`, `env()`,
+  `effects()`, `sounds()`, `spots()`, `net()` and `server()` (hooks); methods of an object:
+  `unit(u)`, `group(g)`, `static_object(o)`, `airbase(a)`, `warehouse(w)`, `controller(c)`,
+  `spot(handle)`, `object(o)`. A target is a scenario symbol, an `Eid`, a `Group`, a world
+  entity, a `sortie::sel` selector or a `DcsObject` an earlier call returned. Inherited methods
+  (`point()`, `coalition()`) are in every class's family; a method runs through the class of
+  its object, as `unit:getCoalition()` does (the catalog path `CoalitionObject.getCoalition`
+  is the entry's name: DCS has no `CoalitionObject` table).
+- Each catalog entry is a capability `call:<env>:<path>` (state, signature, live check):
+  `ctx.capability(caps::call::mission::LAND_GET_HEIGHT)` finds one ("Capabilities" below).
+- Hooks-environment calls (`net()`, `server()`) need a running mission session in this release
+  (wave 1), like mission calls: without one they are `sortie::unavailable`.
+- Results are typed: enum numbers as their key (`"ROAD"`), coalitions as `Coalition`, points as
+  `Vec3` / `MapPoint`, objects as `DcsObject { class, eid, name, type_name, .. }`, spots as
+  `Handle`, tables as `sortie::dcs::Value`. A number DCS returns as a string (ids in 2.9.31)
+  is still an `f64` where the catalog says `number` (`static_object(o).id()`).
+- Point arguments follow the catalog entry: `vec2` is a `MapPoint` (`land().height(p)`), `vec3`
+  a `Vec3` in DCS axes, x north, y up, z east (`land().profile(a, b)`: DCS reads x and z).
+- Reads (`read`, `heavy`) take no key: a key on a read is `Error::Invalid`. Mutators (`mutate`)
+  are off until the engine owner enables them in `<Saved Games>/Sortie/engine.toml` (`[calls]
+  enable = [..]`) or runs `sortied --dev`; until then `Error::Rejected` naming the capability
+  `call:mission:<path>`. In `enable` and `disable` a method is named by its catalog entry, the
+  class that defines it (`Object.destroy`, not `Unit.destroy`): the entry is one for every
+  class, and an inherited name stops `sortied` at start. A mutator repeats its effect when run
+  again: key it. A repeat with the same key does not reach DCS and returns the stored result,
+  objects and handles included (a replayed `create_laser(..).key("lase-1")` gives the same
+  `Handle`); only a result above 64 KiB is stored without its values, and its repeat is
+  `Error::ResultNotKept`.
+- The engine checks every call against the catalog: wrong arguments are `Error::Invalid` with
+  the entry's signature, an argument out of the entry's range (explosion power above 5000) too.
+  A sound file is a path inside the `.miz` (relative, no `..`).
+- A big table comes back whole or as `Value::Cut(n)` (its key count) with `truncated` on the
+  `Return`: deeper than `.max_depth(n)` (6 by default), after 50 000 table entries of one call,
+  or when the answer of the whole command, every call of a batch together, would pass 150 000
+  values (objects count with their description). A wrapper that expects a list then fails
+  with `Error::Invalid`; split a big read into several commands.
+- An object, id or name argument must be of the class the entry declares, also when it is a
+  `Handle` or the result of an earlier call of a batch: a spot is no `object:Object`, a
+  unit's id no group id. The wrong class is `Error::Invalid`, and DCS is not called with it.
+- The world replica does not learn what a mutator changed until the next sweep (airbase owner,
+  destroyed objects). Prefer the typed operation where one exists: such wrappers are
+  `#[deprecated]` and name it (`ctx.smoke(..)` for `effects().smoke(..)`).
+- The untyped call by path is behind the cargo feature `dcs-raw`:
+  `ctx.dcs().call("land.getHeight").arg(sortie::dcs::arg::vec2(p))`, and `ctx.dcs().batch()`.
+
+## Objects
+
+Static objects, cargo and FARPs, destroying any object, removing junk: typed operations of API
+revision 1 (the engine keeps the name policy and the spawn gate and tells the world at once).
+
+<!-- snippet: skills-api-objects -->
+```rust
+#[sortie::mission(api_rev = 1)] // spawn_static, destroy, remove_junk are API revision 1
+pub async fn run(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
+    let p = zones::OBJECTIVE.center();
+    // The engine fills the DCS category and shape from its type table.
+    let depot = ctx
+        .spawn_static(".Ammunition depot", "RUSSIA")
+        .named("Depot")
+        .at(p, 0.0)
+        .on_conflict(OnConflict::Keep) // a rerun gets the live depot back
+        .key("depot")
+        .await?;
+    // A working FARP is an airbase: `heliport` is required for heliport types.
+    let farp = ctx
+        .spawn_static("FARP", "USA")
+        .named("FARP Alpha")
+        .at(p.toward(0.0, m(3_000)), 0.0)
+        .heliport(Heliport::new().callsign("Dallas"))
+        .key("farp-alpha")
+        .await?;
+    // Destroy any unit, static or cargo; a unit with a player needs .allow_player().
+    match ctx
+        .destroy(Obj::static_object("Depot"))
+        .key("depot-gone")
+        .await
+    {
+        Ok(()) | Err(Error::Gone(_)) => {}
+        Err(e) => return Err(e),
+    }
+    let junk = ctx
+        .remove_junk([Volume::sphere_on_ground(p, 1_000.0)])
+        .await?;
+    ctx.report().set("farp", farp.airbase.is_some());
+    ctx.report().set("junk", junk.total);
+    let _ = depot.kept;
+    ctx.end_session(Outcome::Draw).await
+}
+```
+
+- `ctx.spawn_static(type, country)` -> `SpawnedStatic { eid, name, airbase, kept }`; place it with
+  `.at(MapPoint, heading)` or `.on_unit(ship, forward_m, right_m, angle)`. The static is in
+  `ctx.world()` when the command returns and a `Birth` with `synthesised = true` announces it
+  (DCS raises none for statics). Key it: in dev mode it is refused without a key.
+- The name is the identity (units and statics share it). Default `OnConflict::Fail` ->
+  `Error::NameConflict`; `Keep` answers a live static of the same type (`kept = true`, a FARP
+  with its `airbase`); `Replace` destroys a live static (its `UnitGone` says `Replaced`) and
+  spawns. If DCS did not remove the old static (reported for FARPs, not measured), `Replace`
+  is `Error::Lua` ("DCS did not remove ..") and nothing is added.
+- The engine's type table (from pydcs) only supplies the default category and shape;
+  `.category(..)` / `.shape(..)` win over it. Whether DCS knows the type is decided by DCS
+  (`getDescByName`): an unknown type is `Error::Invalid`. A type the table lacks (a mod) needs
+  both `.category(..)` and `.shape(..)` (unit categories need no shape); with one missing it is
+  `Error::Invalid` naming the missing field. Heliport
+  types need `.heliport(..)`; `.cargo(mass, liftable)` needs a cargo type.
+- `ctx.destroy(obj)` takes an `Eid`, a world entity or `Obj::{unit, static_object, weapon,
+  snap}` (a weapon in flight or an ejected pilot by its event Eid). A unit a player occupies is
+  `Error::Rejected` unless `.allow_player()` (also on `group.destroy()` with API revision 1).
+  Scenery is `Error::Unavailable`. The world gets `UnitGone` with `Despawned` (not for weapons
+  and pilots: no entities); a FARP's airbase ends with its static. Removing a FARP is not
+  promised: DCS is reported not to remove one with `destroy()` (not measured). The Lua layer
+  looks again one DCS frame after it destroyed a static or cargo; when DCS still has it,
+  `ctx.destroy` is `Error::Lua` ("DCS did not remove .."), no `UnitGone` comes and the static
+  and its airbase stay alive in the world. FakeDcs: `dcs.survives_destroy(name, true)`.
+- `ctx.remove_junk(volumes)` (1 to 16) -> `JunkRemoved { total, per_volume }`. DCS volume types
+  and map circles only; a polygon is `Error::Invalid`, never widened. Safe to repeat.
+
+Many spawns at once (a campaign restore) are one `ctx.spawn_batch()` command with one key:
+
+<!-- snippet: skills-api-batch -->
+```rust
+// A campaign restore: one command, one key, checked as a whole before anything is sent;
+// the spawn gate spreads the items, the result comes when the last one settled.
+let mut batch = ctx.spawn_batch();
+let cap = batch.add_group(
+    ctx.spawn_group(templates::RED_CAP.named("Red CAP 1"))
+        .from_airbase(airbases::MAYKOP, StartType::Runway),
+);
+for (name, p) in &depots {
+    batch = batch.static_object(
+        ctx.spawn_static(".Ammunition depot", "RUSSIA")
+            .named(name.as_str())
+            .at(*p, 0.0),
+    );
+}
+let out = batch.key("restore-turn-7").await?;
+let cap: Group<Air> = out.get(&cap)?; // typed per item; an item's own error otherwise
+for item in out.items.iter().filter(|i| !i.is_ok()) {
+    ctx.report().set(item.name.as_str(), item.skipped); // nothing is rolled back
+}
+```
+
+- Items are `ctx.spawn_group(..)` / `ctx.spawn_static(..)` builders, not awaited:
+  `.group(..)` / `.static_object(..)` chain, `.add_group(..)` / `.add_static(..)` return a
+  `BatchSlot<T>` for `out.get(&slot)` -> `Group<K>` or `SpawnedStatic`. 1 to 512 items; their
+  own `.key`/`.timeout`/`.after` do not apply.
+- The engine checks the whole batch first (each item as its own command, no two items with one
+  name): one malformed item (unknown template, bad name) fails the command and nothing spawns.
+  A name a live group or static (or a spawn in flight) already holds is that item's own
+  `Error::NameConflict`; the others run (with `.stop_on_error()` the items after it are
+  skipped). Then the spawn gate (2 groups and 24 units per second by default, a static is one
+  of each) spreads the items, sharing the gate in turn with other spawns; each is applied to
+  the world as it answers. The default deadline adds the gate's time.
+- Nothing is rolled back: the command is OK when it ran; `SpawnedBatch::items` holds each
+  item's `eid`, `error()`, `skipped`, `settled`. `.stop_on_error()` sends one item at a time and
+  skips the rest after the first failure (`Error::Rejected`).
+- Lost with the mission link: `Error::Unavailable`. Retry with the same key: until the world
+  snapshot after the reconnect it answers `Unavailable` naming the unknown items; after it the
+  retry resumes the batch (items found by name are `settled`, the rest spawn, none twice).
+- Capability `caps::SPAWN_BATCH`. An engine owner who switched off `spawn_static` or
+  `spawn_group` also refuses a batch that holds such an item (`Error::Rejected`, and
+  `Error::capability()` names the item's operation).
+
+## Map drawings
+
+`ctx.map()` draws on the F10 map: `panel` (a mark with a text box), `line`, `path` (2..=33
+points), `polygon` (3..=64, 4 = the DCS quad), `circle`, `rect`, `arrow`, `text`. Every drawing
+is a named resource of the session (API revision 1); a put with an existing name brings that
+drawing to the new spec.
+
+<!-- snippet: skills-api-map -->
+```rust
+#[sortie::mission(api_rev = 1, event_rev = 1)] // drawings: API rev 1; ResourceEnded: event rev 1
+pub async fn run(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
+    let obj = zones::OBJECTIVE.center();
+    // A put by name: the same spec again sends nothing to DCS.
+    let d = ctx
+        .map()
+        .circle("obj/ring", obj, 4_000.0)
+        .color(Rgba::RED)
+        .line_style(LineStyle::Dashed)
+        .to(Coalition::Blue)
+        .await?;
+    assert!(matches!(d.change, Change::Created | Change::Unchanged));
+    ctx.map()
+        .panel("obj/label", obj, "Objective")
+        .to(Coalition::Blue)
+        .await?;
+    // Ends that were not this logic's own remove.
+    let mut ends = ctx.events().of::<v1::ResourceEnded>();
+    if let Some(e) = ends.next().await {
+        ctx.report().set("ended", e.name);
+    }
+    ctx.map().remove_prefix("obj/").await?;
+    ctx.end_session(Outcome::Draw).await
+}
+```
+
+- `Drawn.change`: `Created`; `Unchanged` (equal spec, no DCS call); `Updated` (colour, fill,
+  circle radius, text and font size of a text, first or last point changed in place, or only
+  the ttl); `Replaced` (anything else: new DCS marks). Commands on one name run in order; no
+  key is needed (a key is ignored).
+- `.color(Rgba)`, `.fill(Rgba)`, `.line_style(LineStyle)`, `.to(..)` (repeatable, at most 8;
+  none = everyone; shapes reach everyone or a coalition, a panel also one group),
+  `.editable()`, `.announce(text)`, `.font_size(n)`, `.ttl(Duration)`.
+- `remove(name)` (`Change::Absent` when there is none), `remove_prefix(p)`, `clear()`: own
+  drawings only unless `.any_owner()`.
+- `ResourceEnded` (needs `event_rev = 1`): `EXPIRED` (ttl), `PLAYER` (a player deleted an
+  editable mark), `LOST` (missing after a reconnect), `REMOVED_BY_OTHER`. The session's end
+  removes everything without an event. `ctx.world().resources()` lists what exists.
+- Mark ids from 7 100 000 up are Sortie's: the raw `ctx.dcs().markup()` wrappers are
+  `#[deprecated]` and refuse such ids.
+
+## Capabilities
+
+One table says what the engine, its Lua layer and the running DCS build can do. Names are the
+constants of `sortie::caps`: typed operations (`caps::SPAWN_STATIC`, `caps::SPAWN_BATCH`,
+`caps::DRAW`, `caps::MENU_TREE`, `caps::REMOVE_JUNK`, `caps::DESTROY_WEAPON`, `caps::DCS_CALL`,
+...) and one per DCS API catalog entry
+(`caps::call::mission::LAND_GET_HEIGHT` = `"call:mission:land.getHeight"`).
+
+<!-- snippet: skills-api-caps -->
+```rust
+#[sortie::mission(api_rev = 1, event_rev = 1, requires = [caps::SPAWN_STATIC])]
+pub async fn run(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
+    // Refused at Attach when spawn_static is not AVAILABLE: no code below runs then.
+    let t = ctx.capabilities(); // Start's table, kept current by CapabilityChanged
+    let report = ctx.report();
+    if !t.is_available(caps::REMOVE_JUNK) {
+        report.set("junk", t.note(caps::REMOVE_JUNK)); // why not
+    }
+    if !t.is_available(caps::call::mission::LAND_GET_SURFACE_TYPE) {
+        report.set("surface", "MISSING_IN_DCS, DISABLED or QUARANTINED");
+    }
+    ctx.end_session(Outcome::Draw).await
+}
+```
+
+- States: `AVAILABLE`; `NOT_IMPLEMENTED` (declared only, e.g. `caps::DESTROY_SCENERY`, or the
+  Lua layer is older than the engine); `MISSING_IN_DCS` (the running DCS build lacks the
+  function); `DISABLED` (the engine owner switched it off, mutators of the catalog by default,
+  `dev_eval` without `--dev-eval`); `QUARANTINED` (DCS crashed while that kind of command ran,
+  or the bridge disabled it after 3 faults). `note` says why. `live` is always `UNVERIFIED`.
+  A typed operation's quarantine ends when DCS runs another build; the build is one per DCS
+  process (the hooks link names it, else the mission link), and a link that reports `unknown`
+  names none, so it neither lifts a quarantine nor keeps one from being recorded.
+- `requires = [..]` goes into `Attach.required_capabilities`; a missing one refuses the attach
+  (`LogicHandle::rejected()` in FakeDcs, `AttachRejected.missing_capabilities`).
+- `CapabilityChanged` updates `ctx.capabilities()` only for `event_rev = 1`.
+- A refusal names its capability: `e.capability()` (`Some("call:mission:land.getHeight")` for
+  a quarantined catalog function). A DCS crash inside a catalog call quarantines that one
+  function, named by the bridge's crash journal (without a journal entry: every function of the
+  batch in flight); `dcs_call`, `dcs_batch`, other functions and typed operations stay
+  `AVAILABLE`. It survives DCS and engine restarts and a new DCS build (then its `note` says
+  "recorded on DCS <old build>, carried over to the running build <new build>"): the engine
+  owner lifts it (`sortie caps --release call:mission:land.getHeight`, or every carried-over
+  one with `sortie caps --release-carried-over`), or, for a documented read without a
+  receiver, a passed probation call at the next mission start. A function gets one probation:
+  if it faults again after a pass, it stays quarantined until the owner releases it. No
+  probation runs while the owner has `dcs_call` switched off or the function is missing in
+  the running DCS build (the `note` says "probation waits: ..."). A function the bridge
+  refuses only because three calls of it took longer than a second (its `note` says "Slow,
+  not a crash") is `QUARANTINED` until DCS restarts and comes back by itself: nothing is
+  stored and nothing needs a release. An owner who sets
+  `engine.toml [quarantine] clear_calls_on_new_build = true` lets a new DCS build lift it too.
+  Code that must keep running
+  checks `t.is_available(caps::call::mission::LAND_GET_HEIGHT)` (the function it needs) and
+  falls back to a typed operation or another function.
+- A typed operation that was running when DCS crashed (`message`, `spawn_static`, `draw`,
+  `menu_tree`, ...) is quarantined on its own until the owner releases it or DCS runs another
+  build; it refuses commands of API revision 1 only (a 0.1.0 logic is not affected). While
+  `menu_tree` or `draw` is quarantined, every put of that kind fails with
+  `Error::Quarantined`, also one that needs no DCS call, and the engine moves no tree with its
+  slot and removes no expired drawing.
+- A Lua layer older than the engine (no `sortie install` after an update) shows every wave-1
+  operation as `NOT_IMPLEMENTED`; `requires = [..]` then refuses the attach.
+- FakeDcs: `dcs.remove_dcs_function("world.removeJunk")` makes the fake DCS build lack it; the
+  table shows `MISSING_IN_DCS` from the next mission load (`dcs.restart().await`).
 
 ## Binary and environment
 

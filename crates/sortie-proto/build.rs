@@ -8,6 +8,7 @@ use prost::Message as _;
 
 const PROTOS: &[&str] = &[
     "sortie/v1/common.proto",
+    "sortie/v1/resources.proto",
     "sortie/v1/world.proto",
     "sortie/v1/events.proto",
     "sortie/v1/commands.proto",

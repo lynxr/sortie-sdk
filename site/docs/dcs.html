@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Вызовы DCS | Sortie SDK</title>
+<meta name="description" content="ctx.dcs() вызывает функции скриптового API DCS, у которых в SDK ещё нет своей типизированной операции: высота и тип поверхности, ветер, владелец аэродрома, склад, лазерные пятна,…">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/docs/dcs.html">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-doc has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.2.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Страницы документации">
+<nav class="toc">
+<a class="toc-home" href="index.html">Документация</a>
+<ul>
+<li><a href="index.html">Обзор</a></li>
+<li><a href="install-runtime.html">Установка рантайма</a></li>
+<li><a href="quickstart.html">Быстрый старт</a></li>
+<li><a href="dependency.html">Подключение SDK</a></li>
+<li><a href="sdk.html">Логика на Rust</a><ul>
+<li><a href="objects.html">Объекты: статики, уничтожение, мусор</a></li>
+<li><a href="map.html">Рисование на карте</a></li>
+<li><a href="menus.html">Деревья меню F10</a></li>
+<li><a href="dcs.html" aria-current="page">Вызовы DCS</a></li>
+<li><a href="dcs-catalog.html">Справочник каталога DCS API</a></li>
+<li><a href="capabilities.html">Возможности движка</a></li>
+</ul>
+</li>
+<li><a href="generator.html">Сценарий на Python</a></li>
+<li><a href="testing.html">Тестирование</a></li>
+<li><a href="operations.html">Эксплуатация</a></li>
+<li><a href="troubleshooting.html">Диагностика</a></li>
+<li><a href="faq.html">Вопросы и ограничения</a></li>
+<li><a href="changelog.html">Что нового</a></li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="вызовы-dcs">Вызовы DCS<a class="anchor" href="#вызовы-dcs" aria-label="Ссылка на этот раздел">#</a></h1>
+<p><code>ctx.dcs()</code> вызывает функции скриптового API DCS, у которых в SDK ещё нет своей типизированной
+операции: высота и тип поверхности, ветер, владелец аэродрома, склад, лазерные пятна, звуки и
+многое другое. Каждая функция описана в каталоге DCS API — файле <code>catalog/dcs_api.toml</code> в
+репозитории SDK. Для каждой записи каталога генерируется обычный метод SDK с типами аргументов и
+результата; полный список — в <a href="dcs-catalog.html">справочнике каталога</a>.</p>
+<p>Движок проверяет каждый вызов по каталогу до того, как что-то попадёт в DCS: путь функции,
+окружение, класс объекта, типы и диапазоны аргументов. Ошибка в аргументе — <code>Error::Invalid</code> с
+сигнатурой записи в сообщении, а не ошибка Lua в игре.</p>
+<h2 id="ревизия-api">Ревизия API<a class="anchor" href="#ревизия-api" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Вызовы DCS — API ревизии 1. Логика объявляет её в атрибуте миссии; без него вызов вернёт
+<code>Error::Revision</code>, и в движок ничего не уйдёт:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">#[sortie::mission(api_rev = 1)] // вызовы DCS — API ревизии 1
+pub async fn with_calls(ctx: Ctx&lt;MyMission&gt;, _start: Start) -&gt; sortie::Result&lt;()&gt; {
+    let height = ctx.dcs().land().height(zones::TARGET.center()).await?;
+    ctx.report().set(&quot;target_height_m&quot;, height);
+    ctx.end_session(Outcome::Draw).await
+}
+</code></pre></div>
+<h2 id="чтение">Чтение<a class="anchor" href="#чтение" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Функции собраны в семейства: <code>land()</code>, <code>atmosphere()</code>, <code>timer()</code>, <code>coord()</code>, <code>coalition()</code>,
+<code>world()</code>, <code>env()</code>, <code>net()</code> и <code>server()</code> (окружение хуков) — функции без объекта; <code>unit(..)</code>,
+<code>group(..)</code>, <code>static_object(..)</code>, <code>airbase(..)</code>, <code>warehouse(..)</code>, <code>controller(..)</code>, <code>spot(..)</code>,
+<code>object(..)</code> — методы объекта DCS. Объект задаётся тем, что у логики уже есть: символом
+сценария, Eid, <code>Group</code>, сущностью из мира или селектором из <code>sortie::sel</code>.</p>
+<p>Вызовы окружения хуков (<code>net()</code>, <code>server()</code>, пути <code>net.*</code> и <code>DCS.*</code>) в этом выпуске (волна 1)
+тоже требуют идущей сессии миссии: ключи и дескрипторы принадлежат сессии. Без неё (DCS в
+меню, между миссиями) вызов отвечает <code>sortie::unavailable</code> («no mission session is running»).
+Вызовы сервера без миссии появятся вместе с логикой уровня сервера (волна 6).</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let dcs = ctx.dcs();
+let p = zones::TARGET.center(); // MapPoint
+let surface: String = dcs.land().surface_type(p).await?; // &quot;LAND&quot;, &quot;ROAD&quot;, &quot;WATER&quot;, ...
+let height: f64 = dcs.land().height(p).await?;
+let (kelvin, pascal) = dcs
+    .atmosphere()
+    .temperature_and_pressure(p.alt(m(3_000)))
+    .await?;
+let owner: Coalition = dcs.airbase(airbases::KUTAISI).coalition().await?;
+</code></pre></div>
+<p>Числа перечислений DCS приходят строкой-ключом (<code>"ROAD"</code>, а не 4), коалиция — значением
+<code>Coalition</code>, точки — <code>Vec3</code> или <code>MapPoint</code>. Точка на карте (<code>vec2</code> в каталоге) — это <code>MapPoint</code>
+с осями севера и востока; <code>vec3</code> — <code>Vec3</code> в осях DCS (<code>x</code> — север, <code>y</code> — высота, <code>z</code> — восток).
+Какой из двух видов берёт функция, сказано в её записи каталога: <code>land().height(p)</code> —
+<code>MapPoint</code>, а <code>land().profile(a, b)</code> — два <code>Vec3</code>, у которых DCS читает <code>x</code> и <code>z</code>.</p>
+<p>Число, которое DCS вернул строкой, приходит числом там, где каталог объявляет <code>number</code>: DCS
+2.9.31 отдаёт <code>Unit:getID()</code> строкой <code>"1"</code>, поэтому <code>static_object(..).id()</code>,
+<code>airbase(..).id()</code> и <code>group(..).id()</code> возвращают <code>f64</code> при любом ответе DCS.</p>
+<h2 id="объекты">Объекты<a class="anchor" href="#объекты" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Объекты DCS в результате — значения <code>DcsObject</code>: класс, Eid зеркала, имя DCS, тип. Объект можно
+передать в следующий вызов. Методы базовых классов DCS (<code>Object</code>, <code>CoalitionObject</code>) есть в
+семействе каждого класса-наследника. Метод выполняется через таблицу класса самого объекта, то
+есть так же, как <code>unit:getCoalition()</code> в скрипте миссии. Путь записи каталога
+(<code>CoalitionObject.getCoalition</code>) — её имя: <code>CoalitionObject</code> есть только в документации DCS,
+таблицы с таким именем в игре нет.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let dcs = ctx.dcs();
+// Объекты возвращаются как DcsObject: Eid зеркала, имя, тип.
+let units: Vec&lt;DcsObject&gt; = dcs.group(groups::SAM).units().await?;
+let mut damaged = Vec::new();
+for u in &amp;units {
+    let life: f64 = dcs.unit(u).life().await?;
+    let life0: f64 = dcs.unit(u).life0().await?;
+    if life &lt; life0 {
+        damaged.push(u.name.clone());
+    }
+}
+// Унаследованные методы есть у каждого класса: Object.getPoint у юнита.
+let point: Vec3 = dcs.unit(&amp;units[0]).point().await?;
+// Группа по имени DCS, если у неё нет символа сценария.
+let size: f64 = dcs.group(GroupSel::name(&quot;Armor&quot;)).size().await?;
+</code></pre></div>
+<p>Если зеркало не знало объект, движок заводит для него Eid по обычным правилам наблюдения.
+Длинные списки (<code>coalition().groups(..)</code>, <code>world().airbases()</code>) возвращают лёгкие ссылки: у
+объектов сверх первых 64 есть имя, но может не быть Eid — следующий проход сэмплера их увидит.
+Контроллер и склад, полученные от объекта (<code>airbase(..).warehouse()</code>), возвращаются селектором,
+по которому их можно вызвать снова.</p>
+<h2 id="изменения-мира">Изменения мира<a class="anchor" href="#изменения-мира" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Функции класса <code>mutate</code> меняют мир и по умолчанию выключены. Владелец движка включает нужные в
+<code>&lt;Saved Games&gt;/Sortie/engine.toml</code>; <code>sortied --dev</code> включает все:</p>
+<div class="code" data-lang="toml"><pre tabindex="0"><code class="language-toml">[calls]
+enable = [&quot;Airbase.setCoalition&quot;, &quot;Airbase.autoCapture&quot;, &quot;Warehouse.addItem&quot;]
+</code></pre></div>
+<p>Пока функция выключена, вызов возвращает <code>Error::Rejected</code> с именем capability
+<code>call:mission:&lt;путь&gt;</code>. Изменяющий вызов повторяет своё действие при каждом выполнении, поэтому
+ставьте ему <code>.key(..)</code>: повтор с тем же ключом вернёт сохранённый результат и не дойдёт до DCS.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let dcs = ctx.dcs();
+let kutaisi = dcs.airbase(airbases::KUTAISI);
+kutaisi.auto_capture(false).key(&quot;kutaisi-manual&quot;).await?;
+kutaisi
+    .set_coalition(Coalition::Blue)
+    .key(&quot;kutaisi-blue&quot;)
+    .await?;
+// Склад аэродрома: по селектору аэродрома.
+let stock = dcs.warehouse(airbases::KUTAISI);
+stock
+    .add_item(&quot;weapons.missiles.AIM_120C&quot;, 8.0)
+    .key(&quot;resupply-1&quot;)
+    .await?;
+let left: f64 = stock.item_count(&quot;weapons.missiles.AIM_120C&quot;).await?;
+let inventory: Value = stock.inventory(None).await?; // большая таблица: класс heavy
+</code></pre></div>
+<h2 id="эффекты-и-звуки">Эффекты и звуки<a class="anchor" href="#эффекты-и-звуки" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Взрывы, ракеты, звуки и радиопередачи — в семействах <code>effects()</code> и <code>sounds()</code>. Числовые
+аргументы с ценой или радиусом ограничены каталогом (мощность взрыва — не больше 5000);
+значение вне диапазона — <code>Error::Invalid</code>. Звуковой файл должен лежать внутри <code>.miz</code>: путь
+относительный, без <code>..</code>, буквы диска и ведущего <code>/</code>.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let dcs = ctx.dcs();
+let target = zones::TARGET.center().alt(m(0));
+dcs.effects()
+    .explosion(target, 500.0) // мощность не больше 5000
+    .key(&quot;depot-blast&quot;)
+    .await?;
+dcs.effects()
+    .signal_flare(target, &quot;Red&quot;, 0.0) // ключ таблицы trigger.flareColor
+    .key(&quot;flare-1&quot;)
+    .await?;
+// Звук — файл внутри .miz: относительный путь, без &quot;..&quot;, диска и ведущего &quot;/&quot;.
+dcs.sounds()
+    .out_sound_for_coalition(Coalition::Blue, &quot;l10n/DEFAULT/alarm.ogg&quot;)
+    .key(&quot;alarm-1&quot;)
+    .await?;
+</code></pre></div>
+<h2 id="лазерные-пятна">Лазерные пятна<a class="anchor" href="#лазерные-пятна" aria-label="Ссылка на этот раздел">#</a></h2>
+<p><code>spots().create_laser(..)</code> и <code>create_infra_red(..)</code> возвращают <code>Handle</code>: мост держит пятно, пока
+его не уберёт <code>spot(h).destroy()</code> или пока не закончится сессия (тогда мост убирает его сам). В
+сессии может быть не больше 256 таких объектов.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let dcs = ctx.dcs();
+let target = zones::TARGET.center().alt(m(0));
+// Лазерное пятно живёт под дескриптором, пока его не уберут или не кончится сессия.
+let spot: Handle = dcs
+    .spots()
+    .create_laser(&amp;jtac, None, target, Some(1688.0))
+    .key(&quot;lase-1&quot;)
+    .await?;
+dcs.spot(spot).set_point(target).key(&quot;lase-1-move&quot;).await?;
+dcs.spot(spot).destroy().key(&quot;lase-1-off&quot;).await?;
+</code></pre></div>
+<h2 id="ключи-полосы-лимиты">Ключи, полосы, лимиты<a class="anchor" href="#ключи-полосы-лимиты" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Класс</th><th>Полоса</th><th>По умолчанию</th><th>Ключ</th><th>Лимит на писателя</th></tr></thead><tbody>
+<tr><td><code>read</code></td><td>QUERY</td><td>включено (кроме функций «проба»)</td><td>нельзя: <code>Error::Invalid</code></td><td>200 вызовов и 20 мс времени DCS в секунду</td></tr>
+<tr><td><code>heavy</code></td><td>BULK, по одному</td><td>включено (запись владельца не с get/is/has — выключена, как <code>mutate</code>)</td><td>нельзя</td><td>2 в секунду</td></tr>
+<tr><td><code>mutate</code></td><td>REALTIME (хуки — CONTROL)</td><td>выключено</td><td>повтор с ключом не выполняется снова</td><td>50 в секунду</td></tr>
+<tr><td><code>admin</code></td><td>CONTROL</td><td>выключено</td><td>как <code>mutate</code></td><td>1 в секунду</td></tr>
+</tbody></table>
+</div>
+<p>Повтор с тем же ключом возвращает сохранённый результат целиком, вместе с объектами и
+дескрипторами: <code>create_laser(..).key("lase-1")</code> после перезапуска логики в той же сессии вернёт
+тот же <code>Handle</code>, и пятно можно сдвинуть или убрать. Состояние объектов в ответе на повтор
+читается из мира заново. Дескриптор в сохранённом результате не продлевает жизнь объекта: если
+пятно уже убрано, вызов по нему ответит <code>Error::Gone</code>. Под ключом не хранятся только значения
+результата больше 64 КиБ: повтор такого вызова возвращает <code>Error::ResultNotKept</code> — вызов уже
+выполнен под этим ключом и снова не выполнялся; нужное прочитайте отдельным вызовом. Функции
+«проба» (недокументированные чтения) выключены, пока их проверка не прошла на запущенной сборке
+DCS.</p>
+<p>Большая таблица приходит целиком или не приходит вовсе: вместо неё стоит <code>Value::Cut(n)</code> с
+числом её ключей, а у результата — <code>truncated</code>. Так бывает, когда таблица глубже <code>max_depth</code>
+(по умолчанию 6, не больше 12), когда вызов уже скопировал 50 000 записей таблиц и когда ответ
+всей команды — все вызовы пакета вместе — был бы больше 150 000 значений (объект считается
+вместе со своим описанием). Обёртка, которая ждёт список, на обрезанной таблице возвращает
+<code>Error::Invalid</code>. Большой запрос делите на несколько команд: у каждой свой запас.</p>
+<h2 id="ошибки">Ошибки<a class="anchor" href="#ошибки" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">match ctx
+    .dcs()
+    .airbase(airbases::NALCHIK)
+    .set_coalition(Coalition::Blue)
+    .key(&quot;nalchik-blue&quot;)
+    .await
+{
+    Ok(()) =&gt; {}
+    // Владелец движка не включил функцию: capability call:mission:Airbase.setCoalition.
+    Err(Error::Rejected(_)) =&gt; ctx.report().set(&quot;nalchik&quot;, &quot;manual capture is off&quot;),
+    Err(e) =&gt; return Err(e),
+}
+</code></pre></div>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Ошибка</th><th>Когда</th></tr></thead><tbody>
+<tr><td><code>Error::Rejected</code></td><td>функции нет в каталоге, она выключена, её нельзя вызывать никогда (Lua-код, файлы, обратные вызовы), превышен лимит</td></tr>
+<tr><td><code>Error::Invalid</code></td><td>аргументы не подходят к записи каталога; ключ на чтении; объект не того класса</td></tr>
+<tr><td><code>Error::Gone</code></td><td>объекта уже нет в DCS (или Eid устарел)</td></tr>
+<tr><td><code>Error::Unavailable</code></td><td>функции нет в этой сборке DCS</td></tr>
+<tr><td><code>Error::ResultNotKept</code></td><td>повтор вызова с ключом, результат которого был больше 64 КиБ: вызов не выполнялся снова, а его значения движок не хранит</td></tr>
+<tr><td><code>Error::Revision</code></td><td>логика не объявила <code>api_rev = 1</code></td></tr>
+</tbody></table>
+</div>
+<h2 id="чего-зеркало-не-узнаёт">Чего зеркало не узнаёт<a class="anchor" href="#чего-зеркало-не-узнаёт" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Изменение, сделанное вызовом, зеркало мира видит только при следующем проходе сэмплера:
+владельца аэродрома после <code>set_coalition</code> — на следующем обходе аэродромов, флаг — при
+следующем чтении флагов. Где у SDK есть типизированная операция, обёртка помечена
+<code>#[deprecated]</code> и называет её: например, дым — это <code>ctx.smoke(..)</code>.</p>
+<h2 id="вызов-по-имени">Вызов по имени<a class="anchor" href="#вызов-по-имени" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Функцию каталога без обёртки (например, добавленную владельцем движка в <code>engine.toml</code>) можно
+вызвать по строке пути. Это функция крейта за cargo-фичей <code>dcs-raw</code>:
+<code>sortie = { ..., features = ["dcs-raw"] }</code>. Движок проверяет такой вызов так же, как вызов
+обёртки.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">use sortie::dcs::{CallResult, arg};
+let dcs = ctx.dcs();
+let r = dcs
+    .call(&quot;land.getHeight&quot;)
+    .arg(arg::vec2(zones::TARGET.center()))
+    .await?;
+let height = r.first().as_f64();
+// Пакет: вызовы выполняются в одном кадре; result_of берёт объект предыдущего вызова.
+let out = dcs
+    .batch()
+    .push(
+        dcs.call(&quot;Airbase.getWarehouse&quot;)
+            .on(arg::airbase(airbases::KUTAISI)),
+    )
+    .push(
+        dcs.call(&quot;Warehouse.getItemCount&quot;)
+            .on_result_of(0)
+            .arg(arg::string(&quot;weapons.missiles.AIM_120C&quot;)),
+    )
+    .await?;
+if let Some(CallResult::Ok(count)) = out.results.get(1) {
+    let _ = count.first().as_f64();
+}
+</code></pre></div>
+<p><code>out.cost_us</code> — сколько времени DCS занял весь пакет в слое Lua, в микросекундах: пакет идёт в
+одном кадре, это его доля в кадре. Пакет оплачивает в лимите писателя каждый свой вызов: 256
+чтений из полной корзины (200 в секунду) проходят, но следующий пакет придётся подождать.</p>
+<p>Сколько стоила каждая команда, а не только пакет, говорит <code>ctx.take_command_timings()</code>: по
+одной записи <code>CommandTiming</code> на каждую команду с ответом (вызов DCS, пакет, типизированная
+операция; ошибки тоже) — операция, цель (путь Lua у вызова), <code>cost_us</code> (время внутри DCS),
+<code>round_trip</code> (от отправки до ответа: очередь и лимиты движка, ожидание ближайшего pump миссии
+раз в 0,02 с, связь в обе стороны) и модельное время ответа. Записи забираются один раз; SDK
+держит не больше 4096, лишние старые отбрасывает и считает в <code>dropped</code>.</p>
+<h2 id="из-python">Из Python<a class="anchor" href="#из-python" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Тот же каталог доступен генератору: модуль <code>sortie_gen.dcs_api</code> строится из него, вызовы идут
+через <code>EngineClient.dcs_call</code> с токеном <code>logic</code> или <code>admin</code>.</p>
+<div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">def resupply(engine: str, token: str) -&gt; None:
+    with EngineClient(engine, token=token) as client:   # токен logic или admin
+        dcs = Dcs(client)
+        print(dcs.land().surface_type((-281_000.0, 647_000.0)))   # (север, восток) -&gt; &quot;LAND&quot;
+        units = dcs.group(&quot;SAM&quot;).units()                           # [DcsObject, ...]
+        print([(u.name, u.eid) for u in units])
+        try:
+            dcs.warehouse(&quot;Kutaisi&quot;).add_item(&quot;weapons.missiles.AIM_120C&quot;, 8, key=&quot;resupply-1&quot;)
+        except CommandFailed as e:
+            print(e.code, e.capability)   # REJECTED call:mission:Warehouse.addItem
+</code></pre></div>
+</article>
+<nav class="pager" aria-label="Соседние страницы">
+<a class="pager-prev" rel="prev" href="menus.html"><span class="pager-dir">Назад</span><span class="pager-title">Деревья меню F10</span></a>
+<a class="pager-next" rel="next" href="dcs-catalog.html"><span class="pager-dir">Дальше</span><span class="pager-title">Справочник каталога DCS API</span></a>
+</nav>
+<p class="page-source"><a href="dcs.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.2.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

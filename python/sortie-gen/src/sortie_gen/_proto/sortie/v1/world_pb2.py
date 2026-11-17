@@ -24,33 +24,34 @@ _sym_db = _symbol_database.Default()
 
 from google.protobuf import field_mask_pb2 as google_dot_protobuf_dot_field__mask__pb2
 from sortie_gen._proto.sortie.v1 import common_pb2 as sortie_dot_v1_dot_common__pb2
+from sortie_gen._proto.sortie.v1 import resources_pb2 as sortie_dot_v1_dot_resources__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15sortie/v1/world.proto\x12\tsortie.v1\x1a google/protobuf/field_mask.proto\x1a\x16sortie/v1/common.proto\"\xc0\x03\n\nEntitySnap\x12\x0b\n\x03\x65id\x18\x01 \x01(\x04\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x11\n\ttype_name\x18\x03 \x01(\t\x12\'\n\tcoalition\x18\x04 \x01(\x0e\x32\x14.sortie.v1.Coalition\x12%\n\x08\x63\x61tegory\x18\x05 \x01(\x0e\x32\x13.sortie.v1.Category\x12!\n\x03pos\x18\x06 \x01(\x0b\x32\x0f.sortie.v1.Vec3H\x00\x88\x01\x01\x12\x13\n\x06player\x18\x07 \x01(\tH\x01\x88\x01\x01\x12\x16\n\tgroup_eid\x18\x08 \x01(\x04H\x02\x88\x01\x01\x12\x0f\n\x07\x63ountry\x18\t \x01(\t\x12&\n\x08velocity\x18\n \x01(\x0b\x32\x0f.sortie.v1.Vec3H\x03\x88\x01\x01\x12\x18\n\x0bheading_rad\x18\x0b \x01(\x01H\x04\x88\x01\x01\x12\x0c\n\x04\x64\x65\x61\x64\x18\x0c \x01(\x08\x12\x12\n\nruntime_id\x18\r \x01(\r\x12\x0f\n\x07unit_id\x18\x0e \x01(\r\x12\x12\n\ngroup_name\x18\x0f \x01(\t\x12\x0c\n\x04life\x18\x10 \x01(\x01\x42\x06\n\x04_posB\t\n\x07_playerB\x0c\n\n_group_eidB\x0b\n\t_velocityB\x0e\n\x0c_heading_rad\"\xb7\x01\n\tGroupSnap\x12\x0b\n\x03\x65id\x18\x01 \x01(\x04\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\r\n\x05ident\x18\x03 \x01(\t\x12\'\n\tcoalition\x18\x04 \x01(\x0e\x32\x14.sortie.v1.Coalition\x12%\n\x08\x63\x61tegory\x18\x05 \x01(\x0e\x32\x13.sortie.v1.Category\x12\r\n\x05units\x18\x06 \x03(\x04\x12\x10\n\x08group_id\x18\x07 \x01(\r\x12\x0f\n\x07\x63ountry\x18\x08 \x01(\t\"\x92\x01\n\x0b\x41irbaseSnap\x12\x0b\n\x03\x65id\x18\x01 \x01(\x04\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\r\n\x05ident\x18\x03 \x01(\t\x12\'\n\tcoalition\x18\x04 \x01(\x0e\x32\x14.sortie.v1.Coalition\x12\x1c\n\x03pos\x18\x05 \x01(\x0b\x32\x0f.sortie.v1.Vec3\x12\x12\n\nairbase_id\x18\x06 \x01(\r\"e\n\nWeaponSnap\x12\x0b\n\x03\x65id\x18\x01 \x01(\x04\x12\x11\n\ttype_name\x18\x02 \x01(\t\x12\x0c\n\x04name\x18\x03 \x01(\t\x12!\n\x03pos\x18\x04 \x01(\x0b\x32\x0f.sortie.v1.Vec3H\x00\x88\x01\x01\x42\x06\n\x04_pos\"\xba\x01\n\rWorldSnapshot\x12\x0f\n\x07session\x18\x01 \x01(\t\x12\x0b\n\x03rev\x18\x02 \x01(\x04\x12\x12\n\nmodel_time\x18\x03 \x01(\x01\x12$\n\x06groups\x18\x04 \x03(\x0b\x32\x14.sortie.v1.GroupSnap\x12\'\n\x08\x65ntities\x18\x05 \x03(\x0b\x32\x15.sortie.v1.EntitySnap\x12(\n\x08\x61irbases\x18\x06 \x03(\x0b\x32\x16.sortie.v1.AirbaseSnap\"\xef\x01\n\nWorldDelta\x12\x10\n\x08\x66rom_rev\x18\x01 \x01(\x04\x12\x0b\n\x03rev\x18\x02 \x01(\x04\x12\x12\n\nmodel_time\x18\x03 \x01(\x01\x12&\n\x07upserts\x18\x04 \x03(\x0b\x32\x15.sortie.v1.EntitySnap\x12\x10\n\x08removals\x18\x05 \x03(\x04\x12+\n\rgroup_upserts\x18\x06 \x03(\x0b\x32\x14.sortie.v1.GroupSnap\x12\x16\n\x0egroup_removals\x18\x07 \x03(\x04\x12/\n\x0f\x61irbase_upserts\x18\x08 \x03(\x0b\x32\x16.sortie.v1.AirbaseSnap\"%\n\x12GetSnapshotRequest\x12\x0f\n\x07session\x18\x01 \x01(\t\"\x99\x01\n\nWorldQuery\x12(\n\ncoalitions\x18\x01 \x03(\x0e\x32\x14.sortie.v1.Coalition\x12\'\n\ncategories\x18\x02 \x03(\x0e\x32\x13.sortie.v1.Category\x12\x13\n\x0bgroup_names\x18\x03 \x03(\t\x12\r\n\x05zones\x18\x04 \x03(\t\x12\x14\n\x0cplayers_only\x18\x05 \x01(\x08\"\x95\x01\n\x15SubscribeWorldRequest\x12\x0f\n\x07session\x18\x01 \x01(\t\x12\x15\n\rfrom_revision\x18\x02 \x01(\x04\x12$\n\x05query\x18\x03 \x01(\x0b\x32\x15.sortie.v1.WorldQuery\x12.\n\nfield_mask\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.FieldMask2\x97\x01\n\x05World\x12\x46\n\x0bGetSnapshot\x12\x1d.sortie.v1.GetSnapshotRequest\x1a\x18.sortie.v1.WorldSnapshot\x12\x46\n\tSubscribe\x12 .sortie.v1.SubscribeWorldRequest\x1a\x15.sortie.v1.WorldDelta0\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15sortie/v1/world.proto\x12\tsortie.v1\x1a google/protobuf/field_mask.proto\x1a\x16sortie/v1/common.proto\x1a\x19sortie/v1/resources.proto\"\xc0\x03\n\nEntitySnap\x12\x0b\n\x03\x65id\x18\x01 \x01(\x04\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x11\n\ttype_name\x18\x03 \x01(\t\x12\'\n\tcoalition\x18\x04 \x01(\x0e\x32\x14.sortie.v1.Coalition\x12%\n\x08\x63\x61tegory\x18\x05 \x01(\x0e\x32\x13.sortie.v1.Category\x12!\n\x03pos\x18\x06 \x01(\x0b\x32\x0f.sortie.v1.Vec3H\x00\x88\x01\x01\x12\x13\n\x06player\x18\x07 \x01(\tH\x01\x88\x01\x01\x12\x16\n\tgroup_eid\x18\x08 \x01(\x04H\x02\x88\x01\x01\x12\x0f\n\x07\x63ountry\x18\t \x01(\t\x12&\n\x08velocity\x18\n \x01(\x0b\x32\x0f.sortie.v1.Vec3H\x03\x88\x01\x01\x12\x18\n\x0bheading_rad\x18\x0b \x01(\x01H\x04\x88\x01\x01\x12\x0c\n\x04\x64\x65\x61\x64\x18\x0c \x01(\x08\x12\x12\n\nruntime_id\x18\r \x01(\r\x12\x0f\n\x07unit_id\x18\x0e \x01(\r\x12\x12\n\ngroup_name\x18\x0f \x01(\t\x12\x0c\n\x04life\x18\x10 \x01(\x01\x42\x06\n\x04_posB\t\n\x07_playerB\x0c\n\n_group_eidB\x0b\n\t_velocityB\x0e\n\x0c_heading_rad\"\xb7\x01\n\tGroupSnap\x12\x0b\n\x03\x65id\x18\x01 \x01(\x04\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\r\n\x05ident\x18\x03 \x01(\t\x12\'\n\tcoalition\x18\x04 \x01(\x0e\x32\x14.sortie.v1.Coalition\x12%\n\x08\x63\x61tegory\x18\x05 \x01(\x0e\x32\x13.sortie.v1.Category\x12\r\n\x05units\x18\x06 \x03(\x04\x12\x10\n\x08group_id\x18\x07 \x01(\r\x12\x0f\n\x07\x63ountry\x18\x08 \x01(\t\"\xb2\x01\n\x0b\x41irbaseSnap\x12\x0b\n\x03\x65id\x18\x01 \x01(\x04\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\r\n\x05ident\x18\x03 \x01(\t\x12\'\n\tcoalition\x18\x04 \x01(\x0e\x32\x14.sortie.v1.Coalition\x12\x1c\n\x03pos\x18\x05 \x01(\x0b\x32\x0f.sortie.v1.Vec3\x12\x12\n\nairbase_id\x18\x06 \x01(\r\x12\x10\n\x08host_eid\x18\x0b \x01(\x04\x12\x0c\n\x04\x64\x65\x61\x64\x18\x0c \x01(\x08\"e\n\nWeaponSnap\x12\x0b\n\x03\x65id\x18\x01 \x01(\x04\x12\x11\n\ttype_name\x18\x02 \x01(\t\x12\x0c\n\x04name\x18\x03 \x01(\t\x12!\n\x03pos\x18\x04 \x01(\x0b\x32\x0f.sortie.v1.Vec3H\x00\x88\x01\x01\x42\x06\n\x04_pos\"\xe6\x01\n\rWorldSnapshot\x12\x0f\n\x07session\x18\x01 \x01(\t\x12\x0b\n\x03rev\x18\x02 \x01(\x04\x12\x12\n\nmodel_time\x18\x03 \x01(\x01\x12$\n\x06groups\x18\x04 \x03(\x0b\x32\x14.sortie.v1.GroupSnap\x12\'\n\x08\x65ntities\x18\x05 \x03(\x0b\x32\x15.sortie.v1.EntitySnap\x12(\n\x08\x61irbases\x18\x06 \x03(\x0b\x32\x16.sortie.v1.AirbaseSnap\x12*\n\tresources\x18\x07 \x03(\x0b\x32\x17.sortie.v1.ResourceSnap\"\xef\x02\n\nWorldDelta\x12\x10\n\x08\x66rom_rev\x18\x01 \x01(\x04\x12\x0b\n\x03rev\x18\x02 \x01(\x04\x12\x12\n\nmodel_time\x18\x03 \x01(\x01\x12&\n\x07upserts\x18\x04 \x03(\x0b\x32\x15.sortie.v1.EntitySnap\x12\x10\n\x08removals\x18\x05 \x03(\x04\x12+\n\rgroup_upserts\x18\x06 \x03(\x0b\x32\x14.sortie.v1.GroupSnap\x12\x16\n\x0egroup_removals\x18\x07 \x03(\x04\x12/\n\x0f\x61irbase_upserts\x18\x08 \x03(\x0b\x32\x16.sortie.v1.AirbaseSnap\x12\x31\n\x10resource_upserts\x18\t \x03(\x0b\x32\x17.sortie.v1.ResourceSnap\x12\x31\n\x11resource_removals\x18\n \x03(\x0b\x32\x16.sortie.v1.ResourceKey\x12\x18\n\x10\x61irbase_removals\x18\x1b \x03(\x04\"6\n\x12GetSnapshotRequest\x12\x0f\n\x07session\x18\x01 \x01(\t\x12\x0f\n\x07\x61pi_rev\x18\x02 \x01(\r\"\x99\x01\n\nWorldQuery\x12(\n\ncoalitions\x18\x01 \x03(\x0e\x32\x14.sortie.v1.Coalition\x12\'\n\ncategories\x18\x02 \x03(\x0e\x32\x13.sortie.v1.Category\x12\x13\n\x0bgroup_names\x18\x03 \x03(\t\x12\r\n\x05zones\x18\x04 \x03(\t\x12\x14\n\x0cplayers_only\x18\x05 \x01(\x08\"\xa6\x01\n\x15SubscribeWorldRequest\x12\x0f\n\x07session\x18\x01 \x01(\t\x12\x15\n\rfrom_revision\x18\x02 \x01(\x04\x12$\n\x05query\x18\x03 \x01(\x0b\x32\x15.sortie.v1.WorldQuery\x12.\n\nfield_mask\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.FieldMask\x12\x0f\n\x07\x61pi_rev\x18\x05 \x01(\r2\x97\x01\n\x05World\x12\x46\n\x0bGetSnapshot\x12\x1d.sortie.v1.GetSnapshotRequest\x1a\x18.sortie.v1.WorldSnapshot\x12\x46\n\tSubscribe\x12 .sortie.v1.SubscribeWorldRequest\x1a\x15.sortie.v1.WorldDelta0\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'sortie.v1.world_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_ENTITYSNAP']._serialized_start=95
-  _globals['_ENTITYSNAP']._serialized_end=543
-  _globals['_GROUPSNAP']._serialized_start=546
-  _globals['_GROUPSNAP']._serialized_end=729
-  _globals['_AIRBASESNAP']._serialized_start=732
-  _globals['_AIRBASESNAP']._serialized_end=878
-  _globals['_WEAPONSNAP']._serialized_start=880
-  _globals['_WEAPONSNAP']._serialized_end=981
-  _globals['_WORLDSNAPSHOT']._serialized_start=984
-  _globals['_WORLDSNAPSHOT']._serialized_end=1170
-  _globals['_WORLDDELTA']._serialized_start=1173
-  _globals['_WORLDDELTA']._serialized_end=1412
-  _globals['_GETSNAPSHOTREQUEST']._serialized_start=1414
-  _globals['_GETSNAPSHOTREQUEST']._serialized_end=1451
-  _globals['_WORLDQUERY']._serialized_start=1454
-  _globals['_WORLDQUERY']._serialized_end=1607
-  _globals['_SUBSCRIBEWORLDREQUEST']._serialized_start=1610
-  _globals['_SUBSCRIBEWORLDREQUEST']._serialized_end=1759
-  _globals['_WORLD']._serialized_start=1762
-  _globals['_WORLD']._serialized_end=1913
+  _globals['_ENTITYSNAP']._serialized_start=122
+  _globals['_ENTITYSNAP']._serialized_end=570
+  _globals['_GROUPSNAP']._serialized_start=573
+  _globals['_GROUPSNAP']._serialized_end=756
+  _globals['_AIRBASESNAP']._serialized_start=759
+  _globals['_AIRBASESNAP']._serialized_end=937
+  _globals['_WEAPONSNAP']._serialized_start=939
+  _globals['_WEAPONSNAP']._serialized_end=1040
+  _globals['_WORLDSNAPSHOT']._serialized_start=1043
+  _globals['_WORLDSNAPSHOT']._serialized_end=1273
+  _globals['_WORLDDELTA']._serialized_start=1276
+  _globals['_WORLDDELTA']._serialized_end=1643
+  _globals['_GETSNAPSHOTREQUEST']._serialized_start=1645
+  _globals['_GETSNAPSHOTREQUEST']._serialized_end=1699
+  _globals['_WORLDQUERY']._serialized_start=1702
+  _globals['_WORLDQUERY']._serialized_end=1855
+  _globals['_SUBSCRIBEWORLDREQUEST']._serialized_start=1858
+  _globals['_SUBSCRIBEWORLDREQUEST']._serialized_end=2024
+  _globals['_WORLD']._serialized_start=2027
+  _globals['_WORLD']._serialized_end=2178
 # @@protoc_insertion_point(module_scope)

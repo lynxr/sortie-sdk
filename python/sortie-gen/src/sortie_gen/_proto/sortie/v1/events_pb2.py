@@ -24,68 +24,79 @@ _sym_db = _symbol_database.Default()
 
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 from sortie_gen._proto.sortie.v1 import common_pb2 as sortie_dot_v1_dot_common__pb2
+from sortie_gen._proto.sortie.v1 import resources_pb2 as sortie_dot_v1_dot_resources__pb2
 from sortie_gen._proto.sortie.v1 import world_pb2 as sortie_dot_v1_dot_world__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x16sortie/v1/events.proto\x12\tsortie.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x16sortie/v1/common.proto\x1a\x15sortie/v1/world.proto\"\x90\x08\n\x05\x45vent\x12\x0b\n\x03seq\x18\x01 \x01(\x04\x12\x12\n\nmodel_time\x18\x02 \x01(\x01\x12-\n\twall_time\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x0f\n\x07session\x18\x04 \x01(\t\x12!\n\x05\x62irth\x18\n \x01(\x0b\x32\x10.sortie.v1.BirthH\x00\x12\x1f\n\x04\x64\x65\x61\x64\x18\x0b \x01(\x0b\x32\x0f.sortie.v1.DeadH\x00\x12(\n\tunit_lost\x18\x0c \x01(\x0b\x32\x13.sortie.v1.UnitLostH\x00\x12\x1f\n\x04kill\x18\r \x01(\x0b\x32\x0f.sortie.v1.KillH\x00\x12\x1d\n\x03hit\x18\x0e \x01(\x0b\x32\x0e.sortie.v1.HitH\x00\x12\x1f\n\x04shot\x18\x0f \x01(\x0b\x32\x0f.sortie.v1.ShotH\x00\x12%\n\x07takeoff\x18\x10 \x01(\x0b\x32\x12.sortie.v1.TakeoffH\x00\x12\x1f\n\x04land\x18\x11 \x01(\x0b\x32\x0f.sortie.v1.LandH\x00\x12\x30\n\rbase_captured\x18\x12 \x01(\x0b\x32\x17.sortie.v1.BaseCapturedH\x00\x12\x1f\n\x04mark\x18\x13 \x01(\x0b\x32\x0f.sortie.v1.MarkH\x00\x12;\n\x13player_entered_unit\x18\x1e \x01(\x0b\x32\x1c.sortie.v1.PlayerEnteredUnitH\x00\x12(\n\tunit_gone\x18\x1f \x01(\x0b\x32\x13.sortie.v1.UnitGoneH\x00\x12.\n\x0cmenu_pressed\x18  \x01(\x0b\x32\x16.sortie.v1.MenuPressedH\x00\x12\x36\n\x10player_connected\x18! \x01(\x0b\x32\x1a.sortie.v1.PlayerConnectedH\x00\x12<\n\x13player_disconnected\x18\" \x01(\x0b\x32\x1d.sortie.v1.PlayerDisconnectedH\x00\x12;\n\x13player_changed_slot\x18# \x01(\x0b\x32\x1c.sortie.v1.PlayerChangedSlotH\x00\x12.\n\x0c\x63hat_message\x18$ \x01(\x0b\x32\x16.sortie.v1.ChatMessageH\x00\x12\x38\n\x11simulation_paused\x18( \x01(\x0b\x32\x1b.sortie.v1.SimulationPausedH\x00\x12:\n\x12simulation_resumed\x18) \x01(\x0b\x32\x1c.sortie.v1.SimulationResumedH\x00\x12\x1d\n\x03gap\x18\x32 \x01(\x0b\x32\x0e.sortie.v1.GapH\x00\x12%\n\x07unknown\x18\x63 \x01(\x0b\x32\x12.sortie.v1.UnknownH\x00\x42\x06\n\x04kind\"\x8a\x01\n\x16SubscribeEventsRequest\x12#\n\x05kinds\x18\x01 \x03(\x0e\x32\x14.sortie.v1.EventKind\x12(\n\ncoalitions\x18\x02 \x03(\x0e\x32\x14.sortie.v1.Coalition\x12\x10\n\x08\x66rom_seq\x18\x03 \x01(\x04\x12\x0f\n\x07session\x18\x04 \x01(\t\"X\n\x05\x42irth\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x05place\x18\x02 \x01(\x0b\x32\x16.sortie.v1.AirbaseSnap\"0\n\x04\x44\x65\x61\x64\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\"4\n\x08UnitLost\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\"~\n\x04Kill\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x06target\x18\x02 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x06weapon\x18\x03 \x01(\x0b\x32\x15.sortie.v1.WeaponSnap\"}\n\x03Hit\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x06target\x18\x02 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x06weapon\x18\x03 \x01(\x0b\x32\x15.sortie.v1.WeaponSnap\"W\n\x04Shot\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x06weapon\x18\x02 \x01(\x0b\x32\x15.sortie.v1.WeaponSnap\"Z\n\x07Takeoff\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x05place\x18\x02 \x01(\x0b\x32\x16.sortie.v1.AirbaseSnap\"W\n\x04Land\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x05place\x18\x02 \x01(\x0b\x32\x16.sortie.v1.AirbaseSnap\"\x88\x01\n\x0c\x42\x61seCaptured\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x05place\x18\x02 \x01(\x0b\x32\x16.sortie.v1.AirbaseSnap\x12\'\n\tcoalition\x18\x03 \x01(\x0e\x32\x14.sortie.v1.Coalition\"\xe3\x01\n\x04Mark\x12%\n\x06\x61\x63tion\x18\x01 \x01(\x0e\x32\x15.sortie.v1.MarkAction\x12\x0f\n\x07mark_id\x18\x02 \x01(\r\x12\x0c\n\x04text\x18\x03 \x01(\t\x12\x1c\n\x03pos\x18\x04 \x01(\x0b\x32\x0f.sortie.v1.Vec3\x12\'\n\tcoalition\x18\x05 \x01(\x0e\x32\x14.sortie.v1.Coalition\x12\x16\n\tgroup_eid\x18\x06 \x01(\x04H\x00\x88\x01\x01\x12(\n\tinitiator\x18\x07 \x01(\x0b\x32\x15.sortie.v1.EntitySnapB\x0c\n\n_group_eid\"H\n\x11PlayerEnteredUnit\x12#\n\x04unit\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12\x0e\n\x06player\x18\x02 \x01(\t\"w\n\x08UnitGone\x12\x0b\n\x03\x65id\x18\x01 \x01(\x04\x12\x0c\n\x04name\x18\x02 \x01(\t\x12%\n\x06reason\x18\x03 \x01(\x0e\x32\x15.sortie.v1.GoneReason\x12)\n\nlast_known\x18\x04 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\"\x7f\n\x0bMenuPressed\x12\r\n\x05ident\x18\x01 \x01(\t\x12\x16\n\tgroup_eid\x18\x02 \x01(\x04H\x00\x88\x01\x01\x12\x12\n\ngroup_name\x18\x03 \x01(\t\x12\'\n\tcoalition\x18\x04 \x01(\x0e\x32\x14.sortie.v1.CoalitionB\x0c\n\n_group_eid\"@\n\x0fPlayerConnected\x12\x11\n\tplayer_id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0c\n\x04ucid\x18\x03 \x01(\t\"C\n\x12PlayerDisconnected\x12\x11\n\tplayer_id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0c\n\x04ucid\x18\x03 \x01(\t\"k\n\x11PlayerChangedSlot\x12\x11\n\tplayer_id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\'\n\tcoalition\x18\x03 \x01(\x0e\x32\x14.sortie.v1.Coalition\x12\x0c\n\x04slot\x18\x04 \x01(\t\"I\n\x0b\x43hatMessage\x12\x11\n\tplayer_id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0c\n\x04text\x18\x03 \x01(\t\x12\x0b\n\x03\x61ll\x18\x04 \x01(\x08\"\x12\n\x10SimulationPaused\"\x13\n\x11SimulationResumed\"7\n\x03Gap\x12\x10\n\x08\x66rom_seq\x18\x01 \x01(\x04\x12\x0e\n\x06to_seq\x18\x02 \x01(\x04\x12\x0e\n\x06reason\x18\x03 \x01(\t\"P\n\x07Unknown\x12\x10\n\x08\x64\x63s_name\x18\x01 \x01(\t\x12\x0e\n\x06\x64\x63s_id\x18\x02 \x01(\x05\x12#\n\x06\x66ields\x18\x03 \x01(\x0b\x32\x13.sortie.v1.LuaValue*\xdc\x04\n\tEventKind\x12\x1a\n\x16\x45VENT_KIND_UNSPECIFIED\x10\x00\x12\x14\n\x10\x45VENT_KIND_BIRTH\x10\x01\x12\x13\n\x0f\x45VENT_KIND_DEAD\x10\x02\x12\x18\n\x14\x45VENT_KIND_UNIT_LOST\x10\x03\x12\x13\n\x0f\x45VENT_KIND_KILL\x10\x04\x12\x12\n\x0e\x45VENT_KIND_HIT\x10\x05\x12\x13\n\x0f\x45VENT_KIND_SHOT\x10\x06\x12\x16\n\x12\x45VENT_KIND_TAKEOFF\x10\x07\x12\x13\n\x0f\x45VENT_KIND_LAND\x10\x08\x12\x1c\n\x18\x45VENT_KIND_BASE_CAPTURED\x10\t\x12\x13\n\x0f\x45VENT_KIND_MARK\x10\n\x12\"\n\x1e\x45VENT_KIND_PLAYER_ENTERED_UNIT\x10\x0b\x12\x18\n\x14\x45VENT_KIND_UNIT_GONE\x10\x0c\x12\x1b\n\x17\x45VENT_KIND_MENU_PRESSED\x10\r\x12\x1f\n\x1b\x45VENT_KIND_PLAYER_CONNECTED\x10\x0e\x12\"\n\x1e\x45VENT_KIND_PLAYER_DISCONNECTED\x10\x0f\x12\"\n\x1e\x45VENT_KIND_PLAYER_CHANGED_SLOT\x10\x10\x12\x1b\n\x17\x45VENT_KIND_CHAT_MESSAGE\x10\x11\x12 \n\x1c\x45VENT_KIND_SIMULATION_PAUSED\x10\x12\x12!\n\x1d\x45VENT_KIND_SIMULATION_RESUMED\x10\x13\x12\x12\n\x0e\x45VENT_KIND_GAP\x10\x14\x12\x16\n\x12\x45VENT_KIND_UNKNOWN\x10\x15*r\n\nMarkAction\x12\x1b\n\x17MARK_ACTION_UNSPECIFIED\x10\x00\x12\x15\n\x11MARK_ACTION_ADDED\x10\x01\x12\x17\n\x13MARK_ACTION_CHANGED\x10\x02\x12\x17\n\x13MARK_ACTION_REMOVED\x10\x03*\xb2\x01\n\nGoneReason\x12\x1b\n\x17GONE_REASON_UNSPECIFIED\x10\x00\x12\"\n\x1eGONE_REASON_MISSING_FROM_SWEEP\x10\x01\x12!\n\x1dGONE_REASON_RUNTIME_ID_REUSED\x10\x02\x12\x19\n\x15GONE_REASON_DESPAWNED\x10\x03\x12%\n!GONE_REASON_MISSING_FROM_SNAPSHOT\x10\x04\x32L\n\x06\x45vents\x12\x42\n\tSubscribe\x12!.sortie.v1.SubscribeEventsRequest\x1a\x10.sortie.v1.Event0\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x16sortie/v1/events.proto\x12\tsortie.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x16sortie/v1/common.proto\x1a\x19sortie/v1/resources.proto\x1a\x15sortie/v1/world.proto\"\xba\t\n\x05\x45vent\x12\x0b\n\x03seq\x18\x01 \x01(\x04\x12\x12\n\nmodel_time\x18\x02 \x01(\x01\x12-\n\twall_time\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x0f\n\x07session\x18\x04 \x01(\t\x12&\n\tdcs_event\x18\x05 \x01(\x0e\x32\x13.sortie.v1.DcsEvent\x12\x10\n\x08\x64\x63s_name\x18\x06 \x01(\t\x12!\n\x05\x62irth\x18\n \x01(\x0b\x32\x10.sortie.v1.BirthH\x00\x12\x1f\n\x04\x64\x65\x61\x64\x18\x0b \x01(\x0b\x32\x0f.sortie.v1.DeadH\x00\x12(\n\tunit_lost\x18\x0c \x01(\x0b\x32\x13.sortie.v1.UnitLostH\x00\x12\x1f\n\x04kill\x18\r \x01(\x0b\x32\x0f.sortie.v1.KillH\x00\x12\x1d\n\x03hit\x18\x0e \x01(\x0b\x32\x0e.sortie.v1.HitH\x00\x12\x1f\n\x04shot\x18\x0f \x01(\x0b\x32\x0f.sortie.v1.ShotH\x00\x12%\n\x07takeoff\x18\x10 \x01(\x0b\x32\x12.sortie.v1.TakeoffH\x00\x12\x1f\n\x04land\x18\x11 \x01(\x0b\x32\x0f.sortie.v1.LandH\x00\x12\x30\n\rbase_captured\x18\x12 \x01(\x0b\x32\x17.sortie.v1.BaseCapturedH\x00\x12\x1f\n\x04mark\x18\x13 \x01(\x0b\x32\x0f.sortie.v1.MarkH\x00\x12;\n\x13player_entered_unit\x18\x1e \x01(\x0b\x32\x1c.sortie.v1.PlayerEnteredUnitH\x00\x12(\n\tunit_gone\x18\x1f \x01(\x0b\x32\x13.sortie.v1.UnitGoneH\x00\x12.\n\x0cmenu_pressed\x18  \x01(\x0b\x32\x16.sortie.v1.MenuPressedH\x00\x12\x36\n\x10player_connected\x18! \x01(\x0b\x32\x1a.sortie.v1.PlayerConnectedH\x00\x12<\n\x13player_disconnected\x18\" \x01(\x0b\x32\x1d.sortie.v1.PlayerDisconnectedH\x00\x12;\n\x13player_changed_slot\x18# \x01(\x0b\x32\x1c.sortie.v1.PlayerChangedSlotH\x00\x12.\n\x0c\x63hat_message\x18$ \x01(\x0b\x32\x16.sortie.v1.ChatMessageH\x00\x12\x38\n\x11simulation_paused\x18( \x01(\x0b\x32\x1b.sortie.v1.SimulationPausedH\x00\x12:\n\x12simulation_resumed\x18) \x01(\x0b\x32\x1c.sortie.v1.SimulationResumedH\x00\x12\x32\n\x0eresource_ended\x18+ \x01(\x0b\x32\x18.sortie.v1.ResourceEndedH\x00\x12\x1d\n\x03gap\x18\x32 \x01(\x0b\x32\x0e.sortie.v1.GapH\x00\x12:\n\x12\x63\x61pability_changed\x18\x36 \x01(\x0b\x32\x1c.sortie.v1.CapabilityChangedH\x00\x12%\n\x07unknown\x18\x63 \x01(\x0b\x32\x12.sortie.v1.UnknownH\x00\x42\x06\n\x04kind\"\xae\x01\n\x16SubscribeEventsRequest\x12#\n\x05kinds\x18\x01 \x03(\x0e\x32\x14.sortie.v1.EventKind\x12(\n\ncoalitions\x18\x02 \x03(\x0e\x32\x14.sortie.v1.Coalition\x12\x10\n\x08\x66rom_seq\x18\x03 \x01(\x04\x12\x0f\n\x07session\x18\x04 \x01(\t\x12\x11\n\tevent_rev\x18\x08 \x01(\r\x12\x0f\n\x07\x61pi_rev\x18\n \x01(\r\"m\n\x05\x42irth\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x05place\x18\x02 \x01(\x0b\x32\x16.sortie.v1.AirbaseSnap\x12\x13\n\x0bsynthesised\x18\x04 \x01(\x08\"0\n\x04\x44\x65\x61\x64\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\"4\n\x08UnitLost\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\"~\n\x04Kill\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x06target\x18\x02 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x06weapon\x18\x03 \x01(\x0b\x32\x15.sortie.v1.WeaponSnap\"}\n\x03Hit\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x06target\x18\x02 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x06weapon\x18\x03 \x01(\x0b\x32\x15.sortie.v1.WeaponSnap\"W\n\x04Shot\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x06weapon\x18\x02 \x01(\x0b\x32\x15.sortie.v1.WeaponSnap\"Z\n\x07Takeoff\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x05place\x18\x02 \x01(\x0b\x32\x16.sortie.v1.AirbaseSnap\"W\n\x04Land\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x05place\x18\x02 \x01(\x0b\x32\x16.sortie.v1.AirbaseSnap\"\x88\x01\n\x0c\x42\x61seCaptured\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x05place\x18\x02 \x01(\x0b\x32\x16.sortie.v1.AirbaseSnap\x12\'\n\tcoalition\x18\x03 \x01(\x0e\x32\x14.sortie.v1.Coalition\"\xfe\x01\n\x04Mark\x12%\n\x06\x61\x63tion\x18\x01 \x01(\x0e\x32\x15.sortie.v1.MarkAction\x12\x0f\n\x07mark_id\x18\x02 \x01(\r\x12\x0c\n\x04text\x18\x03 \x01(\t\x12\x1c\n\x03pos\x18\x04 \x01(\x0b\x32\x0f.sortie.v1.Vec3\x12\'\n\tcoalition\x18\x05 \x01(\x0e\x32\x14.sortie.v1.Coalition\x12\x16\n\tgroup_eid\x18\x06 \x01(\x04H\x00\x88\x01\x01\x12(\n\tinitiator\x18\x07 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12\x0c\n\x04name\x18\x08 \x01(\t\x12\x0b\n\x03own\x18\t \x01(\x08\x42\x0c\n\n_group_eid\"H\n\x11PlayerEnteredUnit\x12#\n\x04unit\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12\x0e\n\x06player\x18\x02 \x01(\t\"w\n\x08UnitGone\x12\x0b\n\x03\x65id\x18\x01 \x01(\x04\x12\x0c\n\x04name\x18\x02 \x01(\t\x12%\n\x06reason\x18\x03 \x01(\x0e\x32\x15.sortie.v1.GoneReason\x12)\n\nlast_known\x18\x04 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\"\xa8\x01\n\x0bMenuPressed\x12\r\n\x05ident\x18\x01 \x01(\t\x12\x16\n\tgroup_eid\x18\x02 \x01(\x04H\x00\x88\x01\x01\x12\x12\n\ngroup_name\x18\x03 \x01(\t\x12\'\n\tcoalition\x18\x04 \x01(\x0e\x32\x14.sortie.v1.Coalition\x12\x0c\n\x04tree\x18\x05 \x01(\t\x12\x0c\n\x04item\x18\x06 \x01(\t\x12\x0b\n\x03\x61rg\x18\x07 \x01(\tB\x0c\n\n_group_eid\"@\n\x0fPlayerConnected\x12\x11\n\tplayer_id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0c\n\x04ucid\x18\x03 \x01(\t\"C\n\x12PlayerDisconnected\x12\x11\n\tplayer_id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0c\n\x04ucid\x18\x03 \x01(\t\"k\n\x11PlayerChangedSlot\x12\x11\n\tplayer_id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\'\n\tcoalition\x18\x03 \x01(\x0e\x32\x14.sortie.v1.Coalition\x12\x0c\n\x04slot\x18\x04 \x01(\t\"I\n\x0b\x43hatMessage\x12\x11\n\tplayer_id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0c\n\x04text\x18\x03 \x01(\t\x12\x0b\n\x03\x61ll\x18\x04 \x01(\x08\"\x12\n\x10SimulationPaused\"\x13\n\x11SimulationResumed\"7\n\x03Gap\x12\x10\n\x08\x66rom_seq\x18\x01 \x01(\x04\x12\x0e\n\x06to_seq\x18\x02 \x01(\x04\x12\x0e\n\x06reason\x18\x03 \x01(\t\"v\n\x07Unknown\x12\x10\n\x08\x64\x63s_name\x18\x01 \x01(\t\x12\x0e\n\x06\x64\x63s_id\x18\x02 \x01(\x05\x12#\n\x06\x66ields\x18\x03 \x01(\x0b\x32\x13.sortie.v1.LuaValue\x12$\n\x03\x63tx\x18\x04 \x01(\x0b\x32\x17.sortie.v1.EventContext\"l\n\x11\x43\x61pabilityChanged\x12)\n\ncapability\x18\x01 \x01(\x0b\x32\x15.sortie.v1.Capability\x12,\n\x08previous\x18\x02 \x01(\x0e\x32\x1a.sortie.v1.CapabilityState\"c\n\x05Place\x12)\n\x07\x61irbase\x18\x01 \x01(\x0b\x32\x16.sortie.v1.AirbaseSnapH\x00\x12\'\n\x06\x65ntity\x18\x02 \x01(\x0b\x32\x15.sortie.v1.EntitySnapH\x00\x42\x06\n\x04kind\"\xa1\x01\n\x0b\x45xtraObject\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\'\n\x06\x65ntity\x18\x02 \x01(\x0b\x32\x15.sortie.v1.EntitySnapH\x00\x12\'\n\x06weapon\x18\x03 \x01(\x0b\x32\x15.sortie.v1.WeaponSnapH\x00\x12)\n\x07\x61irbase\x18\x04 \x01(\x0b\x32\x16.sortie.v1.AirbaseSnapH\x00\x42\x08\n\x06object\"\xc2\x03\n\x0c\x45ventContext\x12(\n\tinitiator\x18\x01 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x06target\x18\x02 \x01(\x0b\x32\x15.sortie.v1.EntitySnap\x12%\n\x06weapon\x18\x03 \x01(\x0b\x32\x15.sortie.v1.WeaponSnap\x12\x1f\n\x05place\x18\x04 \x01(\x0b\x32\x10.sortie.v1.Place\x12\x13\n\x0bweapon_type\x18\x05 \x01(\t\x12\x0c\n\x04text\x18\x06 \x01(\t\x12!\n\x03pos\x18\x07 \x01(\x0b\x32\x0f.sortie.v1.Vec3H\x00\x88\x01\x01\x12\'\n\tcoalition\x18\x08 \x01(\x0e\x32\x14.sortie.v1.Coalition\x12\x16\n\tgroup_eid\x18\t \x01(\x04H\x01\x88\x01\x01\x12\x10\n\x03idx\x18\n \x01(\rH\x02\x88\x01\x01\x12\"\n\x05\x65xtra\x18\x0b \x01(\x0b\x32\x13.sortie.v1.LuaValue\x12-\n\rextra_objects\x18\x0c \x03(\x0b\x32\x16.sortie.v1.ExtraObject\x12\x0f\n\x07\x66oreign\x18\r \x01(\x08\x42\x06\n\x04_posB\x0c\n\n_group_eidB\x06\n\x04_idx*\x9e\x05\n\tEventKind\x12\x1a\n\x16\x45VENT_KIND_UNSPECIFIED\x10\x00\x12\x14\n\x10\x45VENT_KIND_BIRTH\x10\x01\x12\x13\n\x0f\x45VENT_KIND_DEAD\x10\x02\x12\x18\n\x14\x45VENT_KIND_UNIT_LOST\x10\x03\x12\x13\n\x0f\x45VENT_KIND_KILL\x10\x04\x12\x12\n\x0e\x45VENT_KIND_HIT\x10\x05\x12\x13\n\x0f\x45VENT_KIND_SHOT\x10\x06\x12\x16\n\x12\x45VENT_KIND_TAKEOFF\x10\x07\x12\x13\n\x0f\x45VENT_KIND_LAND\x10\x08\x12\x1c\n\x18\x45VENT_KIND_BASE_CAPTURED\x10\t\x12\x13\n\x0f\x45VENT_KIND_MARK\x10\n\x12\"\n\x1e\x45VENT_KIND_PLAYER_ENTERED_UNIT\x10\x0b\x12\x18\n\x14\x45VENT_KIND_UNIT_GONE\x10\x0c\x12\x1b\n\x17\x45VENT_KIND_MENU_PRESSED\x10\r\x12\x1f\n\x1b\x45VENT_KIND_PLAYER_CONNECTED\x10\x0e\x12\"\n\x1e\x45VENT_KIND_PLAYER_DISCONNECTED\x10\x0f\x12\"\n\x1e\x45VENT_KIND_PLAYER_CHANGED_SLOT\x10\x10\x12\x1b\n\x17\x45VENT_KIND_CHAT_MESSAGE\x10\x11\x12 \n\x1c\x45VENT_KIND_SIMULATION_PAUSED\x10\x12\x12!\n\x1d\x45VENT_KIND_SIMULATION_RESUMED\x10\x13\x12\x12\n\x0e\x45VENT_KIND_GAP\x10\x14\x12\x16\n\x12\x45VENT_KIND_UNKNOWN\x10\x15\x12\x1d\n\x19\x45VENT_KIND_RESOURCE_ENDED\x10\x16\x12!\n\x1d\x45VENT_KIND_CAPABILITY_CHANGED\x10(*r\n\nMarkAction\x12\x1b\n\x17MARK_ACTION_UNSPECIFIED\x10\x00\x12\x15\n\x11MARK_ACTION_ADDED\x10\x01\x12\x17\n\x13MARK_ACTION_CHANGED\x10\x02\x12\x17\n\x13MARK_ACTION_REMOVED\x10\x03*\xcc\x01\n\nGoneReason\x12\x1b\n\x17GONE_REASON_UNSPECIFIED\x10\x00\x12\"\n\x1eGONE_REASON_MISSING_FROM_SWEEP\x10\x01\x12!\n\x1dGONE_REASON_RUNTIME_ID_REUSED\x10\x02\x12\x19\n\x15GONE_REASON_DESPAWNED\x10\x03\x12%\n!GONE_REASON_MISSING_FROM_SNAPSHOT\x10\x04\x12\x18\n\x14GONE_REASON_REPLACED\x10\x05*\xb4\x0f\n\x08\x44\x63sEvent\x12\x19\n\x15\x44\x43S_EVENT_UNSPECIFIED\x10\x00\x12\x12\n\x0e\x44\x43S_EVENT_SHOT\x10\x01\x12\x11\n\rDCS_EVENT_HIT\x10\x02\x12\x12\n\x0e\x44\x43S_EVENT_KILL\x10\x03\x12\x1c\n\x18\x44\x43S_EVENT_SHOOTING_START\x10\x04\x12\x1a\n\x16\x44\x43S_EVENT_SHOOTING_END\x10\x05\x12\x11\n\rDCS_EVENT_BDA\x10\x06\x12\x13\n\x0f\x44\x43S_EVENT_SCORE\x10\x07\x12\x13\n\x0f\x44\x43S_EVENT_BIRTH\x10\n\x12\x12\n\x0e\x44\x43S_EVENT_DEAD\x10\x0b\x12\x17\n\x13\x44\x43S_EVENT_UNIT_LOST\x10\x0c\x12\x13\n\x0f\x44\x43S_EVENT_CRASH\x10\r\x12\x18\n\x14\x44\x43S_EVENT_PILOT_DEAD\x10\x0e\x12\x15\n\x11\x44\x43S_EVENT_TAKEOFF\x10\x14\x12\x12\n\x0e\x44\x43S_EVENT_LAND\x10\x15\x12\x1c\n\x18\x44\x43S_EVENT_RUNWAY_TAKEOFF\x10\x16\x12\x1a\n\x16\x44\x43S_EVENT_RUNWAY_TOUCH\x10\x17\x12\x1c\n\x18\x44\x43S_EVENT_ENGINE_STARTUP\x10\x18\x12\x1d\n\x19\x44\x43S_EVENT_ENGINE_SHUTDOWN\x10\x19\x12\x17\n\x13\x44\x43S_EVENT_REFUELING\x10\x1a\x12\x1c\n\x18\x44\x43S_EVENT_REFUELING_STOP\x10\x1b\x12\x1b\n\x17\x44\x43S_EVENT_HUMAN_FAILURE\x10\x1c\x12\x1e\n\x1a\x44\x43S_EVENT_DETAILED_FAILURE\x10\x1d\x12)\n%DCS_EVENT_HUMAN_AIRCRAFT_REPAIR_START\x10\x1e\x12*\n&DCS_EVENT_HUMAN_AIRCRAFT_REPAIR_FINISH\x10\x1f\x12\x1e\n\x1a\x44\x43S_EVENT_AI_ABORT_MISSION\x10 \x12\x1f\n\x1b\x44\x43S_EVENT_EMERGENCY_LANDING\x10!\x12\"\n\x1e\x44\x43S_EVENT_LANDING_QUALITY_MARK\x10\"\x12\x18\n\x14\x44\x43S_EVENT_WEAPON_ADD\x10(\x12\x19\n\x15\x44\x43S_EVENT_WEAPON_DROP\x10)\x12\x1a\n\x16\x44\x43S_EVENT_WEAPON_REARM\x10*\x12\x16\n\x12\x44\x43S_EVENT_EJECTION\x10\x32\x12*\n&DCS_EVENT_DISCARD_CHAIR_AFTER_EJECTION\x10\x33\x12$\n DCS_EVENT_LANDING_AFTER_EJECTION\x10\x34\x12!\n\x1d\x44\x43S_EVENT_PARATROOPER_LENDING\x10\x35\x12\x1f\n\x1b\x44\x43S_EVENT_PLAYER_ENTER_UNIT\x10<\x12\x1f\n\x1b\x44\x43S_EVENT_PLAYER_LEAVE_UNIT\x10=\x12\x1c\n\x18\x44\x43S_EVENT_PLAYER_COMMENT\x10>\x12$\n DCS_EVENT_PLAYER_SELF_KILL_PILOT\x10?\x12%\n!DCS_EVENT_PLAYER_CAPTURE_AIRFIELD\x10@\x12\x1a\n\x16\x44\x43S_EVENT_TOOK_CONTROL\x10\x41\x12\x1b\n\x17\x44\x43S_EVENT_BASE_CAPTURED\x10\x46\x12\x18\n\x14\x44\x43S_EVENT_MARK_ADDED\x10G\x12\x19\n\x15\x44\x43S_EVENT_MARK_CHANGE\x10H\x12\x1a\n\x16\x44\x43S_EVENT_MARK_REMOVED\x10I\x12\x1a\n\x16\x44\x43S_EVENT_TRIGGER_ZONE\x10J\x12\x1f\n\x1b\x44\x43S_EVENT_NEW_DYNAMIC_CARGO\x10P\x12\"\n\x1e\x44\x43S_EVENT_DYNAMIC_CARGO_LOADED\x10Q\x12$\n DCS_EVENT_DYNAMIC_CARGO_UNLOADED\x10R\x12#\n\x1f\x44\x43S_EVENT_DYNAMIC_CARGO_REMOVED\x10S\x12\x1e\n\x1a\x44\x43S_EVENT_UNIT_CREATE_TASK\x10Z\x12\x1e\n\x1a\x44\x43S_EVENT_UNIT_DELETE_TASK\x10[\x12 \n\x1c\x44\x43S_EVENT_UNIT_TASK_COMPLETE\x10\\\x12\x1d\n\x19\x44\x43S_EVENT_UNIT_TASK_STAGE\x10]\x12!\n\x1d\x44\x43S_EVENT_GROUP_CHANGE_OPTION\x10^\x12\x1b\n\x17\x44\x43S_EVENT_MISSION_START\x10\x64\x12\x19\n\x15\x44\x43S_EVENT_MISSION_END\x10\x65\x12\x1d\n\x19\x44\x43S_EVENT_MISSION_RESTART\x10\x66\x12\x1c\n\x18\x44\x43S_EVENT_MISSION_WINNER\x10g\x12\x1e\n\x1a\x44\x43S_EVENT_SIMULATION_START\x10h\x12\x1f\n\x1b\x44\x43S_EVENT_SIMULATION_FREEZE\x10i\x12!\n\x1d\x44\x43S_EVENT_SIMULATION_UNFREEZE\x10j\x12\x16\n\x12\x44\x43S_EVENT_DAYNIGHT\x10k\x12\x19\n\x15\x44\x43S_EVENT_FLIGHT_TIME\x10l\x12\x1d\n\x19\x44\x43S_EVENT_MAC_EXTRA_SCORE\x10m\x12\x1d\n\x19\x44\x43S_EVENT_MAC_LMS_RESTART\x10n2L\n\x06\x45vents\x12\x42\n\tSubscribe\x12!.sortie.v1.SubscribeEventsRequest\x1a\x10.sortie.v1.Event0\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'sortie.v1.events_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_EVENTKIND']._serialized_start=3213
-  _globals['_EVENTKIND']._serialized_end=3817
-  _globals['_MARKACTION']._serialized_start=3819
-  _globals['_MARKACTION']._serialized_end=3933
-  _globals['_GONEREASON']._serialized_start=3936
-  _globals['_GONEREASON']._serialized_end=4114
-  _globals['_EVENT']._serialized_start=118
-  _globals['_EVENT']._serialized_end=1158
-  _globals['_SUBSCRIBEEVENTSREQUEST']._serialized_start=1161
-  _globals['_SUBSCRIBEEVENTSREQUEST']._serialized_end=1299
-  _globals['_BIRTH']._serialized_start=1301
-  _globals['_BIRTH']._serialized_end=1389
-  _globals['_DEAD']._serialized_start=1391
-  _globals['_DEAD']._serialized_end=1439
-  _globals['_UNITLOST']._serialized_start=1441
-  _globals['_UNITLOST']._serialized_end=1493
-  _globals['_KILL']._serialized_start=1495
-  _globals['_KILL']._serialized_end=1621
-  _globals['_HIT']._serialized_start=1623
-  _globals['_HIT']._serialized_end=1748
-  _globals['_SHOT']._serialized_start=1750
-  _globals['_SHOT']._serialized_end=1837
-  _globals['_TAKEOFF']._serialized_start=1839
-  _globals['_TAKEOFF']._serialized_end=1929
-  _globals['_LAND']._serialized_start=1931
-  _globals['_LAND']._serialized_end=2018
-  _globals['_BASECAPTURED']._serialized_start=2021
-  _globals['_BASECAPTURED']._serialized_end=2157
-  _globals['_MARK']._serialized_start=2160
-  _globals['_MARK']._serialized_end=2387
-  _globals['_PLAYERENTEREDUNIT']._serialized_start=2389
-  _globals['_PLAYERENTEREDUNIT']._serialized_end=2461
-  _globals['_UNITGONE']._serialized_start=2463
-  _globals['_UNITGONE']._serialized_end=2582
-  _globals['_MENUPRESSED']._serialized_start=2584
-  _globals['_MENUPRESSED']._serialized_end=2711
-  _globals['_PLAYERCONNECTED']._serialized_start=2713
-  _globals['_PLAYERCONNECTED']._serialized_end=2777
-  _globals['_PLAYERDISCONNECTED']._serialized_start=2779
-  _globals['_PLAYERDISCONNECTED']._serialized_end=2846
-  _globals['_PLAYERCHANGEDSLOT']._serialized_start=2848
-  _globals['_PLAYERCHANGEDSLOT']._serialized_end=2955
-  _globals['_CHATMESSAGE']._serialized_start=2957
-  _globals['_CHATMESSAGE']._serialized_end=3030
-  _globals['_SIMULATIONPAUSED']._serialized_start=3032
-  _globals['_SIMULATIONPAUSED']._serialized_end=3050
-  _globals['_SIMULATIONRESUMED']._serialized_start=3052
-  _globals['_SIMULATIONRESUMED']._serialized_end=3071
-  _globals['_GAP']._serialized_start=3073
-  _globals['_GAP']._serialized_end=3128
-  _globals['_UNKNOWN']._serialized_start=3130
-  _globals['_UNKNOWN']._serialized_end=3210
-  _globals['_EVENTS']._serialized_start=4116
-  _globals['_EVENTS']._serialized_end=4192
+  _globals['_EVENTKIND']._serialized_start=4402
+  _globals['_EVENTKIND']._serialized_end=5072
+  _globals['_MARKACTION']._serialized_start=5074
+  _globals['_MARKACTION']._serialized_end=5188
+  _globals['_GONEREASON']._serialized_start=5191
+  _globals['_GONEREASON']._serialized_end=5395
+  _globals['_DCSEVENT']._serialized_start=5398
+  _globals['_DCSEVENT']._serialized_end=7370
+  _globals['_EVENT']._serialized_start=145
+  _globals['_EVENT']._serialized_end=1355
+  _globals['_SUBSCRIBEEVENTSREQUEST']._serialized_start=1358
+  _globals['_SUBSCRIBEEVENTSREQUEST']._serialized_end=1532
+  _globals['_BIRTH']._serialized_start=1534
+  _globals['_BIRTH']._serialized_end=1643
+  _globals['_DEAD']._serialized_start=1645
+  _globals['_DEAD']._serialized_end=1693
+  _globals['_UNITLOST']._serialized_start=1695
+  _globals['_UNITLOST']._serialized_end=1747
+  _globals['_KILL']._serialized_start=1749
+  _globals['_KILL']._serialized_end=1875
+  _globals['_HIT']._serialized_start=1877
+  _globals['_HIT']._serialized_end=2002
+  _globals['_SHOT']._serialized_start=2004
+  _globals['_SHOT']._serialized_end=2091
+  _globals['_TAKEOFF']._serialized_start=2093
+  _globals['_TAKEOFF']._serialized_end=2183
+  _globals['_LAND']._serialized_start=2185
+  _globals['_LAND']._serialized_end=2272
+  _globals['_BASECAPTURED']._serialized_start=2275
+  _globals['_BASECAPTURED']._serialized_end=2411
+  _globals['_MARK']._serialized_start=2414
+  _globals['_MARK']._serialized_end=2668
+  _globals['_PLAYERENTEREDUNIT']._serialized_start=2670
+  _globals['_PLAYERENTEREDUNIT']._serialized_end=2742
+  _globals['_UNITGONE']._serialized_start=2744
+  _globals['_UNITGONE']._serialized_end=2863
+  _globals['_MENUPRESSED']._serialized_start=2866
+  _globals['_MENUPRESSED']._serialized_end=3034
+  _globals['_PLAYERCONNECTED']._serialized_start=3036
+  _globals['_PLAYERCONNECTED']._serialized_end=3100
+  _globals['_PLAYERDISCONNECTED']._serialized_start=3102
+  _globals['_PLAYERDISCONNECTED']._serialized_end=3169
+  _globals['_PLAYERCHANGEDSLOT']._serialized_start=3171
+  _globals['_PLAYERCHANGEDSLOT']._serialized_end=3278
+  _globals['_CHATMESSAGE']._serialized_start=3280
+  _globals['_CHATMESSAGE']._serialized_end=3353
+  _globals['_SIMULATIONPAUSED']._serialized_start=3355
+  _globals['_SIMULATIONPAUSED']._serialized_end=3373
+  _globals['_SIMULATIONRESUMED']._serialized_start=3375
+  _globals['_SIMULATIONRESUMED']._serialized_end=3394
+  _globals['_GAP']._serialized_start=3396
+  _globals['_GAP']._serialized_end=3451
+  _globals['_UNKNOWN']._serialized_start=3453
+  _globals['_UNKNOWN']._serialized_end=3571
+  _globals['_CAPABILITYCHANGED']._serialized_start=3573
+  _globals['_CAPABILITYCHANGED']._serialized_end=3681
+  _globals['_PLACE']._serialized_start=3683
+  _globals['_PLACE']._serialized_end=3782
+  _globals['_EXTRAOBJECT']._serialized_start=3785
+  _globals['_EXTRAOBJECT']._serialized_end=3946
+  _globals['_EVENTCONTEXT']._serialized_start=3949
+  _globals['_EVENTCONTEXT']._serialized_end=4399
+  _globals['_EVENTS']._serialized_start=7372
+  _globals['_EVENTS']._serialized_end=7448
 # @@protoc_insertion_point(module_scope)

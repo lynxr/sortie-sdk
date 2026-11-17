@@ -41,12 +41,63 @@ mod spelled_out {
     }
 }
 
+mod declared {
+    use super::Demo;
+    use sortie::prelude::*;
+
+    /// Declares the wave-1 API revision; events stay at 0.
+    #[sortie::mission(api_rev = 1)]
+    pub async fn run(_ctx: Ctx<Demo>, _start: Start) -> sortie::Result<()> {
+        Ok(())
+    }
+}
+
 fn assert_mission<M: Scenario, F: sortie::runtime::Mission<M>>(_: F) {}
+
+fn revisions_of<M: Scenario, F: sortie::runtime::Mission<M>>(f: &F) -> sortie::runtime::Revisions {
+    f.revisions()
+}
 
 #[test]
 fn a_mission_is_what_main_and_the_fake_take() {
     assert_mission::<Demo, _>(run);
     assert_mission::<Demo, _>(spelled_out::run);
+    assert_mission::<Demo, _>(declared::run);
+}
+
+#[test]
+fn revisions_are_declared_by_the_attribute() {
+    use sortie::runtime::Revisions;
+    assert_eq!(revisions_of::<Demo, _>(&run), Revisions::V0_1_0);
+    assert_eq!(
+        revisions_of::<Demo, _>(&declared::run),
+        Revisions::new(1, 0)
+    );
+    assert_eq!(declared::run.declared(), Revisions::new(1, 0));
+}
+
+mod required {
+    use super::Demo;
+    use sortie::prelude::*;
+
+    /// Cannot run without static objects and drawings.
+    #[sortie::mission(api_rev = 1, requires = [sortie::caps::SPAWN_STATIC, "draw"])]
+    pub async fn run(_ctx: Ctx<Demo>, _start: Start) -> sortie::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn required_capabilities_are_declared_by_the_attribute() {
+    use sortie::runtime::Mission;
+    assert_mission::<Demo, _>(required::run);
+    assert_eq!(
+        Mission::<Demo>::required_capabilities(&required::run),
+        ["spawn_static", "draw"]
+    );
+    assert_eq!(required::run.required(), ["spawn_static", "draw"]);
+    assert!(Mission::<Demo>::required_capabilities(&declared::run).is_empty());
+    assert!(Mission::<Demo>::required_capabilities(&run).is_empty());
 }
 
 /// A harness that records what `#[sortie::test]` hands it and polls the body to completion.

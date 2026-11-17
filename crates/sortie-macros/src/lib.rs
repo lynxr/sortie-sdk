@@ -21,7 +21,20 @@ mod test_attr;
 /// ```
 ///
 /// The function is emitted unchanged, so it is what `sortie::main!(run)` takes (it accepts
-/// any `sortie::runtime::Mission<M>`). Mistakes are reported at the definition, in two layers:
+/// any `sortie::runtime::Mission<M>`).
+///
+/// `#[sortie::mission(api_rev = 1, event_rev = 0)]` declares the revisions the logic is
+/// written for (each optional, default 0 = the 0.1.0 behaviour; `event_rev` at most
+/// `api_rev`). Then `run` is a `sortie::runtime::Declared` constant that carries them and runs
+/// the function (kept under a hidden name): `sortie::main!(run)` and `FakeDcs::run(run)` take
+/// it the same way, a direct call is `run.call(ctx, start)`.
+///
+/// `requires = [sortie::caps::SPAWN_STATIC, sortie::caps::DRAW]` names the capabilities the
+/// logic cannot run without (`&'static str` expressions: the `sortie::caps` constants or
+/// literal names). They go into `Attach.required_capabilities`, and the engine refuses the
+/// attach when one is not AVAILABLE, before any mission code runs.
+///
+/// Mistakes are reported at the definition, in two layers:
 ///
 /// * the attribute checks the syntax: async, two arguments, no generics, an explicit return
 ///   type, and the types where they are spelled with the SDK's names (`Ctx<M>` first, `Start`

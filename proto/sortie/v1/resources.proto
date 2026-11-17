@@ -1,0 +1,354 @@
+// The resource registry (wave 1, API revision 1): named things a logic keeps in DCS (map
+// drawings, F10 menu trees; later watches, emitters, spots, stock and policy rules). A put
+// creates a resource or brings it to a new spec in place; the engine remembers it for the
+// session, shows it in the world mirror and ends it when its lifetime ends.
+//
+// The spec messages live in this file (not in commands.proto) so that the mirror side
+// (ResourceSnap, world.proto) can carry them as a typed oneof: commands.proto imports
+// world.proto, so world.proto cannot import commands.proto.
+syntax = "proto3";
+
+package sortie.v1;
+
+import "sortie/v1/common.proto";
+
+// ---- registry: identity and mirror side ----
+
+// What a registered resource is. A (kind, name) pair is unique within a session; the same
+// name under two kinds is two resources.
+enum ResourceKind {
+  RESOURCE_KIND_UNSPECIFIED = 0;
+  // Map drawings and mark panels (Draw, MarkCommand).
+  RESOURCE_KIND_DRAWING = 1;
+  // F10 menu entries (MenuTree; the 0.1.0 Menu registers as a one-node tree).
+  RESOURCE_KIND_MENU = 2;
+  // W2. Non-default sampling (Watch).
+  RESOURCE_KIND_WATCH = 3;
+  // W3. Repeating or lasting effects (Emitter).
+  RESOURCE_KIND_EMITTER = 4;
+  // W3. Laser and infra-red spots (Spot).
+  RESOURCE_KIND_SPOT = 5;
+  // W3. Warehouse stock rules (StockRule).
+  RESOURCE_KIND_STOCK_RULE = 6;
+  // W2. Slot and connect policy rules of the session (PolicyRule; W6: chat rules).
+  RESOURCE_KIND_POLICY_RULE = 7;
+}
+
+enum ResourcePhase {
+  RESOURCE_PHASE_UNSPECIFIED = 0;
+  // Exists in DCS / is being applied.
+  RESOURCE_PHASE_ACTIVE = 1;
+  // Registered, but not applied right now: the mission link is away, the slot it is bound
+  // to is empty, its anchor object does not exist yet. The engine applies it again when it
+  // can.
+  RESOURCE_PHASE_SUSPENDED = 2;
+}
+
+// The spec of a resource as last put, one member per kind. The tags are the tags of
+// ResourcePut.spec.
+message ResourceSpec {
+  oneof spec {
+    // RESOURCE_KIND_DRAWING. A 0.1.0 MarkCommand shows as the Draw{panel} it stands for.
+    Draw draw = 10;
+    // 11 Watch (W2), 12 Emitter, 13 Spot, 14 StockRule (W3), 16 PolicyRule (W2).
+    // RESOURCE_KIND_MENU. A 0.1.0 Menu shows as the one-node tree it stands for.
+    MenuTree menu_tree = 15;
+  }
+}
+
+// One registered resource as the engine knows it.
+message ResourceSnap {
+  ResourceKind kind = 1;
+  string name = 2;
+  ResourcePhase phase = 3;
+  // Model time of the put that created it / of the last put that changed it.
+  double created_at = 4;
+  double updated_at = 5;
+  // Model time at which ttl_s runs out; unset = no ttl. Every put moves it.
+  optional double expires_at = 6;
+  // The writer that created it: the name of its API token (Start.writer); without a token
+  // Attach.logic, or "api:<role>" for Commands.Submit.
+  string owner = 7;
+  // The spec as last put (typed; spec section 3.2 used google.protobuf.Any, lead decision
+  // L4 made it a oneof).
+  ResourceSpec spec = 8;
+  // 9..11 are kept for W2 (engine-side effective values of a Watch).
+  // The writer of the last put that changed it.
+  string updated_by = 12;
+  // What is in DCS no longer equals `spec` (a player edited an editable mark, the layer lost
+  // part of it, an update failed half way). The next put is applied again even if its spec
+  // is equal, and clears the flag.
+  bool drifted = 13;
+}
+
+message ResourceKey {
+  ResourceKind kind = 1;
+  string name = 2;
+}
+
+// ---- registry: command side ----
+
+// Create a named resource, or bring the existing one to this spec in place
+// (Command.body.put). Result: reply.resource. A put whose resolved spec equals the registered
+// one costs no DCS call. Puts and removes of one (kind, name) run in the order the engine
+// accepted them, whatever their lane. Command.key is ignored: a put is its own idempotent form.
+message ResourcePut {
+  // 1..=128 bytes of UTF-8 without control characters. Unique per kind within the session.
+  // "/" separates levels for removal by prefix. Names that start with "sortie:" are made by
+  // the engine and are refused here.
+  string name = 1;
+  // Lifetime in model seconds, counted from this put: every put, also one that changes
+  // nothing else, starts it again. 0 = until removed or the session ends.
+  double ttl_s = 2;
+  // For kinds that keep running inside DCS without the engine (W2: PolicyRule; W3:
+  // Emitter, Spot, StockRule): seconds the Lua layer keeps the resource applied while the
+  // engine link is down. Drawings ignore it.
+  double offline_ttl_s = 3;
+  // 4..9 are kept for later waves.
+  oneof spec {
+    // RESOURCE_KIND_DRAWING.
+    Draw draw = 10;
+    // 11 Watch (W2), 12 Emitter, 13 Spot, 14 StockRule (W3), 16 PolicyRule (W2).
+    // RESOURCE_KIND_MENU.
+    MenuTree menu_tree = 15;
+  }
+}
+
+// Remove one resource by name, every resource of the kind whose name starts with a prefix,
+// or every resource of the kind (Command.body.remove). Result: reply.resource. Removing what
+// does not exist succeeds with RESOURCE_CHANGE_ABSENT.
+message ResourceRemove {
+  ResourceKind kind = 1;
+  // Unset is ERROR_CODE_INVALID. An empty name or prefix, or all = false, is
+  // ERROR_CODE_INVALID.
+  oneof which {
+    string name = 2;
+    string prefix = 3;
+    // Every resource of the kind. Must be true.
+    bool all = 4;
+  }
+  // `prefix` and `all` remove only what the calling writer owns unless this is set; a named
+  // remove of another writer's resource without it is ERROR_CODE_REJECTED. A resource removed
+  // by a writer other than its owner ends for the owner with
+  // ResourceEnded{REMOVED_BY_OTHER}.
+  bool any_owner = 5;
+}
+
+enum ResourceChange {
+  RESOURCE_CHANGE_UNSPECIFIED = 0;
+  RESOURCE_CHANGE_CREATED = 1;
+  // The resolved spec and ttl_s equal the registered ones and the resource has not drifted:
+  // nothing was sent to DCS. The ttl still starts again.
+  RESOURCE_CHANGE_UNCHANGED = 2;
+  // Changed in place (the DCS objects kept their ids), or only ttl_s or `announce` changed.
+  RESOURCE_CHANGE_UPDATED = 3;
+  // DCS cannot change this in place: removed and created again with new DCS ids.
+  RESOURCE_CHANGE_REPLACED = 4;
+  RESOURCE_CHANGE_REMOVED = 5;
+  // Remove: nothing matched.
+  RESOURCE_CHANGE_ABSENT = 6;
+}
+
+message ResourceAck {
+  ResourceChange change = 1;
+  // Resources affected (remove by prefix: how many were removed).
+  uint32 count = 2;
+  // DCS calls the command needed.
+  uint32 dcs_calls = 3;
+  // The resource after the command (unset after a remove).
+  ResourceSnap resource = 4;
+  // Parts of the spec the engine could not honour and what it did instead.
+  repeated string warnings = 5;
+  // A remove: the resources it took out, so a replica drops them before the next delta.
+  repeated ResourceKey removed = 6;
+}
+
+// ---- registry: ends ----
+
+enum ResourceEndReason {
+  RESOURCE_END_REASON_UNSPECIFIED = 0;
+  // ttl_s ran out.
+  RESOURCE_END_REASON_EXPIRED = 1;
+  // It did what it was for (an emitter with a count, a one-shot watch).
+  RESOURCE_END_REASON_FINISHED = 2;
+  // The object it reads from or is attached to is gone.
+  RESOURCE_END_REASON_SOURCE_GONE = 3;
+  // The object it points at is gone.
+  RESOURCE_END_REASON_TARGET_GONE = 4;
+  // A player removed it (an editable mark deleted on the F10 map).
+  RESOURCE_END_REASON_PLAYER = 5;
+  // The engine found it missing in DCS when reconciling (after a link drop, a Gap or an
+  // engine restart).
+  RESOURCE_END_REASON_LOST = 6;
+  // A writer other than its owner removed it (ResourceRemove with any_owner).
+  RESOURCE_END_REASON_REMOVED_BY_OTHER = 7;
+}
+
+// A registered resource stopped existing without a ResourceRemove from its owner
+// (Event.kind.resource_ended, event revision 1). The owner's own removal is reported in that
+// command's result and in WorldDelta only; the end of the session raises none (SessionEnded
+// closes the registry). Best effort: after an attach or a resync the snapshot's `resources`
+// is the truth.
+message ResourceEnded {
+  ResourceKind kind = 1;
+  string name = 2;
+  ResourceEndReason reason = 3;
+  // The writer that owned it (ResourceSnap.owner).
+  string owner = 4;
+}
+
+// ---- Draw (RESOURCE_KIND_DRAWING) ----
+
+// Line types by name; the Lua layer maps them to the DCS numbers (no DCS Lua table exists).
+enum LineStyle {
+  // = SOLID.
+  LINE_STYLE_UNSPECIFIED = 0;
+  LINE_STYLE_NONE = 1;
+  LINE_STYLE_SOLID = 2;
+  LINE_STYLE_DASHED = 3;
+  LINE_STYLE_DOTTED = 4;
+  LINE_STYLE_DOT_DASH = 5;
+  LINE_STYLE_LONG_DASH = 6;
+  LINE_STYLE_TWO_DASH = 7;
+}
+
+message MapStyle {
+  // Outline / text colour, each channel 0..1. Unset = opaque coalition colour of the audience
+  // entry (red, blue; white for all and neutral).
+  Rgba color = 1;
+  // Fill colour of closed shapes / text background. Unset = no fill.
+  Rgba fill = 2;
+  // A change of the line style replaces the drawing (DCS does not send setMarkupTypeLine to
+  // clients).
+  LineStyle line = 3;
+}
+
+// A drawing on the F10 map: a mark panel or one of the map shapes. Resource spec
+// (ResourcePut.spec.draw, RESOURCE_KIND_DRAWING); shares its name space with MarkCommand.
+// One resource owns a list of DCS mark ids: one per audience entry and, for an open path, per
+// segment. Mark ids are allocated by the engine from 7 100 000 and never reused within a
+// mission. In place (same ids): colour, fill, circle radius, text and font size of `text`,
+// first point, last point. Everything else replaces the drawing (new ids): line style, a
+// middle vertex or any vertex of a closed path, the number of points, panel text or position,
+// shape kind, audience, `editable`.
+message Draw {
+  // Ignored by `panel`.
+  MapStyle style = 1;
+  // Who sees it; empty = everyone. At most 8 entries. Shapes accept `all` and `coalition`;
+  // `panel` accepts `group` as well (it reaches the group only while a player occupies it).
+  // Any other member is ERROR_CODE_INVALID.
+  repeated Audience audience = 2;
+  // true: players may edit or delete it on the map (DCS readOnly = false). An edit by a
+  // player sets ResourceSnap.drifted; a delete ends the resource (ResourceEnded{PLAYER}).
+  bool editable = 3;
+  // Text DCS shows to the audience when the drawing appears; empty = none. Shown again when
+  // the drawing is replaced.
+  string announce = 4;
+  // 5..9 are kept (W3: follow an object).
+  oneof shape {
+    MarkPanel panel = 10;
+    MapPath path = 11;
+    MapCircle circle = 12;
+    MapRect rect = 13;
+    MapArrow arrow = 14;
+    MapText text = 15;
+  }
+}
+
+// The classic mark with a text box (trigger.action.markTo*).
+message MarkPanel {
+  Anchor at = 1;
+  string text = 2;
+}
+
+// Open, 2..=33 points: n - 1 DCS lines (there is no polyline in DCS), so an open path costs
+// n - 1 DCS calls per audience entry. Closed, 3..=64 points: a filled polygon (4 points use
+// the DCS quad, others the free-form markup).
+message MapPath {
+  repeated MapPoint points = 1;
+  bool closed = 2;
+}
+
+// Axis-aligned rectangle given by two opposite corners.
+message MapRect {
+  MapPoint a = 1;
+  MapPoint b = 2;
+}
+
+// An arrow whose head is at `tip`.
+message MapArrow {
+  MapPoint tip = 1;
+  MapPoint tail = 2;
+}
+
+message MapText {
+  MapPoint at = 1;
+  string text = 2;
+  // 0 = engine default (16).
+  uint32 font_size = 3;
+}
+
+// ---- MenuTree (RESOURCE_KIND_MENU) ----
+
+// A named F10 radio menu tree for one audience (ResourcePut.spec.menu_tree). A put creates the
+// tree or brings it to the new spec: the engine compares the nodes with what it installed and
+// removes and adds only what changed (DCS cannot rename a menu entry; an entry that changes,
+// and the entries after it on its level, are added again so the order stays as given). A
+// press arrives as MenuPressed{tree, item, arg}.
+// `audience` accepts all, coalition and group (player: W6); any other member is
+// ERROR_CODE_INVALID. DCS knows a group's menu only while a player occupies the group (it has
+// no group id otherwise). A group given by name or manifest ident is bound to the slot: the
+// tree is SUSPENDED while nobody occupies the group (a put answers with a warning and 0 DCS
+// calls) and is installed again, by the engine, when a player takes a slot of the group (a
+// dynamic slot gets a new group id). A group given by Eid ends with
+// ResourceEnded{SOURCE_GONE} when that group is gone.
+// Limits: at most 200 nodes (the "More..." pages of `overflow` do not count; a tree has at most
+// 22); DCS shows at most 10 entries per level, a longer level is paged or refused by
+// `overflow`; two entries with one label on one level are ERROR_CODE_INVALID (DCS addresses
+// entries by their label path).
+message MenuTree {
+  Audience audience = 1;
+  // Sub-menu labels the tree hangs under, from the F10 root; made on demand, shared with
+  // other trees and 0.1.0 `Menu` entries of the same audience, removed when empty. Not paged.
+  repeated string under = 2;
+  // At most 200 nodes in total.
+  repeated MenuNode nodes = 3;
+  // What a level of the tree's own nodes with more than 10 entries does (not the `under`
+  // levels, which other menus share).
+  MenuOverflow overflow = 4;
+  // 5 is kept for W6 (MenuEach each: one copy per matching player group).
+}
+
+message MenuNode {
+  // Stable within the tree, echoed in MenuPressed.item. Required for a command; unique within
+  // the tree.
+  string id = 1;
+  // 1..=128 bytes without control characters; empty = the manifest label of `ident`.
+  string label = 2;
+  // Non-empty = a sub-menu.
+  repeated MenuNode children = 3;
+  // Optional manifest menu ident: the label defaults to the manifest label and the press
+  // also reaches the typed MenuRef handle (MenuPressed.ident).
+  string ident = 4;
+  // Opaque payload echoed in MenuPressed.arg; at most 256 bytes.
+  string arg = 5;
+  // Keep a sub-menu that has no children.
+  bool keep_empty = 6;
+}
+
+enum MenuOverflow {
+  // = PAGE (so is a value the engine does not know).
+  MENU_OVERFLOW_UNSPECIFIED = 0;
+  // More than 10 entries at a level: DCS shows the first 9 and a sub-menu "More..." holding the
+  // rest, paged the same way (a level of 25: 9 and "More...", then 9 and "More...", then 7).
+  // The page of the tree's root level is labelled "More... (<resource name>)": that level is
+  // shared with other trees and 0.1.0 `Menu` entries, and DCS addresses entries by their label
+  // path, so each tree's page there has its own label, the same while the tree lives.
+  // A page is never pressed; a press of an entry on a page carries the node's own id, ident and
+  // arg. An entry with the label of a page of its level ("More...", on the root level also
+  // "More... (<resource name>)") on a level that pages is ERROR_CODE_INVALID. The engine
+  // diffs the paged form: an entry that moves across a page boundary is added again.
+  MENU_OVERFLOW_PAGE = 1;
+  // A level of more than 10 entries is ERROR_CODE_INVALID; nothing changes.
+  MENU_OVERFLOW_REJECT = 2;
+}

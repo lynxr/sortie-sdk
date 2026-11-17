@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Рисование на карте | Sortie SDK</title>
+<meta name="description" content="ctx.map() рисует на карте F10: метки с текстом, линии, ломаные, многоугольники, круги, прямоугольники, стрелки и надписи. Каждый рисунок — именованный ресурс сессии: движок помнит…">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/docs/map.html">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-doc has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.2.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Страницы документации">
+<nav class="toc">
+<a class="toc-home" href="index.html">Документация</a>
+<ul>
+<li><a href="index.html">Обзор</a></li>
+<li><a href="install-runtime.html">Установка рантайма</a></li>
+<li><a href="quickstart.html">Быстрый старт</a></li>
+<li><a href="dependency.html">Подключение SDK</a></li>
+<li><a href="sdk.html">Логика на Rust</a><ul>
+<li><a href="objects.html">Объекты: статики, уничтожение, мусор</a></li>
+<li><a href="map.html" aria-current="page">Рисование на карте</a></li>
+<li><a href="menus.html">Деревья меню F10</a></li>
+<li><a href="dcs.html">Вызовы DCS</a></li>
+<li><a href="dcs-catalog.html">Справочник каталога DCS API</a></li>
+<li><a href="capabilities.html">Возможности движка</a></li>
+</ul>
+</li>
+<li><a href="generator.html">Сценарий на Python</a></li>
+<li><a href="testing.html">Тестирование</a></li>
+<li><a href="operations.html">Эксплуатация</a></li>
+<li><a href="troubleshooting.html">Диагностика</a></li>
+<li><a href="faq.html">Вопросы и ограничения</a></li>
+<li><a href="changelog.html">Что нового</a></li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="рисование-на-карте">Рисование на карте<a class="anchor" href="#рисование-на-карте" aria-label="Ссылка на этот раздел">#</a></h1>
+<p><code>ctx.map()</code> рисует на карте F10: метки с текстом, линии, ломаные, многоугольники, круги,
+прямоугольники, стрелки и надписи. Каждый рисунок — именованный ресурс сессии: движок помнит
+его, показывает в реплике мира (<code>ctx.world().resources()</code>) и убирает, когда сессия кончается.
+Повторная команда с тем же именем не рисует второй рисунок, а приводит существующий к новому
+описанию.</p>
+<h2 id="ревизия-api">Ревизия API<a class="anchor" href="#ревизия-api" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Рисунки — API ревизии 1. Событие <code>ResourceEnded</code> (рисунок исчез не по команде логики) — событий
+ревизии 1; без <code>event_rev = 1</code> логика его не получает.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">#[sortie::mission(api_rev = 1, event_rev = 1)] // рисунки — API ревизии 1, их концы — событий 1
+pub async fn with_drawings(ctx: Ctx&lt;MyMission&gt;, _start: Start) -&gt; sortie::Result&lt;()&gt; {
+    let target = zones::TARGET.center();
+    ctx.map()
+        .circle(&quot;zones/target&quot;, target, 3_000.0)
+        .color(Rgba::RED)
+        .fill(Rgba::RED.alpha(0.15))
+        .line_style(LineStyle::Dashed)
+        .to(Coalition::Blue)
+        .await?;
+    ctx.end_session(Outcome::Draw).await
+}
+</code></pre></div>
+<h2 id="фигуры">Фигуры<a class="anchor" href="#фигуры" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Метод</th><th>Что в DCS</th></tr></thead><tbody>
+<tr><td><code>panel(имя, место, текст)</code></td><td>метка с текстом (<code>markToAll</code> / <code>markToCoalition</code> / <code>markToGroup</code>)</td></tr>
+<tr><td><code>line(имя, a, b)</code></td><td>одна линия</td></tr>
+<tr><td><code>path(имя, точки)</code></td><td>ломаная из 2..=33 точек: по линии DCS на отрезок</td></tr>
+<tr><td><code>polygon(имя, точки)</code></td><td>замкнутая фигура из 3..=64 точек (4 точки — четырёхугольник DCS)</td></tr>
+<tr><td><code>circle(имя, центр, радиус_м)</code></td><td>круг</td></tr>
+<tr><td><code>rect(имя, a, b)</code></td><td>прямоугольник по двум противоположным углам</td></tr>
+<tr><td><code>arrow(имя, остриё, хвост)</code></td><td>стрелка</td></tr>
+<tr><td><code>text(имя, точка, текст)</code></td><td>надпись на карте, масштабируется вместе с картой</td></tr>
+</tbody></table>
+</div>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let map = ctx.map();
+map.line(&quot;front/1&quot;, a, b).color(Rgba::RED).await?;
+map.path(&quot;route&quot;, [a, target, b])
+    .to(Coalition::Blue)
+    .await?; // 2 линии DCS
+map.polygon(&quot;area&quot;, [a, target, b])
+    .fill(Rgba::GREEN.alpha(0.2))
+    .await?;
+map.rect(&quot;strip&quot;, a, b).await?;
+map.arrow(&quot;push&quot;, target, a).await?; // остриё в target
+map.text(&quot;label&quot;, b, &quot;FLOT&quot;).font_size(24).await?;
+map.panel(&quot;rally&quot;, target, &quot;Сбор здесь&quot;)
+    .editable() // игроки могут менять и удалять
+    .announce(&quot;Новая точка сбора&quot;)
+    .await?;
+</code></pre></div>
+<p>Настройки: <code>.color(Rgba)</code> — цвет линии и текста (по умолчанию цвет коалиции, белый для всех),
+<code>.fill(Rgba)</code> — заливка (по умолчанию нет), <code>.line_style(LineStyle)</code> — тип линии (по умолчанию
+сплошная), <code>.to(..)</code> — кто видит (можно несколько раз, до 8; без <code>.to</code> — все), <code>.editable()</code> —
+игроки могут менять и удалять, <code>.announce(текст)</code> — сообщение аудитории при появлении,
+<code>.font_size(n)</code> — размер надписи, <code>.ttl(время)</code> — срок жизни. Фигуры видны всем или одной
+коалиции; одной группе — только метка с текстом (<code>panel</code>). Остальные аудитории —
+<code>Error::Invalid</code>.</p>
+<h2 id="изменения">Изменения<a class="anchor" href="#изменения" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Движок сравнивает новое описание с зарегистрированным:</p>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Результат (<code>Drawn.change</code>)</th><th>Когда</th><th>Вызовы DCS</th></tr></thead><tbody>
+<tr><td><code>Created</code></td><td>имени ещё нет</td><td>по одному на метку</td></tr>
+<tr><td><code>Unchanged</code></td><td>описание то же</td><td>ни одного</td></tr>
+<tr><td><code>Updated</code></td><td>изменились цвет, заливка, радиус круга, текст или размер надписи, первая или последняя точка; или только <code>ttl</code> / <code>announce</code></td><td>по одному на изменённое свойство метки; id меток те же</td></tr>
+<tr><td><code>Replaced</code></td><td>всё остальное: тип линии, средняя точка, число точек, текст или место метки, аудитория, <code>editable</code></td><td>новые метки, затем удаление старых</td></tr>
+</tbody></table>
+</div>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let zone = |r: f64| {
+    ctx.map()
+        .circle(&quot;zones/target&quot;, target, r)
+        .color(Rgba::RED)
+        .to(Coalition::Blue)
+};
+let d = zone(3_000.0).await?;
+assert_eq!(d.change, Change::Created);
+let d = zone(3_000.0).await?; // тот же спек: в DCS ничего не уходит
+assert_eq!((d.change, d.dcs_calls), (Change::Unchanged, 0));
+let d = zone(5_000.0).await?; // радиус меняется на месте, id метки тот же
+assert_eq!(d.change, Change::Updated);
+// Временная метка: исчезнет через 2 минуты модельного времени.
+ctx.map()
+    .text(&quot;hint&quot;, target, &quot;Цель накрыта&quot;)
+    .ttl(Duration::from_secs(120))
+    .await?;
+</code></pre></div>
+<p>Команды над одним именем выполняются в порядке отправки, даже если первая ещё не дошла до DCS;
+команды над разными именами друг друга не ждут. <code>.key(..)</code> не нужен: повтор команды — та же
+команда.</p>
+<h2 id="удаление-и-концы">Удаление и концы<a class="anchor" href="#удаление-и-концы" aria-label="Ссылка на этот раздел">#</a></h2>
+<p><code>remove(имя)</code> удаляет рисунок (нет такого — <code>Change::Absent</code>), <code>remove_prefix("zones/")</code> — все
+свои рисунки с этим началом имени, <code>clear()</code> — все свои. Чужой рисунок (другой логики или
+токена) удаляется только с <code>.any_owner()</code>; его владелец получит <code>ResourceEnded</code> с причиной
+<code>REMOVED_BY_OTHER</code>.</p>
+<p>Рисунок кончается и без команды: истёк <code>ttl</code> (<code>EXPIRED</code>), игрок удалил редактируемую метку
+(<code>PLAYER</code>; копии для других аудиторий движок удаляет сам), после обрыва связи с DCS рисунка не
+оказалось (<code>LOST</code>). Если игрок отредактировал метку, ресурс помечается <code>drifted</code>, и следующая
+команда с тем же именем нарисует его заново.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let mut ends = ctx.events().of::&lt;v1::ResourceEnded&gt;();
+let mut deleted_by_players = Vec::new();
+while let Some(e) = ends.next().await {
+    if e.reason == v1::ResourceEndReason::Player as i32 {
+        deleted_by_players.push(e.name); // игрок удалил редактируемую метку
+    }
+}
+// Что зарегистрировано сейчас: реплика мира.
+let n = ctx.world().resources().count();
+ctx.map().remove_prefix(&quot;zones/&quot;).await?;
+ctx.map().clear().await?; // все рисунки этой логики
+</code></pre></div>
+<p>У событий <code>Mark</code> по зарегистрированным рисункам заполнены <code>name</code> (имя рисунка) и <code>own</code> (<code>true</code>,
+если событие вызвал сам Sortie: DCS, по описаниям сообщества, повторяет метки скриптов
+событиями; на сервере это ещё не проверено).</p>
+<h2 id="ограничения">Ограничения<a class="anchor" href="#ограничения" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li>Id меток DCS общие у игроков, скриптов и Sortie. Sortie берёт id от 7 100 000 и никогда не
+повторяет их в одной миссии; сырые вызовы <code>trigger.action.markToAll</code> и др. через <code>ctx.dcs()</code>
+с id от 7 100 000 отклоняются.</li>
+<li>DCS не умеет перечислять фигуры на карте: после перезапуска движка, пока миссия идёт, Sortie
+удаляет рисунки прежнего движка и продолжает нумерацию выше них.</li>
+<li><code>setMarkupTypeLine</code> DCS не передаёт клиентам, поэтому смена типа линии перерисовывает фигуру.</li>
+<li>Что из этого подтверждено на сервере DCS 2.9.31, а что ещё нет, — в
+<a href="dcs-catalog.html">справочнике каталога</a> (проверки TRG-L9, TRG-L10, TRG-L17).</li>
+</ul>
+</article>
+<nav class="pager" aria-label="Соседние страницы">
+<a class="pager-prev" rel="prev" href="objects.html"><span class="pager-dir">Назад</span><span class="pager-title">Объекты: статики, уничтожение, мусор</span></a>
+<a class="pager-next" rel="next" href="menus.html"><span class="pager-dir">Дальше</span><span class="pager-title">Деревья меню F10</span></a>
+</nav>
+<p class="page-source"><a href="map.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.2.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -75,7 +75,7 @@ class Resync(_message.Message):
     def __init__(self, have_rev: _Optional[int] = ..., reason: _Optional[str] = ...) -> None: ...
 
 class Attach(_message.Message):
-    __slots__ = ("logic", "build_id", "scenario_schema_sha256", "symbols_used", "mode", "scenario", "schema")
+    __slots__ = ("logic", "build_id", "scenario_schema_sha256", "symbols_used", "mode", "scenario", "schema", "event_rev", "api_rev", "required_capabilities")
     LOGIC_FIELD_NUMBER: _ClassVar[int]
     BUILD_ID_FIELD_NUMBER: _ClassVar[int]
     SCENARIO_SCHEMA_SHA256_FIELD_NUMBER: _ClassVar[int]
@@ -83,6 +83,9 @@ class Attach(_message.Message):
     MODE_FIELD_NUMBER: _ClassVar[int]
     SCENARIO_FIELD_NUMBER: _ClassVar[int]
     SCHEMA_FIELD_NUMBER: _ClassVar[int]
+    EVENT_REV_FIELD_NUMBER: _ClassVar[int]
+    API_REV_FIELD_NUMBER: _ClassVar[int]
+    REQUIRED_CAPABILITIES_FIELD_NUMBER: _ClassVar[int]
     logic: str
     build_id: str
     scenario_schema_sha256: bytes
@@ -90,7 +93,10 @@ class Attach(_message.Message):
     mode: Mode
     scenario: str
     schema: int
-    def __init__(self, logic: _Optional[str] = ..., build_id: _Optional[str] = ..., scenario_schema_sha256: _Optional[bytes] = ..., symbols_used: _Optional[_Iterable[str]] = ..., mode: _Optional[_Union[Mode, str]] = ..., scenario: _Optional[str] = ..., schema: _Optional[int] = ...) -> None: ...
+    event_rev: int
+    api_rev: int
+    required_capabilities: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, logic: _Optional[str] = ..., build_id: _Optional[str] = ..., scenario_schema_sha256: _Optional[bytes] = ..., symbols_used: _Optional[_Iterable[str]] = ..., mode: _Optional[_Union[Mode, str]] = ..., scenario: _Optional[str] = ..., schema: _Optional[int] = ..., event_rev: _Optional[int] = ..., api_rev: _Optional[int] = ..., required_capabilities: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class LogicDown(_message.Message):
     __slots__ = ("start", "tick", "event", "result", "promote", "shutdown", "ended", "state", "rejected", "resync")
@@ -117,20 +123,28 @@ class LogicDown(_message.Message):
     def __init__(self, start: _Optional[_Union[Start, _Mapping]] = ..., tick: _Optional[_Union[Tick, _Mapping]] = ..., event: _Optional[_Union[_events_pb2.Event, _Mapping]] = ..., result: _Optional[_Union[_commands_pb2.CommandResult, _Mapping]] = ..., promote: _Optional[_Union[Promote, _Mapping]] = ..., shutdown: _Optional[_Union[Shutdown, _Mapping]] = ..., ended: _Optional[_Union[SessionEnded, _Mapping]] = ..., state: _Optional[_Union[StateResult, _Mapping]] = ..., rejected: _Optional[_Union[AttachRejected, _Mapping]] = ..., resync: _Optional[_Union[_world_pb2.WorldSnapshot, _Mapping]] = ...) -> None: ...
 
 class Start(_message.Message):
-    __slots__ = ("session", "kind", "manifest", "snapshot", "turn", "model_time")
+    __slots__ = ("session", "kind", "manifest", "snapshot", "turn", "model_time", "capabilities", "api_rev", "event_rev", "writer")
     SESSION_FIELD_NUMBER: _ClassVar[int]
     KIND_FIELD_NUMBER: _ClassVar[int]
     MANIFEST_FIELD_NUMBER: _ClassVar[int]
     SNAPSHOT_FIELD_NUMBER: _ClassVar[int]
     TURN_FIELD_NUMBER: _ClassVar[int]
     MODEL_TIME_FIELD_NUMBER: _ClassVar[int]
+    CAPABILITIES_FIELD_NUMBER: _ClassVar[int]
+    API_REV_FIELD_NUMBER: _ClassVar[int]
+    EVENT_REV_FIELD_NUMBER: _ClassVar[int]
+    WRITER_FIELD_NUMBER: _ClassVar[int]
     session: str
     kind: StartKind
     manifest: _manifest_pb2.Manifest
     snapshot: _world_pb2.WorldSnapshot
     turn: str
     model_time: float
-    def __init__(self, session: _Optional[str] = ..., kind: _Optional[_Union[StartKind, str]] = ..., manifest: _Optional[_Union[_manifest_pb2.Manifest, _Mapping]] = ..., snapshot: _Optional[_Union[_world_pb2.WorldSnapshot, _Mapping]] = ..., turn: _Optional[str] = ..., model_time: _Optional[float] = ...) -> None: ...
+    capabilities: _containers.RepeatedCompositeFieldContainer[_common_pb2.Capability]
+    api_rev: int
+    event_rev: int
+    writer: str
+    def __init__(self, session: _Optional[str] = ..., kind: _Optional[_Union[StartKind, str]] = ..., manifest: _Optional[_Union[_manifest_pb2.Manifest, _Mapping]] = ..., snapshot: _Optional[_Union[_world_pb2.WorldSnapshot, _Mapping]] = ..., turn: _Optional[str] = ..., model_time: _Optional[float] = ..., capabilities: _Optional[_Iterable[_Union[_common_pb2.Capability, _Mapping]]] = ..., api_rev: _Optional[int] = ..., event_rev: _Optional[int] = ..., writer: _Optional[str] = ...) -> None: ...
 
 class Tick(_message.Message):
     __slots__ = ("n", "model_time", "delta", "paused")
@@ -173,14 +187,16 @@ class SessionEnded(_message.Message):
     def __init__(self, session: _Optional[str] = ..., outcome: _Optional[_Union[_common_pb2.Outcome, str]] = ..., text: _Optional[str] = ..., reason: _Optional[_Union[EndReason, str]] = ...) -> None: ...
 
 class AttachRejected(_message.Message):
-    __slots__ = ("code", "message", "missing_symbols")
+    __slots__ = ("code", "message", "missing_symbols", "missing_capabilities")
     CODE_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     MISSING_SYMBOLS_FIELD_NUMBER: _ClassVar[int]
+    MISSING_CAPABILITIES_FIELD_NUMBER: _ClassVar[int]
     code: _common_pb2.ErrorCode
     message: str
     missing_symbols: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, code: _Optional[_Union[_common_pb2.ErrorCode, str]] = ..., message: _Optional[str] = ..., missing_symbols: _Optional[_Iterable[str]] = ...) -> None: ...
+    missing_capabilities: _containers.RepeatedCompositeFieldContainer[_common_pb2.Capability]
+    def __init__(self, code: _Optional[_Union[_common_pb2.ErrorCode, str]] = ..., message: _Optional[str] = ..., missing_symbols: _Optional[_Iterable[str]] = ..., missing_capabilities: _Optional[_Iterable[_Union[_common_pb2.Capability, _Mapping]]] = ...) -> None: ...
 
 class StateOp(_message.Message):
     __slots__ = ("id", "get", "put", "once_check", "once_mark", "timer_arm", "report_set")

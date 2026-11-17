@@ -24,7 +24,7 @@
 <a class="skip" href="#content">Перейти к содержанию</a>
 <header class="topbar">
 <div class="topbar-inner">
-<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.2.0</span></a>
 <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
 <nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="page">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
 <div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
@@ -39,7 +39,15 @@
 <li><a href="install-runtime.html">Установка рантайма</a></li>
 <li><a href="quickstart.html">Быстрый старт</a></li>
 <li><a href="dependency.html">Подключение SDK</a></li>
-<li><a href="sdk.html">Логика на Rust</a></li>
+<li><a href="sdk.html">Логика на Rust</a><ul>
+<li><a href="objects.html">Объекты: статики, уничтожение, мусор</a></li>
+<li><a href="map.html">Рисование на карте</a></li>
+<li><a href="menus.html">Деревья меню F10</a></li>
+<li><a href="dcs.html">Вызовы DCS</a></li>
+<li><a href="dcs-catalog.html">Справочник каталога DCS API</a></li>
+<li><a href="capabilities.html">Возможности движка</a></li>
+</ul>
+</li>
 <li><a href="generator.html">Сценарий на Python</a></li>
 <li><a href="testing.html">Тестирование</a></li>
 <li><a href="operations.html">Эксплуатация</a></li>
@@ -55,7 +63,7 @@
 <p>Sortie — внешний движок миссий для DCS World. Поведение миссии пишется на Rust и работает в
 отдельном процессе рядом с DCS. Статическая часть миссии описывается на Python и собирается в
 обычный <code>.miz</code>.</p>
-<p>Это SDK версии 0.1.0: библиотеки для логики на Rust, генератор миссий на Python,
+<p>Это SDK версии 0.2.0: библиотеки для логики на Rust, генератор миссий на Python,
 шаблон проекта и документация. Движок и мост для DCS поставляются отдельно, готовым архивом
 рантайма.</p>
 <h2 id="как-это-устроено">Как это устроено<a class="anchor" href="#как-это-устроено" aria-label="Ссылка на этот раздел">#</a></h2>
@@ -104,7 +112,7 @@ Visual Studio Build Tools с компонентом «Desktop development with C
 </ul>
 <p>Логику и сценарий можно собирать и на Linux. Рантайм (<code>sortied</code>, мост) работает только на
 Windows рядом с DCS.</p>
-<h2 id="состояние-версии-010">Состояние версии 0.1.0<a class="anchor" href="#состояние-версии-010" aria-label="Ссылка на этот раздел">#</a></h2>
+<h2 id="состояние-версии-020">Состояние версии 0.2.0<a class="anchor" href="#состояние-версии-020" aria-label="Ссылка на этот раздел">#</a></h2>
 <ul>
 <li>В живом DCS 2.9.31 проверены одиночная игра и сетевая игра, где хост — обычный клиент DCS.</li>
 <li>На dedicated server Sortie ещё не запускался. Перезапуск миссии (<code>restart</code>), запуск сборки
@@ -124,7 +132,7 @@ Windows рядом с DCS.</p>
 <p>Исходники SDK, шаблон и пример <code>op_north</code> лежат в репозитории
 <a href="https://github.com/lynxr/sortie-sdk">lynxr/sortie-sdk</a>. Инструкции для ИИ-агентов, которые
 пишут миссии на этом SDK, — в папке
-<a href="https://github.com/lynxr/sortie-sdk/tree/v0.1.0/agents">agents</a> репозитория.</p>
+<a href="https://github.com/lynxr/sortie-sdk/tree/v0.2.0/agents">agents</a> репозитория.</p>
 </article>
 <nav class="pager" aria-label="Соседние страницы">
 <a class="pager-next" rel="next" href="install-runtime.html"><span class="pager-dir">Дальше</span><span class="pager-title">Установка рантайма</span></a>
@@ -134,7 +142,7 @@ Windows рядом с DCS.</p>
 </div>
 <footer class="footer">
 <div class="footer-inner">
-<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p>Sortie SDK 0.2.0. Лицензия SDK: MIT OR Apache-2.0.</p>
 <p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
 </div>
 </footer>

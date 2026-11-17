@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Scenario of the my_mission Sortie mission"
 requires-python = ">=3.11"
 dependencies = [
-    "sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.1.0#subdirectory=python/sortie-gen",
+    "sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.2.0#subdirectory=python/sortie-gen",
 ]
 
 [tool.uv]

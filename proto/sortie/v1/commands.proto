@@ -4,6 +4,8 @@ syntax = "proto3";
 package sortie.v1;
 
 import "sortie/v1/common.proto";
+import "sortie/v1/resources.proto";
+import "sortie/v1/world.proto";
 
 service Commands {
   // Executes one command in the current session and waits for its result.
@@ -58,10 +60,22 @@ message Command {
   Origin origin = 7;
   // Target session; empty = current. A stale session yields ERROR_CODE_SESSION_ENDED.
   string session = 8;
+  // W1. The lowest engine API revision that understands every field this command uses.
+  // The SDK fills it from the newest builder or field it used. An engine with a lower
+  // api_rev answers ERROR_CODE_UNAVAILABLE (CommandError.capability names the operation)
+  // instead of running the command with defaults for fields it cannot see. A 0.1.0 engine
+  // does not know this field: against it the SDK refuses locally (Start.api_rev absent = 0).
+  uint32 min_api_rev = 9;
   oneof body {
     SpawnGroup spawn_group = 10;
+    // W1. A static object, cargo or FARP (spec 5.1).
+    SpawnStatic spawn_static = 11;
     Destroy destroy = 12;
+    // W1. The universal call: one DCS function of the catalog.
+    DcsCall dcs_call = 13;
     SetTask set_task = 14;
+    // W1. Several universal calls executed in one frame.
+    DcsBatch dcs_batch = 15;
     SetOption set_option = 16;
     Message message = 20;
     Effect effect = 21;
@@ -69,10 +83,22 @@ message Command {
     Menu menu = 23;
     MarkCommand mark = 24;
     EndSession end_session = 25;
+    // W1. Create or update a registered resource (resources.proto); reply.resource.
+    ResourcePut put = 26;
+    // W1. Remove registered resources (resources.proto); reply.resource.
+    ResourceRemove remove = 27;
+    // W1. world.removeJunk in DCS volumes.
+    RemoveJunk remove_junk = 28;
     Query query = 30;
     ServerControl server = 32;
+    // W1. Many SpawnGroup and SpawnStatic in one command, spread by the spawn gate.
+    SpawnBatch spawn_batch = 35;
     DevEval dev_eval = 99;
   }
+  // W1. API revision whose behaviour the caller expects for this command (the gates of
+  // spec section 8.3). On the Logic stream 0 = the revision declared at Attach. On
+  // Commands.Submit 0 = 0.1.0 behaviour.
+  uint32 api_rev = 40;
 }
 
 message CommandResult {
@@ -87,24 +113,46 @@ message CommandResult {
   // Eid of the object the command created (SpawnGroup: the group), 0 otherwise.
   // Eids never travel inside LuaValue (doubles cannot hold every uint64).
   uint64 eid = 6;
+  // W1. Typed part of the result; `ok` stays for raw results. Which fields a command
+  // fills is stated on that command. Unset for commands with no typed result.
+  Reply reply = 7;
+  // W1. true when this result answers a keyed repeat: identities (eid, names) come from the
+  // stored result, snaps in `reply` were read from the mirror again at replay time.
+  bool replayed = 8;
+  // W1. Mirror revision that contains every effect of the command. The mirror is the
+  // truth; `reply` is a copy taken at this revision. 0 = the command did not touch the mirror.
+  uint64 world_rev = 9;
 }
 
-// Selects a group: by Eid (preferred), DCS name, or manifest symbol.
-message GroupSel {
-  oneof sel {
-    uint64 eid = 1;
-    string name = 2;
-    string ident = 3;
-  }
+// W1. Typed part of a CommandResult. A flat message: each command fills the fields its own
+// comment names and leaves the rest empty. `CommandResult.ok` keeps the raw value.
+// A Reply is a copy of mirror state taken at CommandResult.world_rev; the mirror stays the
+// truth. A Reply may accompany an error (a REPLACE spawn that failed after the destroy).
+// Filled in 0.2.0: SpawnGroup (groups[0] = the group, entities = its units in DCS order),
+// SpawnStatic (entities[0] = the static; with `heliport` also airbases[0]), Destroy (groups /
+// entities = the last known snaps of what was removed), RemoveJunk (junk) and ResourcePut /
+// ResourceRemove / MarkCommand (resource).
+message Reply {
+  // Objects the command created, changed, returned or (Destroy) removed, as the mirror
+  // knows them at world_rev. Order is stated per command.
+  repeated EntitySnap entities = 1;
+  repeated GroupSnap groups = 2;
+  repeated AirbaseSnap airbases = 3;
+  // ResourcePut, ResourceRemove and MarkCommand (which registers as a drawing).
+  ResourceAck resource = 4;
+  // DcsCall.
+  DcsReturn call = 5;
+  // DcsBatch.
+  DcsBatchReturn batch = 6;
+  // RemoveJunk.
+  JunkRemoved junk = 7;
+  // SpawnBatch: one per item, in item order (`groups` and `entities` then hold the snaps of
+  // the items that ran, in item order).
+  repeated SpawnResult spawns = 8;
+  // 10..39 are assigned to waves 2..6 (spec, section 8.2).
 }
 
-// Selects a unit: by Eid (preferred) or DCS name.
-message UnitSel {
-  oneof sel {
-    uint64 eid = 1;
-    string name = 2;
-  }
-}
+// GroupSel and UnitSel moved to common.proto in 0.2.0 (same package, same numbers).
 
 // Spawn a group from a manifest template (templates are kept out of the .miz).
 // Result: ok = { name = <group name>, units = { <unit name>, ... } }, CommandResult.eid = group eid.
@@ -131,11 +179,148 @@ message SpawnAt {
   double heading_rad = 2;
 }
 
+// ---- W1: SpawnStatic ----
+// coalition.addStaticObject, or coalition.addGroup(country, -1, ..) when `heliport` is set.
+// Result: CommandResult.eid = the static's eid, reply.entities[0] = the static,
+// reply.airbases[0] = the new airbase (with `heliport`), ok = { name = <static name> } (plus
+// kept = true for NAME_CONFLICT_KEEP). The static and the airbase are read back by name after
+// the add (what the add call returns is undocumented). No S_EVENT_BIRTH is raised by DCS for
+// statics: the engine emits Birth{synthesised}. Statics count toward the spawn gate.
+message SpawnStatic {
+  // Unique among units and statics. Default: <type_name>#<session4>-<n>.
+  optional string name = 1;
+  // DCS type name, e.g. "Cafe", "ammo_cargo", "FARP", "Invisible FARP", "Mi-8MT".
+  string type_name = 2;
+  // DCS country key; the coalition follows the country.
+  string country = 3;
+  oneof placement {
+    StaticAt at = 4;
+    OnUnit on_unit = 5;
+  }
+  // DCS `category` string ("Fortifications", "Cargos", "Heliports", "Planes", ...).
+  // Empty = taken from the engine's table `sortie.static_type` (type -> category, shape).
+  // DCS cannot report it at run time, so a type the table lacks needs it set here
+  // (ERROR_CODE_INVALID otherwise); for a type the table has it must match the table.
+  string dcs_category = 6;
+  // Model override; empty = the shape the table `sortie.static_type` names for the type.
+  string shape_name = 7;
+  // Spawn as a wreck.
+  bool dead = 8;
+  CargoSpec cargo = 9;
+  HeliportSpec heliport = 10;
+  string livery = 11;
+  // Score for killing it (the mission-editor `rate`).
+  uint32 score = 12;
+  bool hidden = 13;
+  NameConflict on_conflict = 14;
+  // Extra keys merged into the DCS table. A key a typed field owns (name, type, category,
+  // shape_name, x, y, heading, linkUnit, linkOffset, offsets, units, country, dead, mass,
+  // canCargo, heliport_*) is ERROR_CODE_INVALID naming the key. The merged table passes
+  // the same checks as the typed fields (string keys, plain data, finite numbers).
+  LuaValue raw = 99;
+}
+
+message StaticAt {
+  MapPoint position = 1;
+  double heading_rad = 2;
+}
+
+// Linked to a ship (`linkUnit` + `linkOffset` + `offsets`).
+message OnUnit {
+  UnitSel unit = 1;
+  // Metres forward and right of the ship's centre.
+  double forward_m = 2;
+  double right_m = 3;
+  // Relative to the ship's heading.
+  double angle_rad = 4;
+}
+
+message CargoSpec {
+  double mass_kg = 1;
+  // `canCargo`: can be hooked or loaded.
+  bool liftable = 2;
+}
+
+message HeliportSpec {
+  // FARP callsign by name ("London", "Dallas", ...; the engine's table `sortie.farp_callsign`).
+  // Empty = the engine picks one this session has not given to a FARP yet.
+  string callsign = 1;
+  // Hertz, as every frequency in this API; 0 = 127.5 MHz. The Lua layer writes the DCS key
+  // `heliport_frequency`, which is in MHz (127500000 -> 127.5).
+  double frequency_hz = 2;
+  // UNSPECIFIED = AM.
+  Modulation modulation = 3;
+}
+
 message Destroy {
   oneof target {
     GroupSel group = 1;
     UnitSel unit = 2;
+    // W1. Any object the mirror knows: a unit, a static or a cargo (by Eid or name). Scenery
+    // is ERROR_CODE_UNAVAILABLE (capability "destroy.scenery"); weapons and ejected crew are
+    // ERROR_CODE_UNAVAILABLE (capability "destroy.weapon") until they get Eids.
+    ObjSel object = 3;
   }
+  // W1. Without it, destroying a unit a player occupies (or a group with one) is
+  // ERROR_CODE_REJECTED (enforced when the command's API revision is >= 1: Command.api_rev /
+  // Attach.api_rev; a 0.1.0 logic keeps the old behaviour).
+  bool allow_player = 4;
+}
+
+// ---- W1: RemoveJunk ----
+// world.removeJunk for each volume: wrecks, craters and debris (what DCS counts as junk is
+// not documented). Result: reply.junk, ok = the total as a number. Repeat-safe (a second run
+// removes nothing more).
+message RemoveJunk {
+  // 1..=16 volumes. DCS removes inside its own volume types only: sphere, axis_box,
+  // segment and pyramid are passed as they are; `area` is accepted for a circle (or a
+  // circular manifest zone) without floor or ceiling and becomes a sphere on the ground. A
+  // polygon, a quad zone, an `around` area or a floor/ceiling is ERROR_CODE_INVALID (it would
+  // have to be widened).
+  repeated Volume volumes = 1;
+}
+
+message JunkRemoved {
+  uint32 total = 1;
+  // One count per requested volume, in order.
+  repeated uint32 per_volume = 2;
+}
+
+// ---- W1: SpawnBatch ----
+// Many spawns in one command: the restore of a persistent campaign. Items are applied in
+// order over as many pumps as the spawn gate needs (spec 5.1); nothing is rolled back.
+// Each item passes the checks of its own command, and the whole batch is checked before its
+// first item is sent (a failing check fails the command and nothing runs).
+// Result: reply.spawns, one per item; reply.groups and reply.entities of the items that ran.
+// The command is `ok` when it ran, whatever the items did. One idempotency key covers the
+// batch; after a link drop the items are settled one by one by name (CONTRACTS §17).
+message SpawnBatch {
+  // 1..=512 items.
+  repeated SpawnItem items = 1;
+  // true: the first failing item stops the batch; the rest are reported `skipped`. The items
+  // then go one at a time (the next is sent when the previous answered).
+  bool stop_on_error = 2;
+}
+
+message SpawnItem {
+  oneof spawn {
+    SpawnGroup group = 1;
+    SpawnStatic static_object = 2;
+  }
+}
+
+message SpawnResult {
+  // Eid of the group or static; 0 when the item failed or was skipped.
+  uint64 eid = 1;
+  // The item's final name (the engine's when the caller left it empty).
+  string name = 2;
+  // Unset = the item succeeded. A skipped item says why (stop_on_error, the deadline, a
+  // dropped link).
+  CommandError err = 3;
+  bool skipped = 4;
+  // The item ran in an earlier attempt of the same key whose result was lost with the
+  // mission link; `eid` is the object the engine found by name (nothing spawned again).
+  bool settled = 5;
 }
 
 message SetTask {
@@ -227,6 +412,10 @@ enum MenuScope {
 }
 
 // Add (or remove) an F10 radio menu command declared in the manifest.
+// Since 0.2.0 it registers as a menu (RESOURCE_KIND_MENU) named
+// "sortie:menu/<ident>/<all|coalition|per_group>[/<red|blue|neutral>]", shown as the one-node
+// MenuTree it stands for; the F10 entry behaves as in 0.1.0 (an equal repeat does nothing, a
+// per-group entry follows the player groups of the coalition). It is removed at session end.
 message Menu {
   MenuScope scope = 1;
   Coalition coalition = 2;
@@ -240,6 +429,9 @@ message Menu {
 }
 
 // Add (or remove) an F10 map mark. (Named MarkCommand to keep `Mark` for the event.)
+// Since 0.2.0 it registers as a drawing (RESOURCE_KIND_DRAWING, the Draw{panel} it stands
+// for, same name space as Draw): a put; `remove = true` is a ResourceRemove by name. An equal
+// repeat does nothing in DCS; a changed one replaces the mark with a new DCS id.
 message MarkCommand {
   // Caller-chosen stable name; the engine maps it to a DCS mark id.
   string name = 1;
@@ -309,4 +501,217 @@ message SendChat {
 message DevEval {
   string code = 1;
   Env env = 2;
+}
+
+// =====================================================================================
+// W1: the universal call (spec, section 2). A logic calls one DCS function of the DCS API
+// catalog (`catalog/dcs_api.toml`) by its Lua path, with data arguments. The engine checks
+// the call against the catalog entry (path, environment, receiver class, argument types,
+// class, guards, limits) before anything reaches DCS. Nothing here is ever compiled: no Lua
+// source, no callback, no file-system path. (CallClass is declared in common.proto next to
+// Capability, which reports it.)
+// =====================================================================================
+
+// A reference to a live DCS object: the receiver of a method, or an argument.
+// An unset `target` is ERROR_CODE_INVALID. An Eid of the wrong class for the member
+// (a group Eid in `object`, an entity Eid in `group`) is ERROR_CODE_INVALID.
+message DcsRef {
+  oneof target {
+    ObjSel object = 1;
+    GroupSel group = 2;
+    AirbaseSel airbase = 3;
+    // Group:getController() / Unit:getController(), derived again on every call.
+    ControllerSel controller = 4;
+    // Airbase:getWarehouse(), Warehouse.getCargoAsWarehouse or Warehouse.getByName, derived
+    // again on every call.
+    WarehouseSel warehouse = 5;
+    // Opaque handle from an earlier DcsReturn (ObjectRef.handle). Only objects that have
+    // no selector get one (a Spot made by a call, unknown userdata). The Lua layer keeps the
+    // object with its class and checks it again before every use. Unknown, dropped, or from
+    // another session or environment: ERROR_CODE_GONE.
+    uint64 handle = 6;
+    // DcsBatch only: the first return value of an earlier call of the same batch (0-based
+    // index into DcsBatch.calls), which must be a DCS object. If that call failed or was
+    // skipped, this call is skipped too.
+    uint32 result_of = 7;
+  }
+}
+
+// One argument. The Lua layer builds the Lua value; nothing here is ever compiled.
+// An unset `kind` is ERROR_CODE_INVALID (nil is `value` holding LuaNil). Numbers are
+// checked before anything is sent: NaN and infinities are ERROR_CODE_INVALID. The kind
+// must fit the type the catalog entry declares for the argument.
+message DcsArg {
+  oneof kind {
+    // nil, boolean, number, string or a plain data table.
+    LuaValue value = 1;
+    // The DCS object itself (a Unit, Group, Airbase, Controller, Warehouse, ...).
+    DcsRef object = 2;
+    // The DCS numeric id of the object (Group:getID, Unit:getID, StaticObject:getID,
+    // Airbase:getID), read in the Lua layer at execution time.
+    DcsRef id_of = 3;
+    // The DCS name of the object (getName), read at execution time.
+    DcsRef name_of = 4;
+    // A DCS enum value by its full Lua path, e.g. "trigger.smokeColor.Red",
+    // "country.id.USA". The table must be the one the catalog entry names for the
+    // argument; the Lua layer resolves the key, a missing key is ERROR_CODE_INVALID.
+    string enum_key = 5;
+    // The coalition in the form the catalog entry declares for this argument:
+    // `side_number` (the coalition.side number) or `side_name` ("red" / "blue" /
+    // "neutrals", the form some hooks functions take).
+    Coalition coalition = 6;
+    // {x=, y=, z=} in runtime axes.
+    Vec3 vec3 = 7;
+    // {x = north, y = east} (the 2D form DCS uses for map points).
+    MapPoint vec2 = 8;
+    // The hooks-environment player id of the player.
+    PlayerSel player = 9;
+    // A table whose values may themselves be object refs, ids, enum keys or points.
+    DcsTable table = 10;
+  }
+}
+
+message DcsTable {
+  repeated DcsField fields = 1;
+}
+
+message DcsField {
+  oneof slot {
+    string key = 1;
+    // 1-based array index.
+    uint32 index = 2;
+  }
+  DcsArg value = 3;
+}
+
+// Call one DCS function of the catalog. Never Lua source.
+// Result: reply.call (typed) and ok = the first return value when it is plain data
+// (nil otherwise: an object or a table that holds objects is in reply.call only).
+// A READ call takes no idempotency key (a stored read would be stale: ERROR_CODE_INVALID);
+// a mutating call repeats its effect unless keyed.
+message DcsCall {
+  // Lua path of the function: "land.getHeight", "trigger.action.explosion",
+  // "net.get_player_list", or "<Class>.<method>" for a method: "Unit.getFuel",
+  // "Airbase.getParking". An inherited method may be named through any class that has it
+  // ("Airbase.getPoint"); the engine resolves it to the defining class ("Object.getPoint"),
+  // which is the name of its catalog entry and capability.
+  // Grammar: name("." name){1,3}, name = [A-Za-z_][A-Za-z0-9_]*, at most 96 bytes.
+  string path = 1;
+  // UNSPECIFIED = the environment of the catalog entry. A path listed for both
+  // environments needs it set.
+  Env env = 2;
+  // Method receiver; unset for plain functions. Its DCS class must be the class the
+  // catalog entry names or one that inherits from it.
+  DcsRef receiver = 3;
+  repeated DcsArg args = 4;
+  // Depth to which returned tables are copied. 0 = 6, at most 12. A deeper table is
+  // returned as DcsValue.cut and DcsReturn.truncated is set.
+  uint32 max_depth = 5;
+}
+
+// Several calls executed in order in one simulation frame (one pump of one environment).
+// All calls must belong to the same environment. The engine validates the whole batch
+// before it sends anything: an unlisted or disabled path, a bad argument, a guard or a
+// rate limit fails the command and no call runs. Result: reply.batch.
+message DcsBatch {
+  repeated DcsCall calls = 1;
+  // true: the first failing call stops the batch; the rest are reported `skipped`.
+  // false: every call runs.
+  bool stop_on_error = 2;
+  // true: when a call failed, the CommandResult is that call's error (reply.batch is
+  // still filled), so `after` chains stop and nothing is stored under the key.
+  // false: the command is `ok` and the caller reads the per-call outcomes.
+  bool fail_command_on_error = 3;
+}
+
+enum ObjectClass {
+  OBJECT_CLASS_UNSPECIFIED = 0;
+  OBJECT_CLASS_UNIT = 1;
+  OBJECT_CLASS_STATIC = 2;
+  OBJECT_CLASS_WEAPON = 3;
+  OBJECT_CLASS_SCENERY = 4;
+  OBJECT_CLASS_CARGO = 5;
+  OBJECT_CLASS_AIRBASE = 6;
+  OBJECT_CLASS_GROUP = 7;
+  OBJECT_CLASS_CONTROLLER = 8;
+  OBJECT_CLASS_WAREHOUSE = 9;
+  OBJECT_CLASS_SPOT = 10;
+  OBJECT_CLASS_OTHER = 11;
+}
+
+// A DCS object that a call returned.
+message ObjectRef {
+  ObjectClass object_class = 1;
+  // Set when the mirror tracks the object. 0 with `name` set: the object came back as a
+  // light reference and was not resolved in this result (per-call cap, spec 2.4); the
+  // next sweep observes it.
+  uint64 eid = 2;
+  string name = 3;
+  string type_name = 4;
+  // Only for objects without a selector (see DcsRef.handle); 0 otherwise.
+  uint64 handle = 5;
+  // A returned Controller or Warehouse comes back as the selector that derives it again
+  // (usable as DcsRef.controller / DcsRef.warehouse). No handle is kept for these.
+  ControllerSel controller = 6;
+  WarehouseSel warehouse = 7;
+  oneof snap {
+    EntitySnap entity = 10;
+    GroupSnap group = 11;
+    AirbaseSnap airbase = 12;
+    WeaponSnap weapon = 13;
+  }
+}
+
+// One returned value as a typed tree. Nothing is marked in-band, so data that DCS returns
+// (mission-authored tables included) can never be mistaken for a reference or a cut.
+message DcsValue {
+  oneof kind {
+    LuaNil nil = 1;
+    bool boolean = 2;
+    double number = 3;
+    string string = 4;
+    DcsValueTable table = 5;
+    // A DCS object: 0-based index into DcsReturn.refs.
+    uint32 ref = 6;
+    // A number of an enum the catalog entry names, replaced by the key name.
+    string enum_key = 7;
+    // A table cut by the depth or size limit: the number of keys it had.
+    uint32 cut = 8;
+  }
+}
+
+// Ordered pairs; arrays use number keys 1..n in order (as LuaTable).
+message DcsValueTable {
+  repeated DcsValuePair pairs = 1;
+}
+
+message DcsValuePair {
+  DcsValue key = 1;
+  DcsValue value = 2;
+}
+
+message DcsReturn {
+  // Every return value in order.
+  repeated DcsValue values = 1;
+  repeated ObjectRef refs = 2;
+  CallClass call_class = 3;
+  // A size or depth limit cut the values (DcsValue.cut), or a function or thread was dropped.
+  bool truncated = 4;
+}
+
+message DcsCallResult {
+  // Both unset when `skipped`.
+  oneof outcome {
+    DcsReturn ok = 1;
+    CommandError err = 2;
+  }
+  uint32 cost_us = 3;
+  // The call did not run: an earlier call failed (stop_on_error) or its result_of
+  // reference had no object.
+  bool skipped = 4;
+}
+
+message DcsBatchReturn {
+  // One per call, in call order.
+  repeated DcsCallResult results = 1;
 }

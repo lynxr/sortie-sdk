@@ -5,6 +5,24 @@
 //! let mut deaths = ctx.events().of::<v1::Dead>().in_group(&sam);
 //! while let Some(dead) = deaths.next().await { ... }
 //! ```
+//!
+//! The generic event form (engine API revision 1): every event decoded from DCS names its
+//! `world.event` entry (`v1::Event::dcs_event`), so a logic tells `S_EVENT_DEAD`,
+//! `S_EVENT_CRASH` and `S_EVENT_PILOT_DEAD` apart (all `Dead`), or `S_EVENT_TAKEOFF` from
+//! `S_EVENT_RUNWAY_TAKEOFF` (both `Takeoff`), with [`TypedEvents::from_dcs`]. Every DCS event
+//! without a typed kind is a `v1::Unknown` whose `ctx` (`v1::EventContext`) holds its
+//! participants as snaps with Eids and every key DCS sent.
+//!
+//! ```ignore
+//! // Wrecks only: not the pilot's death, which DCS raises while the airframe still flies.
+//! let mut wrecks = ctx.events().of::<v1::Dead>()
+//!     .from_dcs(v1::DcsEvent::Dead)
+//!     .from_dcs(v1::DcsEvent::Crash);
+//! // Engine starts of the blue players' aircraft.
+//! let mut starts = ctx.events().of::<v1::Unknown>()
+//!     .from_dcs(v1::DcsEvent::EngineStartup)
+//!     .coalition(Coalition::Blue);
+//! ```
 
 use std::rc::Rc;
 
@@ -20,7 +38,8 @@ pub trait EventType: Sized + 'static {
     fn extract(kind: Kind) -> Option<Self>;
     /// The entity the event is about, used by the filters of [`TypedEvents`]: the initiator
     /// (the unit that was born, died, shot, took off, killed...), `last_known` for
-    /// `UnitGone`, the unit for `PlayerEnteredUnit`; `None` for events without one.
+    /// `UnitGone`, the unit for `PlayerEnteredUnit`, `ctx.initiator` for `Unknown`; `None` for
+    /// events without one.
     fn subject(&self) -> Option<&v1::EntitySnap>;
 }
 
@@ -62,7 +81,10 @@ event_types!(
     SimulationPaused => |_e| None,
     SimulationResumed => |_e| None,
     Gap => |_e| None,
-    Unknown => |_e| None,
+    ResourceEnded => |_e| None,
+    CapabilityChanged => |_e| None,
+    // The generic form's participants (an engine of API revision 1).
+    Unknown => |e| e.ctx.as_ref().and_then(|c| c.initiator.as_ref()),
 );
 
 /// All events of the session from the moment of subscription.
@@ -112,6 +134,7 @@ impl Events {
         TypedEvents {
             inner: self,
             filters: Vec::new(),
+            dcs: Vec::new(),
         }
     }
 }
@@ -130,6 +153,8 @@ type Filter<E> = Box<dyn Fn(&Session, &E) -> bool>;
 pub struct TypedEvents<E> {
     inner: Events,
     filters: Vec<Filter<E>>,
+    /// `from_dcs`: the `world.event` entries let through (empty = all).
+    dcs: Vec<v1::DcsEvent>,
 }
 
 impl<E> std::fmt::Debug for TypedEvents<E> {
@@ -137,6 +162,7 @@ impl<E> std::fmt::Debug for TypedEvents<E> {
         f.debug_struct("TypedEvents")
             .field("type", &std::any::type_name::<E>())
             .field("filters", &self.filters.len())
+            .field("dcs", &self.dcs)
             .finish()
     }
 }
@@ -185,14 +211,41 @@ impl<E: EventType> TypedEvents<E> {
         self
     }
 
+    /// Only events decoded from the `world.event` entry `entry` (`Event.dcs_event`); call it
+    /// again to let several through. An engine older than API revision 1 names no entry, so
+    /// against it this matches nothing (`ctx.engine_api_rev()`; a warning is logged).
+    #[must_use]
+    pub fn from_dcs(mut self, entry: v1::DcsEvent) -> Self {
+        if self.inner.session.engine_api_rev == 0 && self.dcs.is_empty() {
+            tracing::warn!(
+                ?entry,
+                "from_dcs: this engine (API revision 0) does not name the world.event entry \
+                 of its events; nothing will match"
+            );
+        }
+        self.dcs.push(entry);
+        self
+    }
+
     /// The next matching event; `None` once the session ended.
     pub async fn next(&mut self) -> Option<E> {
+        self.next_with_dcs_event().await.map(|(e, _)| e)
+    }
+
+    /// Like [`TypedEvents::next`], with the `world.event` entry the event was decoded from
+    /// (`DcsEvent::Unspecified` for events the engine or the hooks made, and for an entry the
+    /// enum lacks: `v1::Event::dcs_name` on the whole event names it).
+    pub async fn next_with_dcs_event(&mut self) -> Option<(E, v1::DcsEvent)> {
         loop {
             let ev = self.inner.next().await?;
+            let entry = ev.dcs_event();
+            if !self.dcs.is_empty() && !self.dcs.contains(&entry) {
+                continue;
+            }
             if let Some(e) = ev.kind.and_then(E::extract)
                 && self.filters.iter().all(|f| f(&self.inner.session, &e))
             {
-                return Some(e);
+                return Some((e, entry));
             }
         }
     }

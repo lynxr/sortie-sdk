@@ -25,14 +25,20 @@
 //!   inherits the manifest ident). Names and idents resolve to the newest object.
 //! * Dead entities stay in the world (`dead = true`) until removed ([`World::remove`],
 //!   [`World::prune_dead`]); queries skip them unless asked otherwise.
+//! * Weapons and ejected crew are no entities. The mirror names them in an identity table
+//!   ([`World::identify_weapon`], [`World::identify_crew`], [`World::identity`]) with Eids of
+//!   the same allocator; the table is never in a snapshot or a delta and never moves the
+//!   revision.
 //! * Zones are loaded from the manifest ([`World::set_zones`]); a query with a typed handle uses
 //!   the manifest geometry if the ident is known, else the handle's own geometry. Zone queries
 //!   use a uniform spatial grid ([`grid::CELL_M`]).
 
 pub mod grid;
+mod identity;
 mod mirror;
 mod model;
 mod query;
+mod resources;
 mod sync;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -41,6 +47,7 @@ use slotmap::{DefaultKey, Key as _, SlotMap};
 use sortie_proto::manifest::v1 as mpb;
 pub use sortie_types::{AsZone, Category, Coalition, Eid, MapPoint, Vec3, ZoneShape};
 
+pub use identity::{Identity, IdentityKind, MAX_IDENTITIES, WEAPON_AFTER_STRIKE_S, WEAPON_IDLE_S};
 pub use mirror::SamplesApplied;
 pub use model::{
     Airbase, AsGroupKey, Entity, GroupEntry, GroupKey, Observation, Observed, OwnedShape, Zone,
@@ -83,6 +90,9 @@ struct History {
     /// (revision, eid) of removed entities, ascending revision.
     entities: Vec<(u64, Eid)>,
     groups: Vec<(u64, Eid)>,
+    airbases: Vec<(u64, Eid)>,
+    /// (revision, (kind, name)) of removed registry resources.
+    resources: Vec<(u64, resources::ResourceId)>,
     /// Deltas can only be computed from revisions >= floor.
     floor: u64,
 }
@@ -98,6 +108,11 @@ pub struct World {
     entities: BTreeMap<Eid, Entity>,
     groups: BTreeMap<Eid, GroupEntry>,
     airbases: BTreeMap<Eid, Airbase>,
+    /// The resource registry (engine-owned; see `resources.rs`).
+    resources: BTreeMap<resources::ResourceId, resources::ResourceEntry>,
+    /// Weapons and ejected crew named by Eid (engine side; never in snapshots or deltas, see
+    /// `identity.rs`).
+    identities: identity::Identities,
     by_runtime: HashMap<u32, Eid>,
     by_name: HashMap<String, Eid>,
     group_by_name: HashMap<String, Eid>,
@@ -193,9 +208,12 @@ impl World {
         self.model_time
     }
 
-    /// Sets the model time (does not bump the revision).
+    /// Sets the model time (does not bump the revision). A non-finite time is ignored: the
+    /// clock drives identity lifetimes, and `inf - inf` is NaN.
     pub fn set_model_time(&mut self, t: f64) {
-        self.model_time = t;
+        if t.is_finite() {
+            self.model_time = t;
+        }
     }
 
     /// The revision a change made now gets: the next one on the mirror, the current one on a
@@ -478,6 +496,27 @@ impl World {
             index_remove(&mut self.group_by_ident, i, eid, c.into_iter());
         }
         Some(g)
+    }
+
+    pub(crate) fn take_airbase(&mut self, eid: Eid) -> Option<Airbase> {
+        let a = self.airbases.remove(&eid)?;
+        let c: Vec<Eid> = self
+            .airbases
+            .values()
+            .filter(|x| x.name == a.name)
+            .map(|x| x.eid)
+            .collect();
+        index_remove(&mut self.airbase_by_name, &a.name, eid, c.into_iter());
+        if let Some(i) = &a.ident {
+            let c: Vec<Eid> = self
+                .airbases
+                .values()
+                .filter(|x| x.ident.as_ref() == Some(i))
+                .map(|x| x.eid)
+                .collect();
+            index_remove(&mut self.airbase_by_ident, i, eid, c.into_iter());
+        }
+        Some(a)
     }
 
     /// Rebuilds every derived index from the entity/group/airbase maps.

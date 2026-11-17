@@ -1,4 +1,4 @@
-error: #[sortie::mission] takes no arguments
+error: #[sortie::mission] takes only `api_rev = <n>`, `event_rev = <n>` and `requires = [<capability>, ..]`
  --> tests/ui/mission_signature.rs:3:19
   |
 3 | #[sortie::mission(fast)]

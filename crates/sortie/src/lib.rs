@@ -23,19 +23,25 @@
 //! * [`testing::TestHarness`] is what `#[sortie::test]` drives (implemented by FakeDcs, which
 //!   is not part of SDK 0.1: there `#[sortie::test]` is a compile error that says so).
 
+pub mod caps;
 pub mod cmd;
 mod ctx;
+pub mod dcs;
 mod error;
 pub mod events;
 pub mod group;
+pub mod map;
 pub mod menu;
+pub mod menu_tree;
 #[cfg(doctest)]
 mod mission_checks;
 pub mod prelude;
 pub mod runtime;
+pub mod sel;
 pub mod state;
 pub mod task;
 pub mod testing;
+pub mod timing;
 
 pub use cmd::Cmd;
 pub use ctx::{Ctx, FlagHandle, FlagValue, MessageTarget, Position, Report, Start, TaskHandle};

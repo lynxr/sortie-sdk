@@ -136,6 +136,9 @@ message CommandError {
   string message = 2;
   // Lua traceback when code = ERROR_CODE_LUA_ERROR, otherwise empty.
   string lua_traceback = 3;
+  // W1. For ERROR_CODE_UNAVAILABLE, REJECTED (gating) and QUARANTINED: the name of the
+  // capability or operation that is missing, switched off or quarantined (see Capability.name).
+  string capability = 4;
 }
 
 // A Lua value as it crosses the bridge. An unset `kind` is nil as well.
@@ -160,4 +163,333 @@ message LuaTable {
 message LuaPair {
   LuaValue key = 1;
   LuaValue value = 2;
+}
+
+// =====================================================================================
+// Selectors. GroupSel and UnitSel were declared in commands.proto by 0.1.0 and moved here
+// in 0.2.0 (same package, names and field numbers: the wire format is unchanged).
+// =====================================================================================
+
+// Selects a group: by Eid (preferred), DCS name, or manifest symbol.
+message GroupSel {
+  oneof sel {
+    uint64 eid = 1;
+    string name = 2;
+    string ident = 3;
+  }
+}
+
+// Selects a unit: by Eid (preferred) or DCS name.
+message UnitSel {
+  oneof sel {
+    uint64 eid = 1;
+    string name = 2;
+  }
+}
+
+// =====================================================================================
+// Wave 1 (api_rev 1) additions: the shared vocabulary (spec, section 1).
+//
+// Rules for every selector, anchor, area and audience (spec, section 1.1):
+//   - an unset oneof is ERROR_CODE_INVALID, never a default. A member added by a later
+//     revision reaches an older engine as an unset oneof, so it fails instead of widening;
+//   - an Eid of the wrong class for the selector is ERROR_CODE_INVALID;
+//   - an Eid is checked against the mirror (unknown, removed or dead: ERROR_CODE_GONE); a
+//     name is resolved in DCS when the command executes and acts on whoever holds it then;
+//   - numbers must be finite (NaN and infinities are ERROR_CODE_INVALID).
+// The 0.1.0 defaults stay: Message.to unset = everyone, Menu.coalition unset = everyone.
+// =====================================================================================
+
+// ---- W1: selectors ----
+// Selects any world object (unit, static, cargo, weapon, ejected crew, scenery).
+// Eid is preferred. Weapons and ejected crew have no name: they are addressed by Eid only
+// (they get Eids when they appear in an event, since W1). Names are DCS runtime names.
+message ObjSel {
+  oneof sel {
+    // An entity Eid (not a group or airbase Eid).
+    uint64 eid = 1;
+    string unit_name = 2;
+    string static_name = 3;
+    // Scenery (map) object: its map object name as a decimal string. Scenery has no other
+    // stable name; the string is opaque to clients (taken from events, queries, the manifest).
+    string scenery_name = 4;
+  }
+}
+
+// Selects an airbase, FARP or ship deck: by Eid, DCS name or manifest symbol.
+// `eid` takes the airbase Eid or the Eid of its host entity (the FARP static, the ship
+// unit: AirbaseSnap.host_eid). Name lookups skip dead and removed airbases.
+message AirbaseSel {
+  oneof sel {
+    uint64 eid = 1;
+    string name = 2;
+    string ident = 3;
+  }
+}
+
+// Selects a connected player. `ucid` is stable across reconnects, `player_id` is the
+// per-connection id carried by the Player* events, `name` is the current nickname.
+// A name that two connected players share is ERROR_CODE_INVALID. A `player_id` is bound
+// to the ucid it had when the command was submitted: if another connection holds the id
+// when the command runs, the result is ERROR_CODE_GONE. Kick and ban take `ucid` only.
+message PlayerSel {
+  oneof sel {
+    string ucid = 1;
+    uint32 player_id = 2;
+    string name = 3;
+  }
+}
+
+// Selects a warehouse: the one of an airbase, the one inside a cargo/static object,
+// or by the DCS warehouse name (Warehouse.getByName).
+message WarehouseSel {
+  oneof sel {
+    AirbaseSel airbase = 1;
+    ObjSel cargo = 2;
+    string dcs_name = 3;
+  }
+}
+
+// Selects a trigger zone: manifest symbol or mission-editor zone name.
+message ZoneSel {
+  oneof sel {
+    string ident = 1;
+    string name = 2;
+  }
+}
+
+// Selects an AI controller: of a group (the normal case) or of one unit (aircraft, ships).
+// An unset `sel` is ERROR_CODE_INVALID.
+message ControllerSel {
+  oneof sel {
+    GroupSel group = 1;
+    UnitSel unit = 2;
+  }
+}
+
+// Who sees or hears something. Each consumer states which members it accepts; a member it
+// cannot serve is ERROR_CODE_INVALID, never a silent widening to a larger audience.
+// An unset `to` (which is also how a member added by a later revision reaches an engine
+// that does not know it) and `all = false` are ERROR_CODE_INVALID.
+message Audience {
+  oneof to {
+    bool all = 1;
+    Coalition coalition = 2;
+    // DCS country key as in the country.id table, e.g. "USA".
+    string country = 3;
+    GroupSel group = 4;
+    UnitSel unit = 5;
+    PlayerSel player = 6;
+  }
+}
+
+// ---- W1: anchor ----
+// A place: a fixed 3D point, a point on the ground, a live object (follows it for as long
+// as the consumer says it does), or the centre of a zone.
+message Anchor {
+  oneof at {
+    // Used as given.
+    Vec3 point = 1;
+    // Terrain height is looked up in DCS when the command executes.
+    MapPoint ground = 2;
+    // Position of the object when the command executes; ERROR_CODE_GONE if it is gone.
+    ObjSel object = 3;
+    // Zone centre on the ground.
+    ZoneSel zone = 4;
+  }
+  // Added to the height of the resolved point (metres, may be negative).
+  double height_offset_m = 5;
+}
+
+// ---- W1: areas and volumes ----
+message MapCircle {
+  MapPoint center = 1;
+  double radius_m = 2;
+}
+
+// Vertices in order; the polygon is closed implicitly. 3..=64 points.
+message MapPolygon {
+  repeated MapPoint points = 1;
+}
+
+// A circle that is evaluated around the current position of an object.
+message AroundObject {
+  ObjSel object = 1;
+  double radius_m = 2;
+}
+
+// A 2D area on the map.
+message MapArea {
+  oneof area {
+    ZoneSel zone = 1;
+    MapCircle circle = 2;
+    MapPolygon polygon = 3;
+    AroundObject around = 4;
+  }
+}
+
+// A 3D volume. sphere, axis_box, segment and pyramid are the DCS volume types
+// (world.VolumeType). `area` is Sortie's own: a consumer that filters results itself
+// (SearchObjects, W2) evaluates it exactly on top of a bounding DCS volume; a consumer
+// that hands the volume to DCS (RemoveJunk) accepts only what it can express exactly.
+message Volume {
+  oneof shape {
+    Sphere sphere = 1;
+    AxisBox axis_box = 2;
+    Segment segment = 3;
+    Pyramid pyramid = 4;
+    AreaVolume area = 5;
+  }
+}
+
+message Sphere {
+  Vec3 center = 1;
+  double radius_m = 2;
+  // true: ignore center.y and put the centre on the terrain.
+  bool center_on_ground = 3;
+}
+
+// Axis-aligned box (world.VolumeType.BOX).
+message AxisBox {
+  Vec3 min = 1;
+  Vec3 max = 2;
+}
+
+message Segment {
+  Vec3 start = 1;
+  Vec3 end = 2;
+}
+
+message Pyramid {
+  Vec3 apex = 1;
+  double heading_rad = 2;
+  double pitch_rad = 3;
+  double length_m = 4;
+  double half_angle_hor_rad = 5;
+  double half_angle_ver_rad = 6;
+}
+
+// A map area extruded between two heights above sea level. Unset = the engine's band
+// around the terrain: 200 m below the lowest and 20 000 m above the highest terrain point
+// of the area (never an unbounded volume).
+message AreaVolume {
+  MapArea area = 1;
+  optional double floor_m = 2;
+  optional double ceiling_m = 3;
+}
+
+// ---- W1: small shared values ----
+// Colour, each channel 0..1.
+message Rgba {
+  float r = 1;
+  float g = 2;
+  float b = 3;
+  float a = 4;
+}
+
+enum Modulation {
+  MODULATION_UNSPECIFIED = 0;
+  MODULATION_AM = 1;
+  MODULATION_FM = 2;
+}
+
+// What a spawn does when the name is already used by a live object.
+enum NameConflict {
+  // = FAIL.
+  NAME_CONFLICT_UNSPECIFIED = 0;
+  // ERROR_CODE_NAME_CONFLICT (0.1.0 behaviour).
+  NAME_CONFLICT_FAIL = 1;
+  // Destroy the holder, then spawn. Only a holder of the same class as the new object
+  // (a static for SpawnStatic, a group for SpawnGroup) that no player occupies; anything
+  // else is ERROR_CODE_NAME_CONFLICT. Everything is validated before the holder is
+  // destroyed. UnitGone for the holder: GONE_REASON_REPLACED when the new object exists,
+  // GONE_REASON_DESPAWNED when the spawn failed after the destroy.
+  NAME_CONFLICT_REPLACE = 2;
+  // Do nothing; the result describes the existing object. Only when the holder has the
+  // same class and type as requested and is alive; otherwise ERROR_CODE_NAME_CONFLICT.
+  NAME_CONFLICT_KEEP = 3;
+}
+
+// ---- W1: capabilities ----
+// Class of an allow-listed DCS function. It decides the lane and the gating.
+enum CallClass {
+  CALL_CLASS_UNSPECIFIED = 0;
+  // No side effect and a bounded cost. LANE_QUERY. On by default when its signature is
+  // documented and its probe passed (spec 2.3).
+  CALL_CLASS_READ = 1;
+  // Changes the simulation. LANE_REALTIME (mission) or LANE_CONTROL (hooks).
+  // Only by an explicit allow-list entry of the engine owner.
+  CALL_CLASS_MUTATE = 2;
+  // Costly in the simulation thread (lists of objects, full tables, path finding).
+  // LANE_BULK, rate limited, never two in one frame.
+  CALL_CLASS_HEAVY = 3;
+  // Server administration. LANE_CONTROL; needs the engine owner's admin capability for the path as well (admin.*).
+  CALL_CLASS_ADMIN = 4;
+}
+
+enum CapabilityState {
+  CAPABILITY_STATE_UNSPECIFIED = 0;
+  CAPABILITY_STATE_AVAILABLE = 1;
+  // Declared in this API revision, not built into this engine/bridge/Lua layer yet.
+  CAPABILITY_STATE_NOT_IMPLEMENTED = 2;
+  // The DCS function or table it needs does not exist in the running DCS build.
+  CAPABILITY_STATE_MISSING_IN_DCS = 3;
+  // Switched off: by the engine owner (allow-list entry, admin list, --dev-eval), or
+  // because the call is undocumented and no probe pass is recorded for the running DCS
+  // build (`note` says which).
+  CAPABILITY_STATE_DISABLED = 4;
+  // Was executing when DCS crashed, or faulted repeatedly.
+  CAPABILITY_STATE_QUARANTINED = 5;
+}
+
+// Result of the automatic live checks of a capability (spec, section 9). Information for
+// the owner and the logic author; the engine itself gates on it only for undocumented calls.
+enum LiveStatus {
+  LIVE_STATUS_UNSPECIFIED = 0;
+  // No automatic check has passed for it.
+  LIVE_STATUS_UNVERIFIED = 1;
+  // Its automatic checks passed on the DCS build named in `verified_dcs` (compare with
+  // CapabilitiesResponse.dcs_version to know whether that is the running build).
+  LIVE_STATUS_VERIFIED = 2;
+  // An automatic check failed on the running build; `note` says what differs.
+  LIVE_STATUS_FAILED = 3;
+}
+
+// How the engine validates one allow-listed call (the merged allow-list entry, spec 2.5).
+message CallSignature {
+  Env env = 1;
+  CallClass call_class = 2;
+  // "function" or "value".
+  string kind = 3;
+  // "" for a plain function, else the class that defines the method ("Unit", "Object", ...).
+  string receiver = 4;
+  // Argument and return types in the allow-list notation, e.g. "vec2", "object:Unit",
+  // "enum:trigger.smokeColor", "side_name".
+  repeated string args = 5;
+  repeated string returns = 6;
+  // Guards the engine applies before the call, e.g. "controller_gate", "player_guard".
+  repeated string guards = 7;
+}
+
+// One thing the engine can do. Names:
+//   "<operation>"                       e.g. "spawn_static", "draw", "query.terrain"
+//   "<operation>.<member>"              e.g. "draw.arrow", "destroy.scenery", "admin.kick"
+//   "call:<env>:<function path>"        e.g. "call:mission:land.getSurfaceType"
+//   "table:<name>"                      e.g. "table:world.event", "table:sortie.line_type"
+message Capability {
+  string name = 1;
+  CapabilityState state = 2;
+  LiveStatus live = 3;
+  // DCS build the automatic checks last passed on, empty if never.
+  string verified_dcs = 4;
+  // Ids from the live-check catalogue that cover this capability.
+  repeated string live_checks = 5;
+  // API revision that introduced it.
+  uint32 since_api_rev = 6;
+  string note = 7;
+  // "call:*" capabilities: the signature of the call.
+  CallSignature signature = 8;
+  // "call:*" capabilities: the typed operation that replaces this raw path (a capability
+  // name), empty if none. The SDK warns once per superseded path a logic uses.
+  string superseded_by = 9;
 }

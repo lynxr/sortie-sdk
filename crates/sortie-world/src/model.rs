@@ -214,6 +214,11 @@ pub struct Airbase {
     pub pos: Option<Vec3>,
     /// `Airbase:getID()` (airdromeId for airfields).
     pub airbase_id: Option<u32>,
+    /// The entity that carries the base (the FARP static, the ship unit); `None` for an
+    /// airfield of the map or a host the mirror has not linked yet.
+    pub host: Option<Eid>,
+    /// The host is destroyed or sunk. Final, as `Entity::dead`.
+    pub dead: bool,
     pub rev: u64,
 }
 
@@ -227,6 +232,8 @@ impl Airbase {
             coalition: self.coalition.map_or(0, Coalition::as_i32),
             pos: self.pos.map(Into::into),
             airbase_id: self.airbase_id.unwrap_or(0),
+            host_eid: self.host.map_or(0, Eid::to_u64),
+            dead: self.dead,
         }
     }
 
@@ -239,6 +246,8 @@ impl Airbase {
             coalition: Coalition::from_i32(s.coalition),
             pos: s.pos.map(Into::into),
             airbase_id: (s.airbase_id != 0).then_some(s.airbase_id),
+            host: Eid::from_u64(s.host_eid),
+            dead: s.dead,
             rev,
         })
     }

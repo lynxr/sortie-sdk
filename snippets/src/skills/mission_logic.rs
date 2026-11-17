@@ -166,6 +166,30 @@ pub async fn events(ctx: Ctx<Frontline>) -> sortie::Result<()> {
     Ok(())
 }
 
+/// The generic event form: which DCS event it was, and the events without a typed kind.
+pub async fn dcs_entries(ctx: Ctx<Frontline>) {
+    // snippet:start skills-logic-events-dcs
+    // Wrecks only: DCS also sends the pilot's death as a Dead while the aircraft still flies.
+    let mut wrecks = ctx
+        .events()
+        .of::<v1::Dead>()
+        .from_dcs(v1::DcsEvent::Dead)
+        .from_dcs(v1::DcsEvent::Crash);
+    let mut starts = ctx
+        .events()
+        .of::<v1::Unknown>()
+        .from_dcs(v1::DcsEvent::EngineStartup);
+    if let Some((dead, entry)) = wrecks.next_with_dcs_event().await {
+        let name = dead.initiator.map(|u| u.name).unwrap_or_default();
+        eprintln!("{name}: {entry:?}");
+    }
+    if let Some(start) = starts.next().await {
+        let who = start.ctx.and_then(|c| c.initiator).map(|u| u.name);
+        eprintln!("engines started: {who:?}");
+    }
+    // snippet:end skills-logic-events-dcs
+}
+
 /// F10 menus: per group (presses say who) and coalition-wide.
 pub async fn menu(ctx: Ctx<Frontline>) -> sortie::Result<()> {
     // snippet:start skills-logic-menus

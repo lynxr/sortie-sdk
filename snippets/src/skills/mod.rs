@@ -9,6 +9,11 @@
 #[allow(dead_code, missing_docs, unreachable_pub, clippy::all)]
 pub mod frontline;
 
+pub mod capabilities;
+pub mod dcs_calls;
 pub mod errors;
+pub mod map_drawings;
+pub mod menu_trees;
 pub mod mission_logic;
+pub mod objects;
 pub mod patterns;

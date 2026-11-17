@@ -22,7 +22,7 @@ import platform
 import re
 import sys
 import warnings
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -201,6 +201,40 @@ def _skill(value: Skill | str) -> Skill:
         raise ScenarioError(f"unknown skill {value!r} (one of {names})") from None
 
 
+#: The most the mission editor lets a warehouse start with of one weapon.
+MAX_INITIAL_AMOUNT = 1_000_000
+
+
+def _munitions(what: str, value: Any) -> tuple[tuple[tuple[int, int, int, int], int], ...]:
+    """The stock of ``airbase(munitions=...)``, checked: ``((wsType, amount), ...)``."""
+    if not isinstance(value, Mapping):
+        raise ScenarioError(
+            f"{what}: munitions must be a mapping of a weapon's wsType (four numbers) to its initial amount"
+        )
+    out = []
+    for key, amount in value.items():
+        ws = tuple(key) if isinstance(key, (tuple, list)) else ()
+        if len(ws) != 4 or any(isinstance(n, bool) or not isinstance(n, int) or n < 0 for n in ws):
+            raise ScenarioError(
+                f"{what}: a weapon is named by its wsType, four numbers such as (4, 4, 7, 106) "
+                f"(DCS's Scripts/Database/wsTypes.lua), not {key!r}"
+            )
+        if isinstance(amount, bool) or not isinstance(amount, int) or not 0 <= amount <= MAX_INITIAL_AMOUNT:
+            raise ScenarioError(
+                f"{what}: the initial amount of {key!r} must be a whole number 0..{MAX_INITIAL_AMOUNT}, not {amount!r}"
+            )
+        out.append(((ws[0], ws[1], ws[2], ws[3]), amount))
+    if not out:
+        # The game's mission editor reads a limited stock without entries as its default
+        # stock (100 of every weapon), not as an empty one; unlisted weapons are 0 only next
+        # to a listed one.
+        raise ScenarioError(
+            f"{what}: munitions must name at least one weapon (for a base without weapons give "
+            "one weapon the amount 0: every weapon that is not listed then starts at 0)"
+        )
+    return tuple(out)
+
+
 def _clean(x: float) -> float:
     """Turns -0.0 into 0.0 (protobuf runtimes disagree on whether -0.0 is a default value)."""
     return float(x) + 0.0
@@ -319,6 +353,8 @@ class _Template:
 class _Airbase:
     handle: AirbaseHandle
     coalition: Coalition | None
+    #: ``(wsType, initial amount)`` in declaration order; ``None``: munitions stay unlimited.
+    munitions: tuple[tuple[tuple[int, int, int, int], int], ...] | None = None
 
 
 @dataclass
@@ -688,7 +724,14 @@ class Scenario:
         self._decls.append(decl)
         return handle
 
-    def airbase(self, name: Any, *, ident: str, coalition: Coalition | str | None = None) -> AirbaseHandle:
+    def airbase(
+        self,
+        name: Any,
+        *,
+        ident: str,
+        coalition: Coalition | str | None = None,
+        munitions: Mapping[Sequence[int], int] | None = None,
+    ) -> AirbaseHandle:
         """Declares an airbase symbol (``airbases::IDENT``) for the logic.
 
         ``coalition`` sets the airbase's owner in the mission; without it the theatre's default
@@ -696,14 +739,28 @@ class Scenario:
         The exception is an airbase a ``player_flight`` starts from on the ground (Cold, Hot or
         Runway): it belongs to that flight's coalition (multiplayer slots need it, see
         ``player_flight``), and with a different ``coalition`` here the build fails.
+
+        ``munitions`` limits the airbase's munitions to a known stock: the warehouse is written
+        with ``unlimitedMunitions = false`` and one entry per weapon listed, as the mission
+        editor writes it. The mapping goes from a weapon's wsType (four numbers, e.g.
+        ``(4, 4, 7, 106)`` for the AIM-120C: DCS's ``Scripts/Database/wsTypes.lua``) to its
+        initial amount (0..1000000). At least one weapon must be listed: the mission editor
+        reads a limited stock without entries as its default stock (100 of every weapon), and
+        gives a weapon that is not listed 0 only next to a listed one, so a base without
+        weapons is one weapon with the amount 0. What DCS itself gives a weapon that has no
+        entry is not measured (0 is expected, as in the editor). Aircraft and fuel stay
+        unlimited. Without ``munitions`` the warehouse keeps pydcs's default, everything
+        unlimited: on such a stock DCS's ``Warehouse`` functions are reported to change no
+        count (not measured).
         """
         airport = self._airport(name, f"airbase {name!r}")
         if airport.name in self._airbases:
             raise NameConflict(f"airbase {airport.name!r} is declared twice")
         ident_ = self._ident("airbase", ident, required=True)
         assert ident_ is not None
+        stock = _munitions(f"airbase {airport.name!r}", munitions) if munitions is not None else None
         handle = AirbaseHandle(airport.name, ident_, int(airport.id), self.point(airport.position.x, airport.position.y))
-        decl = _Airbase(handle, Coalition.parse(coalition) if coalition is not None else None)
+        decl = _Airbase(handle, Coalition.parse(coalition) if coalition is not None else None, stock)
         self._claim_ident("airbase", ident_)
         self._airbases[airport.name] = decl
         self._decls.append(decl)
@@ -1049,8 +1106,16 @@ class _MissionBuilder:
             self.terrain.airports[name].set_coalition(side.value)
 
     def _airbase(self, d: _Airbase) -> None:
+        airport = self.terrain.airports[d.handle.name]
         if d.coalition is not None:
-            self.terrain.airports[d.handle.name].set_coalition(d.coalition.value)
+            airport.set_coalition(d.coalition.value)
+        if d.munitions is not None:
+            # The `warehouses` file of the .miz, as the mission editor writes a limited stock.
+            airport.unlimited_munitions = False
+            airport.weapons = {
+                k: {"wsType": {i: n for i, n in enumerate(ws, start=1)}, "initialAmount": amount}
+                for k, (ws, amount) in enumerate(d.munitions, start=1)
+            }
         self.airbases.append(d)
 
     def _payload(self, group: Any, payload: Any, what: str) -> None:

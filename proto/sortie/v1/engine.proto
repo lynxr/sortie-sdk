@@ -3,9 +3,19 @@ syntax = "proto3";
 
 package sortie.v1;
 
+import "sortie/v1/common.proto";
+
 service Engine {
   rpc Version(VersionRequest) returns (VersionResponse);
   rpc Health(HealthRequest) returns (HealthResponse);
+  // W1. Every operation, typed family member and allow-listed DCS function the engine
+  // knows, with its state on the running DCS build and its live-check status.
+  rpc Capabilities(CapabilitiesRequest) returns (CapabilitiesResponse);
+  // W1. Lifts the quarantine of an exec op kind (admin token). `name` is the op kind
+  // ("dcs_call", "spawn_static") or any capability it covers ("call:mission:land.getHeight"
+  // releases "dcs_call"). The released capabilities report their state again at once.
+  // `carried_over` releases every quarantine carried over from another DCS build instead.
+  rpc ReleaseQuarantine(ReleaseQuarantineRequest) returns (ReleaseQuarantineResponse);
 }
 
 message VersionRequest {}
@@ -19,6 +29,8 @@ message VersionResponse {
   // Of the connected bridge, empty when no bridge is connected.
   string bridge_version = 5;
   string dcs_version = 6;
+  // W1. API revision: 0 = 0.1.0, 1 = wave 1, and so on.
+  uint32 api_rev = 7;
 }
 
 message HealthRequest {}
@@ -40,6 +52,12 @@ message LinkHealth {
   uint64 events_dropped = 4;
   // Seconds since the last heartbeat from the bridge.
   double heartbeat_age_s = 5;
+  // From the bridge's last heartbeat (0 before the first one): the frame rate it measured and
+  // the 99th percentile of the work Sortie did per pump (commands, events, samples) since the
+  // heartbeat before it, in microseconds; compare with the bridge's pump budget (mission:
+  // 1000 us by default).
+  float fps = 6;
+  uint32 pump_p99_us = 7;
 }
 
 message HealthResponse {
@@ -52,4 +70,47 @@ message HealthResponse {
   bool paused = 6;
   uint32 logic_clients = 7;
   repeated string notes = 8;
+  // W1. Quarantines of the universal call (`call:<env>:<path>`, or "dcs_call" for an older
+  // engine's row) recorded on another DCS build than the running one and carried over to it
+  // (a new build does not lift them unless engine.toml [quarantine] clear_calls_on_new_build
+  // says so); `notes` names their builds. Empty before a bridge connected.
+  repeated string carried_over_quarantines = 9;
+}
+
+// =====================================================================================
+// Wave 1 (api_rev 1) additions.
+// =====================================================================================
+
+// ---- W1: Engine.Capabilities ----
+message CapabilitiesRequest {
+  // Only capabilities whose name starts with this; empty = all.
+  string prefix = 1;
+}
+
+message CapabilitiesResponse {
+  repeated Capability capabilities = 1;
+  // API revision of the engine (same as VersionResponse.api_rev).
+  uint32 api_rev = 2;
+  // Highest event revision the engine can serve.
+  uint32 event_rev = 3;
+  // DCS build the answer refers to; empty when no bridge is connected (then every
+  // DCS-dependent state is reported as of the last connected build).
+  string dcs_version = 4;
+}
+
+// ---- W1: Engine.ReleaseQuarantine ----
+message ReleaseQuarantineRequest {
+  string name = 1;
+  // W1. Instead of `name` (which must then be empty): release every quarantine carried over
+  // from another DCS build than the running one (HealthResponse.carried_over_quarantines).
+  // FAILED_PRECONDITION while the running build is not known (no bridge connected since the
+  // engine started).
+  bool carried_over = 2;
+}
+
+message ReleaseQuarantineResponse {
+  // The op kinds whose quarantine was lifted (empty: nothing was quarantined under `name`).
+  repeated string released = 1;
+  // The capabilities of those op kinds, as they are now.
+  repeated Capability capabilities = 2;
 }

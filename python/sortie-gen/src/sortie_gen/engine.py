@@ -15,7 +15,8 @@ from typing import Any, TypeVar
 
 import grpc
 
-from .errors import EngineError, EngineNotReady, EngineUnavailable, NotYet
+from .errors import CommandFailed, EngineError, EngineNotReady, EngineUnavailable, NotYet, ResultNotKept
+from ._proto.sortie.v1 import commands_pb2, commands_pb2_grpc, common_pb2
 from ._proto.sortie.v1 import engine_pb2, engine_pb2_grpc
 from ._proto.sortie.v1 import events_pb2, events_pb2_grpc
 from ._proto.sortie.v1 import generator_pb2, generator_pb2_grpc
@@ -74,6 +75,7 @@ class EngineClient:
         self.missions = missions_pb2_grpc.MissionsStub(self.channel)
         self.generator = generator_pb2_grpc.GeneratorStub(self.channel)
         self.events_stub = events_pb2_grpc.EventsStub(self.channel)
+        self.commands = commands_pb2_grpc.CommandsStub(self.channel)
 
     def close(self) -> None:
         self.channel.close()
@@ -131,6 +133,31 @@ class EngineClient:
 
     def health(self) -> engine_pb2.HealthResponse:
         return self._call("Engine.Health", self.engine.Health, engine_pb2.HealthRequest())
+
+    def capabilities(self, prefix: str = "") -> engine_pb2.CapabilitiesResponse:
+        """The engine's capability table (names starting with `prefix`; empty = all)."""
+        return self._call(
+            "Engine.Capabilities", self.engine.Capabilities, engine_pb2.CapabilitiesRequest(prefix=prefix)
+        )
+
+    def release_quarantine(self, name: str) -> engine_pb2.ReleaseQuarantineResponse:
+        """Lifts the quarantine of an exec op kind (`dcs_call`, `spawn_static`, or a capability
+        it covers such as `call:mission:land.getHeight`). Needs an admin token."""
+        return self._call(
+            "Engine.ReleaseQuarantine",
+            self.engine.ReleaseQuarantine,
+            engine_pb2.ReleaseQuarantineRequest(name=name),
+        )
+
+    def release_carried_over(self) -> engine_pb2.ReleaseQuarantineResponse:
+        """Lifts every quarantine carried over from another DCS build than the running one (a
+        new DCS build does not lift a universal call path's quarantine; `health()` lists them in
+        `carried_over_quarantines`). Needs an admin token."""
+        return self._call(
+            "Engine.ReleaseQuarantine",
+            self.engine.ReleaseQuarantine,
+            engine_pb2.ReleaseQuarantineRequest(carried_over=True),
+        )
 
     def begin_build(self, scenario: str, schema: int, schema_sha256: str, generator_version: str) -> str:
         r = self._call(
@@ -197,6 +224,68 @@ class EngineClient:
 
     def results(self, session: str = "") -> missions_pb2.MissionResults:
         return self._call("Missions.GetResults", self.missions.GetResults, missions_pb2.GetResultsRequest(session=session))
+
+    def submit(self, command: commands_pb2.Command, timeout: float | None = None) -> commands_pb2.CommandResult:
+        """``Commands.Submit``: runs one command in the running session (a ``logic`` or ``admin``
+        token) and returns its result; a failed command is a result with ``err``, not an error."""
+        return self._call("Commands.Submit", self.commands.Submit, command, timeout=timeout)
+
+    def dcs_call(
+        self,
+        path: str,
+        env: str = "",
+        receiver: commands_pb2.DcsRef | None = None,
+        args: Iterable[commands_pb2.DcsArg] = (),
+        returns: list[str] | None = None,
+        *,
+        key: str = "",
+        timeout: float | None = None,
+        session: str = "",
+        max_depth: int = 0,
+    ) -> Any:
+        """Calls one function of the DCS API catalog (``DcsCall``) and returns its values.
+
+        ``returns`` (the entry's return types, as the generated :mod:`sortie_gen.dcs_api` passes
+        them) shapes the result: nothing -> ``None``, one value -> it, more -> a tuple; without
+        it the raw ``DcsReturn`` comes back. A refused or failed call raises
+        :class:`~sortie_gen.errors.CommandFailed` (``code``, ``capability``). Reads take no
+        ``key``; a mutating call repeats its effect unless keyed. A repeat with the same ``key``
+        does not reach DCS and returns the stored result, returned objects and handles
+        included; only a result above 64 KiB is stored without its values, and its repeat
+        raises :class:`~sortie_gen.errors.ResultNotKept`.
+        """
+        from .dcs import decode_return
+
+        arglist = list(args)
+        while arglist and arglist[-1].WhichOneof("kind") == "value" and arglist[-1].value.WhichOneof("kind") in (None, "nil"):
+            arglist.pop()
+        envs = {"": common_pb2.ENV_UNSPECIFIED, "mission": common_pb2.ENV_MISSION, "hooks": common_pb2.ENV_HOOKS}
+        call = commands_pb2.DcsCall(path=path, env=envs[env], args=arglist, max_depth=max_depth)
+        if receiver is not None:
+            call.receiver.CopyFrom(receiver)
+        waited = timeout if timeout is not None else self.timeout
+        cmd = commands_pb2.Command(
+            key=key,
+            session=session,
+            timeout_ms=int(waited * 1000),
+            # The universal call is API revision 1; an older engine refuses instead of guessing.
+            min_api_rev=1,
+            api_rev=1,
+            dcs_call=call,
+        )
+        r = self.submit(cmd, timeout=waited + 5.0)
+        if r.HasField("err"):
+            raise CommandFailed(
+                f"DcsCall {path}",
+                common_pb2.ErrorCode.Name(r.err.code).removeprefix("ERROR_CODE_"),
+                r.err.message,
+                r.err.capability,
+            )
+        if r.replayed and not r.reply.HasField("call"):
+            raise ResultNotKept(f"DcsCall {path}")
+        if returns is None:
+            return r.reply.call
+        return decode_return(r.reply.call, returns)
 
     def events(self, session: str = "", kinds: Iterable[int] = (), from_seq: int = 0) -> Iterator[events_pb2.Event]:
         """Live events (a server stream without a deadline; stop it with Ctrl-C)."""

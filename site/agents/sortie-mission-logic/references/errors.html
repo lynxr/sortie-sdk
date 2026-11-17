@@ -24,7 +24,7 @@
 <a class="skip" href="#content">Перейти к содержанию</a>
 <header class="topbar">
 <div class="topbar-inner">
-<a class="brand" href="../../../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<a class="brand" href="../../../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.2.0</span></a>
 <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
 <nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="../../../docs/quickstart.html">Быстрый старт</a><a href="../../../docs/index.html">Документация</a><a href="../../../agents.html" aria-current="true">Для агентов</a><a href="../../../downloads.html">Загрузки</a><a href="../../../changelog.html">Изменения</a></nav>
 <div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
@@ -104,10 +104,13 @@ is never recorded. A panic is recorded the same way, with its location.</p>
 <tr><td><code>sortie::session_ended</code></td><td>the session ended before the command completed</td><td>normal at the end of a turn → return <code>Ok(())</code></td></tr>
 <tr><td><code>sortie::unavailable</code></td><td>the engine cannot run it now</td><td>no mission session is running; or a keyed command was in flight when the DCS link dropped ("whether it ran is not known": check the world, then use a new key)</td></tr>
 <tr><td><code>sortie::paused</code></td><td>the simulation is paused</td><td>the command was sent with <code>.on_pause(v1::PausePolicy::Fail)</code></td></tr>
-<tr><td><code>sortie::rejected</code></td><td>the engine refused the command</td><td>read the message</td></tr>
-<tr><td><code>sortie::quarantined</code></td><td>this command kind is disabled after it faulted the bridge</td><td>run <code>sortie doctor</code>, report it with <code>Logs/sortie-bridge.log</code></td></tr>
+<tr><td><code>sortie::rejected</code></td><td>the engine refused the command</td><td>read the message; capability <code>dev_eval</code> = a raw table (<code>Task::raw</code>, <code>.raw(..)</code> of a static, a <code>ctx.dcs()</code> argument) holds Lua code or a file name at the path the message names (<code>Script</code> / <code>ScriptFile</code> actions, <code>condition</code>, <code>command</code>, <code>file</code> strings) → use the typed operation; raw tables carry data only; another capability (<code>e.capability()</code>) = the engine owner switched that operation off (<code>engine.toml [operations]</code>)</td></tr>
+<tr><td><code>sortie::quarantined</code></td><td>this command kind (for a universal call: this catalog function) is quarantined: DCS crashed while one ran, or it faulted the bridge 3 times</td><td><code>e.capability()</code> names it (<code>"call:mission:land.getHeight"</code>: one catalog function); the engine owner releases it with <code>sortie caps --release &lt;name&gt;</code>; report it with <code>Logs/sortie-bridge.log</code></td></tr>
 <tr><td><code>sortie::bridge_fault</code></td><td>the bridge caught a fault</td><td>report it with <code>Logs/sortie-bridge.log</code></td></tr>
 <tr><td><code>sortie::conflict</code></td><td>a state write lost against another writer</td><td><code>StateDoc::update</code> retries by itself; seen only after 8 conflicts in a row</td></tr>
+<tr><td><code>sortie::result_not_kept</code></td><td>a keyed <code>ctx.dcs()</code> call was answered from the key store, which kept no values for it (a result above 64 KiB); the call ran before and was not run again</td><td>read what you need with a call of its own; results up to 64 KiB, handles and objects included, come back on a repeat</td></tr>
+<tr><td><code>sortie::revision</code></td><td>the operation belongs to a newer API revision than the logic declares; nothing was sent</td><td>declare it: <code>#[sortie::mission(api_rev = 1)]</code> (revisions are written in the logic's source, default 0)</td></tr>
+<tr><td><code>sortie::engine_too_old</code></td><td>the engine's API revision (<code>ctx.engine_api_rev()</code>) is below the operation's; nothing was sent</td><td>update <code>sortied</code>, or keep to the operations of the engine's revision</td></tr>
 </tbody></table>
 </div>
 <h2 id="lookup-and-state-errors">Lookup and state errors<a class="anchor" href="#lookup-and-state-errors" aria-label="Ссылка на этот раздел">#</a></h2>
@@ -154,7 +157,7 @@ is never recorded. A panic is recorded the same way, with its location.</p>
 </div>
 <footer class="footer">
 <div class="footer-inner">
-<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p>Sortie SDK 0.2.0. Лицензия SDK: MIT OR Apache-2.0.</p>
 <p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
 </div>
 </footer>

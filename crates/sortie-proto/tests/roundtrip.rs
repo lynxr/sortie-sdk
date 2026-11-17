@@ -55,6 +55,15 @@ fn link_frames_round_trip() {
                 pid: 4242,
                 initial_credits: 64,
                 capabilities: vec!["samples".into()],
+                crash_journal: Some(link::CrashJournal {
+                    pid: 4241,
+                    env: v1::Env::Mission as i32,
+                    exec_id: "01JC70ZZZZZZZZZZZZZZZZZZZY".into(),
+                    key: "call:mission:land.getHeight".into(),
+                    note: String::new(),
+                    boot_id: "19a2b3c4d5e-0123456789abcdef".into(),
+                }),
+                boot_id: "19a2b3c4f00-fedcba9876543210".into(),
             })),
         },
         link::Frame {
@@ -91,6 +100,11 @@ fn link_frames_round_trip() {
                     traceback: "stack traceback:\n\t[C]: in function 'getController'".into(),
                 })),
                 cost_us: 37,
+                disabled_keys: vec![
+                    "call:mission:land.profile".into(),
+                    "call:mission:coalition.getGroups".into(),
+                ],
+                slow_keys: vec!["call:mission:coalition.getGroups".into()],
             })),
         },
         link::Frame {
@@ -134,6 +148,8 @@ fn command_and_event_round_trip() {
             ..Default::default()
         }),
         session: String::new(),
+        min_api_rev: 1,
+        api_rev: 1,
         body: Some(v1::command::Body::SpawnGroup(v1::SpawnGroup {
             template: "RED_CAP".into(),
             name: Some("Red CAP 1".into()),
@@ -182,6 +198,9 @@ fn command_and_event_round_trip() {
                 ..Default::default()
             }),
         })),
+        // W1: the generic event form.
+        dcs_event: v1::DcsEvent::Crash as i32,
+        dcs_name: String::new(),
     };
     round_trip(&ev);
 }

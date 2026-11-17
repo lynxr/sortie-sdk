@@ -136,6 +136,7 @@ impl<K: Kind> Group<K> {
             cmd::Destroy {
                 group: self.selector(),
                 group_name: self.name.clone(),
+                allow_player: false,
             },
             Location::caller(),
         )

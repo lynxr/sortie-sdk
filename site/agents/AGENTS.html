@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agent instructions: a Sortie mission repository | Sortie SDK</title>
-<meta name="description" content="This repository is one DCS World mission built on the Sortie SDK 0.1.0 (https://github.com/lynxr/sortie-sdk, tag v0.1.0). It has two halves:">
+<meta name="description" content="This repository is one DCS World mission built on the Sortie SDK 0.2.0 (https://github.com/lynxr/sortie-sdk, tag v0.2.0). It has two halves:">
 <meta name="color-scheme" content="light dark">
 <link rel="canonical" href="https://lynxr.github.io/sortie-sdk/agents/AGENTS.html">
 <link rel="stylesheet" href="../assets/style.css">
@@ -24,7 +24,7 @@
 <a class="skip" href="#content">Перейти к содержанию</a>
 <header class="topbar">
 <div class="topbar-inner">
-<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.2.0</span></a>
 <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
 <nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="../docs/quickstart.html">Быстрый старт</a><a href="../docs/index.html">Документация</a><a href="../agents.html" aria-current="true">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
 <div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
@@ -64,8 +64,8 @@
 <p class="lang-note">Инструкции и навыки для агентов написаны на английском.</p>
 <article class="prose" lang="en">
 <h1 id="agent-instructions-a-sortie-mission-repository">Agent instructions: a Sortie mission repository<a class="anchor" href="#agent-instructions-a-sortie-mission-repository" aria-label="Ссылка на этот раздел">#</a></h1>
-<p>This repository is one DCS World mission built on the Sortie SDK 0.1.0
-(<code>https://github.com/lynxr/sortie-sdk</code>, tag <code>v0.1.0</code>). It has two halves:</p>
+<p>This repository is one DCS World mission built on the Sortie SDK 0.2.0
+(<code>https://github.com/lynxr/sortie-sdk</code>, tag <code>v0.2.0</code>). It has two halves:</p>
 <ul>
 <li><code>scenario.py</code>: the static mission in Python (sortie-gen over pydcs). It builds the <code>.miz</code>,
 its manifest and <code>scenario.lock.json</code>, the list of symbols the logic may use.</li>
@@ -112,7 +112,7 @@ timers (<code>ctx.timer</code>), run one-time steps in <code>ctx.once</code> and
 <code>ctx.once_per_turn</code>.</li>
 <li><strong>One thread, short borrows.</strong> No blocking calls; background work through <code>ctx.spawn</code>;
 <code>ctx.world()</code> and <code>StateDoc::get()</code> are dropped before the next <code>.await</code>.</li>
-<li><strong>No tests without DCS in SDK 0.1.0.</strong> FakeDcs and <code>#[sortie::test]</code> arrive in
+<li><strong>No tests without DCS in SDK 0.2.0.</strong> FakeDcs and <code>#[sortie::test]</code> arrive in
 SDK 0.2 (<code>#[sortie::test]</code> is a compile error until then). Unit-test plain functions with
 <code>#[test]</code>; test the mission in DCS with <code>sortied --dev</code>.</li>
 <li><strong>The <code>.miz</code> comes from <code>scenario.py</code>.</strong> Change groups, units and zones there, not in the
@@ -126,7 +126,7 @@ Mission Editor. A DO SCRIPT added in a <code>@sc.pydcs</code> hook uses
 <li>Skills, one per task: <code>sortie-mission-logic</code> (the Rust logic), <code>sortie-scenario</code>
 (<code>scenario.py</code> and its commands), <code>sortie-live-debugging</code> (install, logs, failures in DCS).
 They are in the <code>agents/</code> folder of the SDK repository and in
-<a href="sortie-agent-skills-0.1.0.zip">the skills zip</a>; online:
+<a href="sortie-agent-skills-0.2.0.zip">the skills zip</a>; online:
 <a href="sortie-mission-logic/SKILL.html">mission logic</a>,
 <a href="sortie-scenario/SKILL.html">scenario</a>,
 <a href="sortie-live-debugging/SKILL.html">live debugging</a>.</li>
@@ -141,7 +141,7 @@ mission), <code>python/sortie-gen</code> (the generator).</li>
 </div>
 <footer class="footer">
 <div class="footer-inner">
-<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p>Sortie SDK 0.2.0. Лицензия SDK: MIT OR Apache-2.0.</p>
 <p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
 </div>
 </footer>

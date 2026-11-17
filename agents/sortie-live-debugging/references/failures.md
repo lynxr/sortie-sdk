@@ -38,6 +38,7 @@ Symptom first. Check the links of the chain in this order: DCS screen and `dcs.l
 | `sortie status` shows the session, but `wait_until` on units never fires and `sortie events` stays silent | the world stays empty: an older runtime reads DCS 2.9.31's string unit ids as numbers | install the current runtime, restart DCS |
 | `sortie::invalid`: spawn or destroy without a key | `sortied --dev` or the logic's `--dev` | `.key("step-name")` |
 | a spawn twice after a logic restart | the spawn had no key, or its key changes between runs | a stable key per step |
+| `ctx.destroy` of a static, or `spawn_static` with `Replace`, → `sortie::lua_error`: ``DCS did not remove the static `X`: it still exists 10 pumps after destroy()`` | DCS kept the object (reported for FARPs; not measured); the world keeps the static and its airbase alive | do not plan on removing a FARP; give the new static another name, or leave the old one |
 | `sortie::timeout` on spawns, note `N command(s) waiting: spawn rate limit (2 groups / 24 units per second)` | too many spawns at once | spawn in a loop, cap the count, raise `.timeout(..)` |
 | commands hang, `sortie status` says `PAUSED` | DCS is paused: mission commands wait | unpause, or `.on_pause(v1::PausePolicy::Fail)` |
 | `ctx.group(groups::X)` → `sortie::not_in_world` | late activation or the group is dead | spawn it from a template instead; check `alive_count()` |

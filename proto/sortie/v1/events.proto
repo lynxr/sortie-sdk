@@ -5,6 +5,7 @@ package sortie.v1;
 
 import "google/protobuf/timestamp.proto";
 import "sortie/v1/common.proto";
+import "sortie/v1/resources.proto";
 import "sortie/v1/world.proto";
 
 service Events {
@@ -13,11 +14,23 @@ service Events {
 }
 
 message Event {
-  // Monotonic within a session, starting at 1. A hole is always announced by a Gap event.
+  // Monotonic within a session, starting at 1: the sequence of the session journal, one number
+  // per journalled event and the same for every subscriber. A subscriber whose kinds, filter or
+  // event revision hides events sees numbers missing; that is not a loss. Lost events are
+  // announced by a Gap, and only by a Gap.
   uint64 seq = 1;
   double model_time = 2;
   google.protobuf.Timestamp wall_time = 3;
   string session = 4;
+  // W1 (generic event form). Which world.event entry this event was decoded from, by name;
+  // UNSPECIFIED for events that do not come from world.event (engine, hooks, layer menus) and
+  // for an entry the enum lacks (then `dcs_name` names it). Filled for every subscriber, so a
+  // logic tells DEAD from CRASH from PILOT_DEAD (all `Dead` at event revisions 0 to 3), or
+  // TAKEOFF from RUNWAY_TAKEOFF, without a newer event revision.
+  DcsEvent dcs_event = 5;
+  // W1. The "S_EVENT_..." name when the enum has no value for it (a newer DCS build), or the
+  // name another script gave its own event in world.event; empty otherwise.
+  string dcs_name = 6;
   oneof kind {
     Birth birth = 10;
     Dead dead = 11;
@@ -40,7 +53,13 @@ message Event {
     ChatMessage chat_message = 36;
     SimulationPaused simulation_paused = 40;
     SimulationResumed simulation_resumed = 41;
+    // W1 (event revision 1). Synthesised by the engine: a registered resource ended without
+    // its owner's ResourceRemove.
+    ResourceEnded resource_ended = 43;
     Gap gap = 50;
+    // W1 (event revision 1). Synthesised by the engine: a capability's state changed after
+    // Start (a quarantine, its release, a probe result, a fault-disabled op).
+    CapabilityChanged capability_changed = 54;
     // Anything DCS emits that the engine does not decode yet.
     Unknown unknown = 99;
   }
@@ -70,6 +89,10 @@ enum EventKind {
   EVENT_KIND_SIMULATION_RESUMED = 19;
   EVENT_KIND_GAP = 20;
   EVENT_KIND_UNKNOWN = 21;
+  // W1 (event revision 1).
+  EVENT_KIND_RESOURCE_ENDED = 22;
+  // W1 (event revision 1).
+  EVENT_KIND_CAPABILITY_CHANGED = 40;
 }
 
 message SubscribeEventsRequest {
@@ -81,11 +104,23 @@ message SubscribeEventsRequest {
   uint64 from_seq = 3;
   // Empty = current session.
   string session = 4;
+  // 5..7 and 9 are kept for W4 (filters, exclude, to_seq, participant_mask); 11 for W4
+  // (hit_merge_s).
+  // W1. Event revision the client asks for (see Attach.event_rev); 0 = the 0.1.0 set.
+  // Must not be higher than api_rev (ERROR_CODE_INVALID).
+  uint32 event_rev = 8;
+  // W1. API revision the client was built for; 0 = 0.1.0. It selects how snaps inside the
+  // events are projected (enum values newer than the revision are downgraded).
+  uint32 api_rev = 10;
 }
 
 message Birth {
   EntitySnap initiator = 1;
   AirbaseSnap place = 2;
+  // 3 is kept for W4 (birth_place).
+  // W1. true when DCS raised no S_EVENT_BIRTH and the engine made the event (SpawnStatic
+  // result; later waves: objects found by a sweep).
+  bool synthesised = 4;
 }
 
 message Dead {
@@ -146,6 +181,11 @@ message Mark {
   Coalition coalition = 5;
   optional uint64 group_eid = 6;
   EntitySnap initiator = 7;
+  // W1. Name of the Draw / MarkCommand resource this mark belongs to, else empty.
+  string name = 8;
+  // W1. true when Sortie caused this event (DCS echoes marks made by scripts as events).
+  // false with `name` set: a player changed or removed a registered editable mark.
+  bool own = 9;
 }
 
 // Synthesised from BIRTH + Unit:getPlayerName() (MP clients do not get
@@ -165,6 +205,8 @@ enum GoneReason {
   GONE_REASON_DESPAWNED = 3;
   // Not present in a fresh world snapshot.
   GONE_REASON_MISSING_FROM_SNAPSHOT = 4;
+  // W1. Its name was taken by a spawn (NAME_CONFLICT_REPLACE) and the new object exists.
+  GONE_REASON_REPLACED = 5;
 }
 
 message UnitGone {
@@ -180,6 +222,13 @@ message MenuPressed {
   optional uint64 group_eid = 2;
   string group_name = 3;
   Coalition coalition = 4;
+  // W1 (event revision 1). Presses of a MenuTree node: the tree (resource name), MenuNode.id
+  // and MenuNode.arg. `ident` is empty for a node without a manifest ident. `group_*` is set
+  // for a tree whose audience is a group; `coalition` for a coalition tree.
+  string tree = 5;
+  string item = 6;
+  string arg = 7;
+  // 8, 9 are kept for W6 (player, players).
 }
 
 message PlayerConnected {
@@ -223,6 +272,154 @@ message Unknown {
   // DCS event name from world.event, e.g. "S_EVENT_WEAPON_ADD".
   string dcs_name = 1;
   int32 dcs_id = 2;
-  // The raw event table as captured by the Lua layer.
+  // The raw event table as captured by the Lua layer. W1: it keeps the 0.1.0 shape for every
+  // subscriber (the twelve 0.1.0 keys, participants as the 0.1.0 object tables with their
+  // runtime ids); keys DCS sends beyond the 0.1.0 list are added to it under their DCS names.
   LuaValue fields = 3;
+  // W1 (generic event form). The same event with its participants resolved to Eids and every
+  // key DCS sent. Filled for every subscriber.
+  EventContext ctx = 4;
+}
+
+// ---- W1: CapabilityChanged ----
+// The state, live status or note of a capability changed after Start (a quarantine, its
+// release, a probe result that arrived after Start, an op the bridge disabled after repeated
+// faults). One event per capability and change; the whole table is in Start.capabilities and
+// Engine.Capabilities.
+message CapabilityChanged {
+  Capability capability = 1;
+  CapabilityState previous = 2;
+}
+
+// ---- W1: generic event form ----
+// Every world.event entry by name. Values are Sortie's own, grouped by subject; they are
+// deliberately not the DCS numbers. The engine maps names through the world.event table the
+// layer captured at mission start. An entry the enum lacks is UNSPECIFIED + Event.dcs_name.
+enum DcsEvent {
+  DCS_EVENT_UNSPECIFIED = 0;
+  // combat
+  DCS_EVENT_SHOT = 1;
+  DCS_EVENT_HIT = 2;
+  DCS_EVENT_KILL = 3;
+  DCS_EVENT_SHOOTING_START = 4;
+  DCS_EVENT_SHOOTING_END = 5;
+  DCS_EVENT_BDA = 6;
+  DCS_EVENT_SCORE = 7;
+  // life cycle
+  DCS_EVENT_BIRTH = 10;
+  DCS_EVENT_DEAD = 11;
+  DCS_EVENT_UNIT_LOST = 12;
+  DCS_EVENT_CRASH = 13;
+  DCS_EVENT_PILOT_DEAD = 14;
+  // flight
+  DCS_EVENT_TAKEOFF = 20;
+  DCS_EVENT_LAND = 21;
+  DCS_EVENT_RUNWAY_TAKEOFF = 22;
+  DCS_EVENT_RUNWAY_TOUCH = 23;
+  DCS_EVENT_ENGINE_STARTUP = 24;
+  DCS_EVENT_ENGINE_SHUTDOWN = 25;
+  DCS_EVENT_REFUELING = 26;
+  DCS_EVENT_REFUELING_STOP = 27;
+  DCS_EVENT_HUMAN_FAILURE = 28;
+  DCS_EVENT_DETAILED_FAILURE = 29;
+  DCS_EVENT_HUMAN_AIRCRAFT_REPAIR_START = 30;
+  DCS_EVENT_HUMAN_AIRCRAFT_REPAIR_FINISH = 31;
+  DCS_EVENT_AI_ABORT_MISSION = 32;
+  DCS_EVENT_EMERGENCY_LANDING = 33;
+  DCS_EVENT_LANDING_QUALITY_MARK = 34;
+  // stores
+  DCS_EVENT_WEAPON_ADD = 40;
+  DCS_EVENT_WEAPON_DROP = 41;
+  DCS_EVENT_WEAPON_REARM = 42;
+  // ejection, troops
+  DCS_EVENT_EJECTION = 50;
+  DCS_EVENT_DISCARD_CHAIR_AFTER_EJECTION = 51;
+  DCS_EVENT_LANDING_AFTER_EJECTION = 52;
+  // DCS spelling.
+  DCS_EVENT_PARATROOPER_LENDING = 53;
+  // players
+  DCS_EVENT_PLAYER_ENTER_UNIT = 60;
+  DCS_EVENT_PLAYER_LEAVE_UNIT = 61;
+  DCS_EVENT_PLAYER_COMMENT = 62;
+  DCS_EVENT_PLAYER_SELF_KILL_PILOT = 63;
+  DCS_EVENT_PLAYER_CAPTURE_AIRFIELD = 64;
+  DCS_EVENT_TOOK_CONTROL = 65;
+  // bases, map
+  DCS_EVENT_BASE_CAPTURED = 70;
+  DCS_EVENT_MARK_ADDED = 71;
+  DCS_EVENT_MARK_CHANGE = 72;
+  DCS_EVENT_MARK_REMOVED = 73;
+  DCS_EVENT_TRIGGER_ZONE = 74;
+  // cargo
+  DCS_EVENT_NEW_DYNAMIC_CARGO = 80;
+  DCS_EVENT_DYNAMIC_CARGO_LOADED = 81;
+  DCS_EVENT_DYNAMIC_CARGO_UNLOADED = 82;
+  DCS_EVENT_DYNAMIC_CARGO_REMOVED = 83;
+  // AI
+  DCS_EVENT_UNIT_CREATE_TASK = 90;
+  DCS_EVENT_UNIT_DELETE_TASK = 91;
+  DCS_EVENT_UNIT_TASK_COMPLETE = 92;
+  DCS_EVENT_UNIT_TASK_STAGE = 93;
+  DCS_EVENT_GROUP_CHANGE_OPTION = 94;
+  // mission, simulation
+  DCS_EVENT_MISSION_START = 100;
+  DCS_EVENT_MISSION_END = 101;
+  DCS_EVENT_MISSION_RESTART = 102;
+  DCS_EVENT_MISSION_WINNER = 103;
+  DCS_EVENT_SIMULATION_START = 104;
+  DCS_EVENT_SIMULATION_FREEZE = 105;
+  DCS_EVENT_SIMULATION_UNFREEZE = 106;
+  DCS_EVENT_DAYNIGHT = 107;
+  DCS_EVENT_FLIGHT_TIME = 108;
+  DCS_EVENT_MAC_EXTRA_SCORE = 109;
+  DCS_EVENT_MAC_LMS_RESTART = 110;
+}
+
+// Where something happened, as DCS puts it in `place`.
+message Place {
+  oneof kind {
+    // Airfield, FARP or ship deck (Object.Category.BASE).
+    AirbaseSnap airbase = 1;
+    // Any other object, e.g. the aircraft in S_EVENT_LANDING_AFTER_EJECTION.
+    EntitySnap entity = 2;
+  }
+}
+
+// A participant or other object under a key that EventContext has no slot for.
+message ExtraObject {
+  // The key in the DCS event table.
+  string key = 1;
+  oneof object {
+    EntitySnap entity = 2;
+    WeaponSnap weapon = 3;
+    AirbaseSnap airbase = 4;
+  }
+}
+
+// Everything a DCS event table can carry, resolved against the mirror. Filled in Unknown.ctx
+// for every world.event entry that has no typed kind at the subscriber's event revision.
+message EventContext {
+  EntitySnap initiator = 1;
+  EntitySnap target = 2;
+  WeaponSnap weapon = 3;
+  Place place = 4;
+  // event.weapon_name.
+  string weapon_type = 5;
+  // event.text, else event.comment.
+  string text = 6;
+  optional Vec3 pos = 7;
+  // UNSPECIFIED when DCS sent none or -1.
+  Coalition coalition = 8;
+  optional uint64 group_eid = 9;
+  // event.idx.
+  optional uint32 idx = 10;
+  // Keys with no slot above: scalars as they are, plain tables as data (two levels, at most 64
+  // keys each). Never an object: objects are in `extra_objects`.
+  LuaValue extra = 11;
+  // In key order.
+  repeated ExtraObject extra_objects = 12;
+  // The event id is not in the world.event table the layer captured at mission start: another
+  // script (a framework) raised the event through world.onEvent. Its tables are copied as data
+  // only; participants are resolved by their runtime id from the mirror, never read in DCS.
+  bool foreign = 13;
 }

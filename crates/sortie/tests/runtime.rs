@@ -174,6 +174,7 @@ async fn command_errors_surface_as_typed_errors() {
                 code: v1::ErrorCode::Gone as i32,
                 message: "x".into(),
                 lua_traceback: String::new(),
+                capability: String::new(),
             };
             down_tx
                 .try_send(down(logic_down::Msg::Result(v1::CommandResult {
@@ -270,6 +271,7 @@ async fn state_update_retries_after_a_conflict() {
                         code: v1::ErrorCode::Conflict as i32,
                         message: "revision 3 is newer".into(),
                         lua_traceback: String::new(),
+                        capability: String::new(),
                     }),
                 ))
                 .unwrap();

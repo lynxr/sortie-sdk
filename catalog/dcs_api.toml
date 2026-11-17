@@ -1,0 +1,1724 @@
+# The DCS API catalog: the allow-list of the universal call (`DcsCall`, `DcsBatch`).
+#
+# One entry per DCS function (or value) that a logic may call by its Lua path. The engine
+# validates every call against its entry before anything reaches DCS; the `call:<env>:<path>`
+# capabilities, the typed wrappers of the Rust SDK (`ctx.dcs()`) and of the Python client
+# (`sortie_gen.dcs_api`) and the reference page `sdk/docs/dcs-catalog.md` are generated from
+# this file (`cargo xtask catalog-gen`). The engine owner narrows or extends it in
+# `<Saved Games>/Sortie/engine.toml`, section `[calls]`.
+#
+# Fields of an entry:
+#   path           canonical Lua path: "land.getHeight", or "<Class>.<method>" for a method on
+#                  the class that defines it ("Object.getPoint", not "Unit.getPoint"). For a
+#                  method the path is the entry's name, not where the function is looked up:
+#                  the Lua layer runs it through the class table of the receiver, as
+#                  receiver:method() does. The classes follow the DCS documentation;
+#                  CoalitionObject exists there only (the game declares Unit, StaticObject,
+#                  Airbase and Weapon directly under Object and has no CoalitionObject table)
+#   env            "mission" | "hooks"
+#   receiver       "" for a plain function, else the class of the method's receiver
+#   args           argument types in order, each "<type> <name>"; a type ending in "?" may be nil
+#                  (and left out at the end). Types: number string boolean table vec2 vec3 any
+#                  mizpath side_number side_name player object:<Class> id:<Class> name:<Class>
+#                  enum:<table path>. vec2 is a map point {x = north, y = east}; vec3 is
+#                  {x, y, z} in runtime axes (x north, y up, z east)
+#   returns        return types in order (same notation; also list:<type>, handle:<Class>). A
+#                  `number` DCS returns as a numeric string comes back as the number
+#   class          "read" | "mutate" | "heavy" | "admin"
+#   guards         checks applied whatever the owner enabled (an owner entry cannot remove one)
+#   live_check     the live-check id that verifies the entry on a running DCS
+#   since_api_rev  the API revision that introduced the entry
+#   doc            one line for the reference page and the generated wrappers
+#   documented     false: a probe-gated read, off until its probe passed on the running build
+#   enabled        default on/off (reads: on when documented; mutators: off)
+#   family         SDK family of the wrapper (default: from the path); wrapper: its method name
+#   kind           "function" (default) or "value" (a table or value read, not a call)
+#   clamp          bounds of numeric arguments by name, e.g. { power = [0, 5000] }
+#   creates        the first return value is a created handle of this class (never evicted)
+#   destroys       true: the call ends the receiver's handle
+#   superseded_by  the typed operation that replaces this raw path (the wrapper is deprecated)
+#   note           anything the reader of the reference page must know
+#   canonical      plain-data arguments valid on every map, for the probation call after a crash
+#                  quarantine (documented reads without a receiver; a read that needs no
+#                  arguments needs none)
+
+version = 1
+
+# ----- land --------------------------------------------------------------------------------
+
+[[call]]
+path = "land.getHeight"
+canonical = [{ x = 0.0, y = 0.0 }]
+env = "mission"
+args = ["vec2 point"]
+returns = ["number"]
+class = "read"
+live_check = "ENV-LC1"
+since_api_rev = 1
+doc = "Terrain height (m above sea level) at a map point."
+wrapper = "height"
+
+[[call]]
+path = "land.getSurfaceHeightWithSeabed"
+canonical = [{ x = 0.0, y = 0.0 }]
+env = "mission"
+args = ["vec2 point"]
+returns = ["number", "number"]
+class = "read"
+live_check = "ENV-LC1"
+since_api_rev = 1
+doc = "Surface height and seabed depth (m) at a map point."
+wrapper = "surface_height_with_seabed"
+
+[[call]]
+path = "land.getSurfaceType"
+canonical = [{ x = 0.0, y = 0.0 }]
+env = "mission"
+args = ["vec2 point"]
+returns = ["enum:land.SurfaceType"]
+class = "read"
+live_check = "ENV-LC1"
+since_api_rev = 1
+doc = "Surface type at a map point: LAND, SHALLOW_WATER, WATER, ROAD or RUNWAY."
+wrapper = "surface_type"
+
+[[call]]
+path = "land.isVisible"
+canonical = [{ x = 0.0, y = 2000.0, z = 0.0 }, { x = 1000.0, y = 2000.0, z = 1000.0 }]
+env = "mission"
+args = ["vec3 origin", "vec3 destination"]
+returns = ["boolean"]
+class = "read"
+live_check = "ENV-LC4"
+since_api_rev = 1
+doc = "Whether the terrain leaves a line of sight between two points (objects do not block it)."
+wrapper = "is_visible"
+
+[[call]]
+path = "land.getIP"
+env = "mission"
+args = ["vec3 origin", "vec3 direction", "number distance"]
+returns = ["vec3?"]
+class = "read"
+live_check = "ENV-LC5"
+since_api_rev = 1
+doc = "Where a ray from origin along direction first hits the terrain within distance (m), or nil."
+wrapper = "intersection"
+clamp = { distance = [0, 300000] }
+
+[[call]]
+path = "land.profile"
+env = "mission"
+args = ["vec3 origin", "vec3 destination"]
+returns = ["list:vec3"]
+class = "read"
+live_check = "ENV-LC6"
+since_api_rev = 1
+doc = "Terrain profile between two points as a list of points on the ground."
+wrapper = "profile"
+guards = ["span_300km"]
+note = "DCS reads x and z of both points and ignores y. The end points may lie at most 300 km apart."
+
+[[call]]
+path = "land.getClosestPointOnRoads"
+env = "mission"
+args = ["string road_type", "number x", "number y"]
+returns = ["number", "number"]
+class = "read"
+live_check = "ENV-LC1"
+since_api_rev = 1
+doc = "The closest point on a road (road_type \"roads\" or \"railroads\") to map coordinates x (north), y (east)."
+wrapper = "closest_point_on_roads"
+
+# ----- atmosphere --------------------------------------------------------------------------
+
+[[call]]
+path = "atmosphere.getWind"
+canonical = [{ x = 0.0, y = 1000.0, z = 0.0 }]
+env = "mission"
+args = ["vec3 point"]
+returns = ["vec3"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Wind vector (m/s, runtime axes) at a point, without turbulence."
+wrapper = "wind"
+
+[[call]]
+path = "atmosphere.getWindWithTurbulence"
+canonical = [{ x = 0.0, y = 1000.0, z = 0.0 }]
+env = "mission"
+args = ["vec3 point"]
+returns = ["vec3"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Wind vector (m/s, runtime axes) at a point, with turbulence."
+wrapper = "wind_with_turbulence"
+
+[[call]]
+path = "atmosphere.getTemperatureAndPressure"
+canonical = [{ x = 0.0, y = 1000.0, z = 0.0 }]
+env = "mission"
+args = ["vec3 point"]
+returns = ["number", "number"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Temperature (K) and pressure (Pa) at a point."
+wrapper = "temperature_and_pressure"
+
+# ----- timer -------------------------------------------------------------------------------
+
+[[call]]
+path = "timer.getTime"
+env = "mission"
+returns = ["number"]
+class = "read"
+live_check = "ENV-LC17"
+since_api_rev = 1
+doc = "Model time in seconds since the mission started."
+wrapper = "time"
+
+[[call]]
+path = "timer.getAbsTime"
+env = "mission"
+returns = ["number"]
+class = "read"
+live_check = "ENV-LC17"
+since_api_rev = 1
+doc = "Mission clock: seconds since midnight of the mission's start day."
+wrapper = "abs_time"
+
+[[call]]
+path = "timer.getTime0"
+env = "mission"
+returns = ["number"]
+class = "read"
+live_check = "ENV-LC17"
+since_api_rev = 1
+doc = "Mission start time in seconds since midnight."
+wrapper = "time0"
+
+# ----- coord -------------------------------------------------------------------------------
+
+[[call]]
+path = "coord.LLtoLO"
+canonical = [42.2, 42.3]
+env = "mission"
+args = ["number lat", "number lon", "number? alt"]
+returns = ["vec3"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Latitude and longitude (degrees) to a runtime point."
+family = "coord"
+wrapper = "ll_to_lo"
+
+[[call]]
+path = "coord.LOtoLL"
+canonical = [{ x = 0.0, y = 0.0, z = 0.0 }]
+env = "mission"
+args = ["vec3 point"]
+returns = ["number", "number", "number"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "A runtime point to latitude, longitude (degrees) and altitude (m)."
+family = "coord"
+wrapper = "lo_to_ll"
+
+[[call]]
+path = "coord.LLtoMGRS"
+canonical = [42.2, 42.3]
+env = "mission"
+args = ["number lat", "number lon"]
+returns = ["table"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Latitude and longitude (degrees) to an MGRS table {UTMZone, MGRSDigraph, Easting, Northing}."
+family = "coord"
+wrapper = "ll_to_mgrs"
+
+# ----- env ---------------------------------------------------------------------------------
+
+[[call]]
+path = "env.mission.theatre"
+env = "mission"
+kind = "value"
+returns = ["string"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Name of the map the mission runs on (\"Caucasus\", \"Syria\", ...)."
+family = "env"
+wrapper = "theatre"
+
+[[call]]
+path = "env.mission.date"
+env = "mission"
+kind = "value"
+returns = ["table"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Start date of the mission: {Day, Month, Year}."
+family = "env"
+wrapper = "date"
+
+# ----- Object (every object class) ---------------------------------------------------------
+
+[[call]]
+path = "Object.isExist"
+env = "mission"
+receiver = "Object"
+returns = ["boolean"]
+class = "read"
+live_check = "UC-5"
+since_api_rev = 1
+doc = "Whether the object still exists."
+wrapper = "is_exist"
+
+[[call]]
+path = "Object.getName"
+env = "mission"
+receiver = "Object"
+returns = ["string"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "DCS runtime name."
+wrapper = "name"
+
+[[call]]
+path = "Object.getTypeName"
+env = "mission"
+receiver = "Object"
+returns = ["string"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "DCS type name, e.g. \"F-16C_50\"."
+wrapper = "type_name"
+
+[[call]]
+path = "Object.getDesc"
+env = "mission"
+receiver = "Object"
+returns = ["table"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "The description table of the object's type."
+wrapper = "desc"
+
+[[call]]
+path = "Object.hasAttribute"
+env = "mission"
+receiver = "Object"
+args = ["string attribute"]
+returns = ["boolean"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Whether the object's type has a DCS attribute, e.g. \"SAM SR\"."
+wrapper = "has_attribute"
+
+[[call]]
+path = "Object.getPoint"
+env = "mission"
+receiver = "Object"
+returns = ["vec3"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Position (runtime axes)."
+wrapper = "point"
+
+[[call]]
+path = "Object.getPosition"
+env = "mission"
+receiver = "Object"
+returns = ["table"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Position and orientation {p, x, y, z} (runtime axes)."
+wrapper = "position"
+
+[[call]]
+path = "Object.getVelocity"
+env = "mission"
+receiver = "Object"
+returns = ["vec3"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Velocity vector (m/s, runtime axes)."
+wrapper = "velocity"
+
+[[call]]
+path = "Object.inAir"
+env = "mission"
+receiver = "Object"
+returns = ["boolean"]
+class = "read"
+live_check = "OBJ-T12"
+since_api_rev = 1
+doc = "Whether the object is airborne (low hover reads true)."
+wrapper = "in_air"
+
+[[call]]
+path = "Object.destroy"
+env = "mission"
+receiver = "Object"
+class = "mutate"
+guards = ["player_guard"]
+live_check = "OBJ-T8"
+since_api_rev = 1
+doc = "Removes the object at once; DCS raises no DEAD event for it."
+wrapper = "destroy"
+superseded_by = "destroy"
+note = "Use ctx.destroy(..): the typed operation tells the world at once (UnitGone DESPAWNED; the airbase of a FARP it removed ends with it) and answers an error when DCS kept the static (reported for FARPs, not measured); a raw destroy is seen at the next sweep."
+
+# ----- CoalitionObject (units, statics, airbases, weapons) ---------------------------------
+#
+# A class of the DCS documentation: the game has no CoalitionObject table. The two entries
+# run as unit:getCoalition(), static:getCountry() and so on (see `path` above).
+
+[[call]]
+path = "CoalitionObject.getCoalition"
+env = "mission"
+receiver = "CoalitionObject"
+returns = ["side_number"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "The coalition the object belongs to."
+wrapper = "coalition"
+
+[[call]]
+path = "CoalitionObject.getCountry"
+env = "mission"
+receiver = "CoalitionObject"
+returns = ["enum:country.id"]
+class = "read"
+live_check = "UC-4"
+since_api_rev = 1
+doc = "The country key of the object, e.g. \"USA\"."
+wrapper = "country"
+
+# ----- Unit --------------------------------------------------------------------------------
+
+[[call]]
+path = "Unit.isActive"
+env = "mission"
+receiver = "Unit"
+returns = ["boolean"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Whether the unit is active (false for a late-activated unit not yet activated)."
+wrapper = "is_active"
+
+[[call]]
+path = "Unit.getLife"
+env = "mission"
+receiver = "Unit"
+returns = ["number"]
+class = "read"
+live_check = "UC-5"
+since_api_rev = 1
+doc = "Hit points left (compare with getLife0)."
+wrapper = "life"
+
+[[call]]
+path = "Unit.getLife0"
+env = "mission"
+receiver = "Unit"
+returns = ["number"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Initial hit points."
+wrapper = "life0"
+
+[[call]]
+path = "Unit.getFuel"
+env = "mission"
+receiver = "Unit"
+returns = ["number"]
+class = "read"
+live_check = "OBJ-T11"
+since_api_rev = 1
+doc = "Internal fuel as a fraction of capacity (above 1 with external tanks; 1 for ground units)."
+wrapper = "fuel"
+
+[[call]]
+path = "Unit.getAmmo"
+env = "mission"
+receiver = "Unit"
+returns = ["table?"]
+class = "read"
+live_check = "OBJ-T10"
+since_api_rev = 1
+doc = "Ammunition: a list of {count, desc}; nil when nothing is loaded."
+wrapper = "ammo"
+
+[[call]]
+path = "Unit.getPlayerName"
+env = "mission"
+receiver = "Unit"
+returns = ["string?"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Name of the player in the unit, or nil for AI."
+wrapper = "player_name"
+
+[[call]]
+path = "Unit.getCallsign"
+env = "mission"
+receiver = "Unit"
+returns = ["string"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Callsign of the unit."
+wrapper = "callsign"
+
+[[call]]
+path = "Unit.getNumber"
+env = "mission"
+receiver = "Unit"
+returns = ["number"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Position of the unit in its group (1-based)."
+wrapper = "number"
+
+[[call]]
+path = "Unit.getGroup"
+env = "mission"
+receiver = "Unit"
+returns = ["object:Group"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "The unit's group."
+wrapper = "group"
+
+[[call]]
+path = "Unit.getSensors"
+env = "mission"
+receiver = "Unit"
+returns = ["table?"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Sensors of the unit by kind (optical, radar, IRST, RWR), or nil."
+wrapper = "sensors"
+
+[[call]]
+path = "Unit.getDescByName"
+canonical = ["T-72B"]
+env = "mission"
+args = ["string type_name"]
+returns = ["table?"]
+class = "read"
+live_check = "UC-7"
+since_api_rev = 1
+doc = "The description table of a unit type by name."
+family = "unit_types"
+wrapper = "desc_by_name"
+
+[[call]]
+path = "Unit.getAirbase"
+env = "mission"
+receiver = "Unit"
+returns = ["object:Airbase?"]
+class = "read"
+documented = false
+live_check = "UC-7"
+since_api_rev = 1
+doc = "The airbase a ship or FARP unit carries (probe-gated)."
+wrapper = "airbase"
+
+# ----- Group -------------------------------------------------------------------------------
+
+[[call]]
+path = "Group.isExist"
+env = "mission"
+receiver = "Group"
+returns = ["boolean"]
+class = "read"
+live_check = "SEL-L1"
+since_api_rev = 1
+doc = "Whether the group still exists."
+wrapper = "is_exist"
+
+[[call]]
+path = "Group.getSize"
+env = "mission"
+receiver = "Group"
+returns = ["number"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Number of units alive in the group."
+wrapper = "size"
+
+[[call]]
+path = "Group.getInitialSize"
+env = "mission"
+receiver = "Group"
+returns = ["number"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Number of units the group was created with."
+wrapper = "initial_size"
+
+[[call]]
+path = "Group.getName"
+env = "mission"
+receiver = "Group"
+returns = ["string"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "DCS name of the group."
+wrapper = "name"
+
+[[call]]
+path = "Group.getID"
+env = "mission"
+receiver = "Group"
+returns = ["number"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "DCS group id (reused by DCS; prefer Eids)."
+wrapper = "id"
+
+[[call]]
+path = "Group.getCoalition"
+env = "mission"
+receiver = "Group"
+returns = ["side_number"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "The coalition of the group."
+wrapper = "coalition"
+
+[[call]]
+path = "Group.getUnits"
+env = "mission"
+receiver = "Group"
+returns = ["list:object:Unit"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "The live units of the group in DCS order."
+wrapper = "units"
+
+[[call]]
+path = "Group.getUnit"
+env = "mission"
+receiver = "Group"
+args = ["number index"]
+returns = ["object:Unit?"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "The unit at a 1-based position of the group, or nil."
+wrapper = "unit"
+
+[[call]]
+path = "Group.getController"
+env = "mission"
+receiver = "Group"
+returns = ["object:Controller"]
+class = "read"
+live_check = "UC-2"
+since_api_rev = 1
+doc = "The group's AI controller (comes back as a controller selector)."
+wrapper = "controller"
+
+# ----- StaticObject ------------------------------------------------------------------------
+
+[[call]]
+path = "StaticObject.getLife"
+env = "mission"
+receiver = "StaticObject"
+returns = ["number"]
+class = "read"
+live_check = "UC-5"
+since_api_rev = 1
+doc = "Hit points left."
+wrapper = "life"
+
+[[call]]
+path = "StaticObject.getID"
+env = "mission"
+receiver = "StaticObject"
+returns = ["number"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "DCS id of the static object."
+wrapper = "id"
+
+[[call]]
+path = "StaticObject.getCargoDisplayName"
+env = "mission"
+receiver = "StaticObject"
+returns = ["string?"]
+class = "read"
+guards = ["class_exact"]
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Display name of a cargo static (its weight text; cargo statics only)."
+wrapper = "cargo_display_name"
+note = "Reported to crash DCS on a static that is no cargo: the class_exact guard refuses those."
+
+[[call]]
+path = "StaticObject.getCargoWeight"
+env = "mission"
+receiver = "StaticObject"
+returns = ["number"]
+class = "read"
+documented = false
+guards = ["class_exact"]
+live_check = "UC-6"
+since_api_rev = 1
+doc = "Mass of a cargo static in kg (probe-gated; cargo statics only)."
+wrapper = "cargo_weight"
+note = "Reported to crash DCS on a static that is no cargo: the class_exact guard refuses those."
+
+[[call]]
+path = "StaticObject.getDescByName"
+canonical = ["Cafe"]
+env = "mission"
+args = ["string type_name"]
+returns = ["table?"]
+class = "read"
+live_check = "UC-7"
+since_api_rev = 1
+doc = "The description table of a static type by name."
+family = "static_types"
+wrapper = "desc_by_name"
+
+# ----- Airbase -----------------------------------------------------------------------------
+
+[[call]]
+path = "Airbase.getByName"
+env = "mission"
+args = ["string name"]
+returns = ["object:Airbase?"]
+class = "read"
+live_check = "AWC-T19"
+since_api_rev = 1
+doc = "An airbase, FARP or ship deck by DCS name, or nil."
+family = "airbases"
+wrapper = "by_name"
+
+[[call]]
+path = "Airbase.getID"
+env = "mission"
+receiver = "Airbase"
+returns = ["number"]
+class = "read"
+live_check = "AWC-T19"
+since_api_rev = 1
+doc = "DCS id of the airbase (ids overlap between airdromes, FARPs and ships)."
+wrapper = "id"
+
+[[call]]
+path = "Airbase.getCallsign"
+env = "mission"
+receiver = "Airbase"
+returns = ["string"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Callsign of the airbase."
+wrapper = "callsign"
+
+[[call]]
+path = "Airbase.getUnit"
+env = "mission"
+receiver = "Airbase"
+args = ["number? index"]
+returns = ["object:Unit?"]
+class = "read"
+live_check = "AWC-T19"
+since_api_rev = 1
+doc = "The unit that carries a ship deck or FARP, or nil for an airdrome."
+wrapper = "unit"
+
+[[call]]
+path = "Airbase.getRunways"
+env = "mission"
+receiver = "Airbase"
+returns = ["table"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Runways: a list of {Name, course, length, width, position}."
+wrapper = "runways"
+
+[[call]]
+path = "Airbase.getParking"
+env = "mission"
+receiver = "Airbase"
+args = ["boolean? available"]
+returns = ["table"]
+class = "heavy"
+live_check = "AWC-T17"
+since_api_rev = 1
+doc = "Parking spots: a list of {Term_Index, Term_Type, vTerminalPos, TO_AC, fDistToRW}; available = free spots only."
+wrapper = "parking"
+
+[[call]]
+path = "Airbase.getRadioSilentMode"
+env = "mission"
+receiver = "Airbase"
+returns = ["boolean"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Whether the airbase's ATC is silent."
+wrapper = "radio_silent_mode"
+
+[[call]]
+path = "Airbase.setRadioSilentMode"
+env = "mission"
+receiver = "Airbase"
+args = ["boolean silent"]
+class = "mutate"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "Silences (true) or restores (false) the airbase's ATC."
+wrapper = "set_radio_silent_mode"
+
+[[call]]
+path = "Airbase.autoCaptureIsOn"
+env = "mission"
+receiver = "Airbase"
+returns = ["boolean"]
+class = "read"
+live_check = "AWC-T1"
+since_api_rev = 1
+doc = "Whether DCS captures the airbase by itself when ground units take it."
+wrapper = "auto_capture_is_on"
+
+[[call]]
+path = "Airbase.autoCapture"
+env = "mission"
+receiver = "Airbase"
+args = ["boolean on"]
+class = "mutate"
+live_check = "AWC-T1"
+since_api_rev = 1
+doc = "Turns DCS's own capture of the airbase on or off."
+wrapper = "auto_capture"
+
+[[call]]
+path = "Airbase.setCoalition"
+env = "mission"
+receiver = "Airbase"
+args = ["side_number coalition"]
+class = "mutate"
+live_check = "AWC-T1"
+since_api_rev = 1
+doc = "Gives the airbase to a coalition (turn auto capture off first, or DCS may flip it back)."
+wrapper = "set_coalition"
+note = "The mirror learns the new owner at the next airbase sweep (BaseCaptured.cause OBSERVED), not at once."
+
+[[call]]
+path = "Airbase.getWarehouse"
+env = "mission"
+receiver = "Airbase"
+returns = ["object:Warehouse"]
+class = "read"
+live_check = "AWC-T14"
+since_api_rev = 1
+doc = "The airbase's warehouse (comes back as a warehouse selector)."
+wrapper = "warehouse"
+
+# ----- Warehouse ---------------------------------------------------------------------------
+
+[[call]]
+path = "Warehouse.getInventory"
+env = "mission"
+receiver = "Warehouse"
+args = ["string? item"]
+returns = ["table"]
+class = "heavy"
+live_check = "AWC-T6"
+since_api_rev = 1
+doc = "Stock: {aircraft = {[type] = n}, weapon = {[name] = n}, liquids = {[0..3] = amount}}; an unlimited class is an empty table."
+wrapper = "inventory"
+
+[[call]]
+path = "Warehouse.getItemCount"
+env = "mission"
+receiver = "Warehouse"
+args = ["string item"]
+returns = ["number"]
+class = "read"
+live_check = "AWC-T6"
+since_api_rev = 1
+doc = "Stock of one item (aircraft type or weapon name)."
+wrapper = "item_count"
+
+[[call]]
+path = "Warehouse.addItem"
+env = "mission"
+receiver = "Warehouse"
+args = ["string item", "number count"]
+class = "mutate"
+live_check = "AWC-T6"
+since_api_rev = 1
+doc = "Adds count of an item."
+wrapper = "add_item"
+clamp = { count = [0, 1000000] }
+
+[[call]]
+path = "Warehouse.removeItem"
+env = "mission"
+receiver = "Warehouse"
+args = ["string item", "number count"]
+class = "mutate"
+live_check = "AWC-T6"
+since_api_rev = 1
+doc = "Removes count of an item."
+wrapper = "remove_item"
+clamp = { count = [0, 1000000] }
+
+[[call]]
+path = "Warehouse.setItem"
+env = "mission"
+receiver = "Warehouse"
+args = ["string item", "number count"]
+class = "mutate"
+live_check = "AWC-T6"
+since_api_rev = 1
+doc = "Sets the stock of an item."
+wrapper = "set_item"
+clamp = { count = [0, 1000000] }
+
+[[call]]
+path = "Warehouse.getLiquidAmount"
+env = "mission"
+receiver = "Warehouse"
+args = ["number liquid"]
+returns = ["number"]
+class = "read"
+live_check = "AWC-T9"
+since_api_rev = 1
+doc = "Stock of a liquid (0 jet fuel, 1 aviation gasoline, 2 MW50, 3 diesel); the unit is not documented (kg assumed)."
+wrapper = "liquid_amount"
+clamp = { liquid = [0, 3] }
+
+[[call]]
+path = "Warehouse.addLiquid"
+env = "mission"
+receiver = "Warehouse"
+args = ["number liquid", "number amount"]
+class = "mutate"
+live_check = "AWC-T9"
+since_api_rev = 1
+doc = "Adds an amount of a liquid."
+wrapper = "add_liquid"
+clamp = { liquid = [0, 3], amount = [0, 100000000] }
+
+[[call]]
+path = "Warehouse.removeLiquid"
+env = "mission"
+receiver = "Warehouse"
+args = ["number liquid", "number amount"]
+class = "mutate"
+live_check = "AWC-T9"
+since_api_rev = 1
+doc = "Removes an amount of a liquid."
+wrapper = "remove_liquid"
+clamp = { liquid = [0, 3], amount = [0, 100000000] }
+
+[[call]]
+path = "Warehouse.setLiquidAmount"
+env = "mission"
+receiver = "Warehouse"
+args = ["number liquid", "number amount"]
+class = "mutate"
+live_check = "AWC-T9"
+since_api_rev = 1
+doc = "Sets the stock of a liquid."
+wrapper = "set_liquid_amount"
+clamp = { liquid = [0, 3], amount = [0, 100000000] }
+
+[[call]]
+path = "Warehouse.getOwner"
+env = "mission"
+receiver = "Warehouse"
+returns = ["object:Airbase?"]
+class = "read"
+live_check = "AWC-T14"
+since_api_rev = 1
+doc = "The airbase that owns the warehouse."
+wrapper = "owner"
+
+# ----- Controller --------------------------------------------------------------------------
+
+[[call]]
+path = "Controller.hasTask"
+env = "mission"
+receiver = "Controller"
+returns = ["boolean"]
+class = "read"
+live_check = "AI-L2"
+since_api_rev = 1
+doc = "Whether the controller has a task (false after the last waypoint)."
+wrapper = "has_task"
+
+[[call]]
+path = "Controller.getDetectedTargets"
+env = "mission"
+receiver = "Controller"
+args = ["enum:Controller.Detection? d1", "enum:Controller.Detection? d2", "enum:Controller.Detection? d3"]
+returns = ["table"]
+class = "heavy"
+live_check = "AI-L1"
+since_api_rev = 1
+doc = "Contacts the controller detects (by the given detection kinds, all without one): a list of {object, visible, type, distance}."
+wrapper = "detected_targets"
+
+# ----- coalition and world (lists) ---------------------------------------------------------
+
+[[call]]
+path = "coalition.getAirbases"
+env = "mission"
+args = ["side_number coalition"]
+returns = ["list:object:Airbase"]
+class = "heavy"
+live_check = "AWC-T19"
+since_api_rev = 1
+doc = "The airbases, FARPs and ship decks of a coalition."
+wrapper = "airbases"
+
+[[call]]
+path = "coalition.getStaticObjects"
+env = "mission"
+args = ["side_number coalition"]
+returns = ["list:object:StaticObject"]
+class = "heavy"
+live_check = "OBJ-T20"
+since_api_rev = 1
+doc = "The static objects of a coalition."
+wrapper = "static_objects"
+
+[[call]]
+path = "coalition.getGroups"
+env = "mission"
+args = ["side_number coalition", "enum:Group.Category? category"]
+returns = ["list:object:Group"]
+class = "heavy"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "The groups of a coalition, optionally of one Group.Category."
+wrapper = "groups"
+
+[[call]]
+path = "coalition.getPlayers"
+canonical = [2]
+env = "mission"
+args = ["side_number coalition"]
+returns = ["list:object:Unit"]
+class = "read"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "The units players occupy in a coalition."
+wrapper = "players"
+
+[[call]]
+path = "coalition.getCountryCoalition"
+env = "mission"
+args = ["enum:country.id country"]
+returns = ["side_number"]
+class = "read"
+live_check = "UC-4"
+since_api_rev = 1
+doc = "The coalition a country belongs to in this mission."
+wrapper = "country_coalition"
+
+[[call]]
+path = "world.getAirbases"
+env = "mission"
+returns = ["list:object:Airbase"]
+class = "heavy"
+live_check = "AWC-T19"
+since_api_rev = 1
+doc = "Every airbase, FARP and ship deck of the mission."
+wrapper = "airbases"
+
+[[call]]
+path = "world.removeJunk"
+env = "mission"
+args = ["table volume"]
+returns = ["number"]
+class = "mutate"
+live_check = "ENV-LC12"
+since_api_rev = 1
+doc = "Removes wrecks, craters and debris inside a DCS volume table {id = world.VolumeType.*, params = ...}; returns how many."
+wrapper = "remove_junk"
+superseded_by = "remove_junk"
+note = "Use ctx.remove_junk(..): the typed operation builds and checks the DCS volumes."
+
+# ----- trigger.action: effects -------------------------------------------------------------
+
+[[call]]
+path = "trigger.action.explosion"
+env = "mission"
+args = ["vec3 point", "number power"]
+class = "mutate"
+guards = ["clamp"]
+live_check = "TRG-L4"
+since_api_rev = 1
+doc = "An explosion of the given power at a point (no initiator: kills are credited to nobody)."
+family = "effects"
+wrapper = "explosion"
+clamp = { power = [0, 5000] }
+
+[[call]]
+path = "trigger.action.illuminationBomb"
+env = "mission"
+args = ["vec3 point", "number power"]
+class = "mutate"
+guards = ["clamp"]
+live_check = "TRG-L7"
+since_api_rev = 1
+doc = "An illumination bomb at a point (it falls and burns out on the ground)."
+family = "effects"
+wrapper = "illumination_bomb"
+clamp = { power = [1, 1000000] }
+
+[[call]]
+path = "trigger.action.signalFlare"
+env = "mission"
+args = ["vec3 point", "enum:trigger.flareColor color", "number azimuth"]
+class = "mutate"
+live_check = "TRG-L7"
+since_api_rev = 1
+doc = "A signal flare from a point (azimuth unit not documented)."
+family = "effects"
+wrapper = "signal_flare"
+
+[[call]]
+path = "trigger.action.smoke"
+env = "mission"
+args = ["vec3 point", "enum:trigger.smokeColor color"]
+class = "mutate"
+live_check = "UC-1"
+since_api_rev = 1
+doc = "A smoke marker at a point."
+family = "effects"
+wrapper = "smoke"
+superseded_by = "smoke"
+note = "Use ctx.smoke(..): the typed operation."
+
+[[call]]
+path = "trigger.action.setUnitInternalCargo"
+env = "mission"
+args = ["name:Unit unit", "number mass"]
+class = "mutate"
+live_check = "TRG-L13"
+since_api_rev = 1
+doc = "Sets the internal cargo mass (kg) of an aircraft or helicopter; no getter, reset on respawn."
+family = "effects"
+wrapper = "set_unit_internal_cargo"
+clamp = { mass = [0, 100000] }
+
+# ----- trigger.action: sounds and radio ----------------------------------------------------
+
+[[call]]
+path = "trigger.action.outSound"
+env = "mission"
+args = ["mizpath file"]
+class = "mutate"
+live_check = "TRG-L2"
+since_api_rev = 1
+doc = "Plays a sound file packed in the .miz to everyone."
+family = "sounds"
+wrapper = "out_sound"
+
+[[call]]
+path = "trigger.action.outSoundForCoalition"
+env = "mission"
+args = ["side_number coalition", "mizpath file"]
+class = "mutate"
+live_check = "TRG-L2"
+since_api_rev = 1
+doc = "Plays a sound file packed in the .miz to a coalition."
+family = "sounds"
+wrapper = "out_sound_for_coalition"
+
+[[call]]
+path = "trigger.action.outSoundForCountry"
+env = "mission"
+args = ["enum:country.id country", "mizpath file"]
+class = "mutate"
+live_check = "TRG-L2"
+since_api_rev = 1
+doc = "Plays a sound file packed in the .miz to a country."
+family = "sounds"
+wrapper = "out_sound_for_country"
+
+[[call]]
+path = "trigger.action.outSoundForGroup"
+env = "mission"
+args = ["id:Group group", "mizpath file"]
+class = "mutate"
+live_check = "TRG-L2"
+since_api_rev = 1
+doc = "Plays a sound file packed in the .miz to the players of a group."
+family = "sounds"
+wrapper = "out_sound_for_group"
+
+[[call]]
+path = "trigger.action.outSoundForUnit"
+env = "mission"
+args = ["id:Unit unit", "mizpath file"]
+class = "mutate"
+live_check = "TRG-L2"
+since_api_rev = 1
+doc = "Plays a sound file packed in the .miz to the player of a unit."
+family = "sounds"
+wrapper = "out_sound_for_unit"
+
+[[call]]
+path = "trigger.action.radioTransmission"
+env = "mission"
+args = ["mizpath file", "vec3 point", "enum:radio.modulation modulation", "boolean looped", "number frequency_hz", "number power_w", "string name"]
+class = "mutate"
+live_check = "TRG-L3"
+since_api_rev = 1
+doc = "Transmits a sound file packed in the .miz on a frequency (Hz) from a point; name it to stop it."
+family = "sounds"
+wrapper = "radio_transmission"
+clamp = { frequency_hz = [1000000, 1000000000], power_w = [0, 100000] }
+
+[[call]]
+path = "trigger.action.stopRadioTransmission"
+env = "mission"
+args = ["string name"]
+class = "mutate"
+live_check = "TRG-L3"
+since_api_rev = 1
+doc = "Stops a named radio transmission."
+family = "sounds"
+wrapper = "stop_radio_transmission"
+
+# ----- trigger.action: map marks and markup (superseded by the Draw resource) --------------
+# Raw access to the F10 map. Mark ids from 7 100 000 up belong to the drawings of the
+# resource registry (`ctx.map()`): the `mark_id` guard refuses them. `markupToAll` takes a
+# variable number of points and has no entry.
+
+[[call]]
+path = "trigger.action.markToAll"
+env = "mission"
+args = ["number id", "string text", "vec3 point", "boolean? read_only", "string? message"]
+class = "mutate"
+guards = ["mark_id"]
+live_check = "TRG-L9"
+since_api_rev = 1
+doc = "A mark panel with a text box for everyone (`id` below 7 100 000)."
+family = "markup"
+wrapper = "mark_to_all"
+superseded_by = "draw"
+note = "Use ctx.map().panel(..): the Draw resource keeps the mark by name."
+
+[[call]]
+path = "trigger.action.markToCoalition"
+env = "mission"
+args = ["number id", "string text", "vec3 point", "side_number coalition", "boolean? read_only", "string? message"]
+class = "mutate"
+guards = ["mark_id"]
+live_check = "TRG-L9"
+since_api_rev = 1
+doc = "A mark panel for one coalition (`id` below 7 100 000)."
+family = "markup"
+wrapper = "mark_to_coalition"
+superseded_by = "draw"
+note = "Use ctx.map().panel(..).to(coalition): the Draw resource keeps the mark by name."
+
+[[call]]
+path = "trigger.action.markToGroup"
+env = "mission"
+args = ["number id", "string text", "vec3 point", "id:Group group", "boolean? read_only", "string? message"]
+class = "mutate"
+guards = ["mark_id"]
+live_check = "TRG-L9"
+since_api_rev = 1
+doc = "A mark panel for the players of one group (`id` below 7 100 000)."
+family = "markup"
+wrapper = "mark_to_group"
+superseded_by = "draw"
+note = "Use ctx.map().panel(..).to(Audience::group(..)): the Draw resource keeps the mark by name."
+
+[[call]]
+path = "trigger.action.removeMark"
+env = "mission"
+args = ["number id"]
+class = "mutate"
+guards = ["mark_id"]
+live_check = "TRG-L9"
+since_api_rev = 1
+doc = "Removes a mark panel or a markup shape by id (`id` below 7 100 000)."
+family = "markup"
+wrapper = "remove_mark"
+superseded_by = "draw"
+note = "Use ctx.map().remove(name) for drawings of the registry."
+
+[[call]]
+path = "trigger.action.lineToAll"
+env = "mission"
+args = ["number coalition", "number id", "vec3 start", "vec3 end", "table color", "number line_type", "boolean? read_only", "string? message"]
+class = "mutate"
+guards = ["mark_id"]
+clamp = { coalition = [-1, 2], line_type = [0, 6] }
+live_check = "TRG-L10"
+since_api_rev = 1
+doc = "A line on the F10 map; coalition -1 = all, color {r, g, b, a}, line type 0 none .. 6 two dash."
+family = "markup"
+wrapper = "line_to_all"
+superseded_by = "draw"
+note = "Use ctx.map().line(..)."
+
+[[call]]
+path = "trigger.action.circleToAll"
+env = "mission"
+args = ["number coalition", "number id", "vec3 center", "number radius", "table color", "table fill", "number line_type", "boolean? read_only", "string? message"]
+class = "mutate"
+guards = ["mark_id"]
+clamp = { coalition = [-1, 2], line_type = [0, 6], radius = [0, 1000000] }
+live_check = "TRG-L10"
+since_api_rev = 1
+doc = "A circle on the F10 map (radius in metres)."
+family = "markup"
+wrapper = "circle_to_all"
+superseded_by = "draw"
+note = "Use ctx.map().circle(..)."
+
+[[call]]
+path = "trigger.action.rectToAll"
+env = "mission"
+args = ["number coalition", "number id", "vec3 start", "vec3 end", "table color", "table fill", "number line_type", "boolean? read_only", "string? message"]
+class = "mutate"
+guards = ["mark_id"]
+clamp = { coalition = [-1, 2], line_type = [0, 6] }
+live_check = "TRG-L10"
+since_api_rev = 1
+doc = "An axis-aligned rectangle on the F10 map given by two opposite corners."
+family = "markup"
+wrapper = "rect_to_all"
+superseded_by = "draw"
+note = "Use ctx.map().rect(..)."
+
+[[call]]
+path = "trigger.action.quadToAll"
+env = "mission"
+args = ["number coalition", "number id", "vec3 p1", "vec3 p2", "vec3 p3", "vec3 p4", "table color", "table fill", "number line_type", "boolean? read_only", "string? message"]
+class = "mutate"
+guards = ["mark_id"]
+clamp = { coalition = [-1, 2], line_type = [0, 6] }
+live_check = "TRG-L10"
+since_api_rev = 1
+doc = "A four-cornered shape on the F10 map."
+family = "markup"
+wrapper = "quad_to_all"
+superseded_by = "draw"
+note = "Use ctx.map().polygon(..) with 4 points."
+
+[[call]]
+path = "trigger.action.arrowToAll"
+env = "mission"
+args = ["number coalition", "number id", "vec3 start", "vec3 end", "table color", "table fill", "number line_type", "boolean? read_only", "string? message"]
+class = "mutate"
+guards = ["mark_id"]
+clamp = { coalition = [-1, 2], line_type = [0, 6] }
+live_check = "TRG-L10"
+since_api_rev = 1
+doc = "An arrow on the F10 map; DCS draws the head at `start`."
+family = "markup"
+wrapper = "arrow_to_all"
+superseded_by = "draw"
+note = "Use ctx.map().arrow(..)."
+
+[[call]]
+path = "trigger.action.textToAll"
+env = "mission"
+args = ["number coalition", "number id", "vec3 point", "table color", "table fill", "number font_size", "boolean read_only", "string text"]
+class = "mutate"
+guards = ["mark_id"]
+clamp = { coalition = [-1, 2], font_size = [1, 512] }
+live_check = "TRG-L10"
+since_api_rev = 1
+doc = "Text on the F10 map (scales with the map zoom)."
+family = "markup"
+wrapper = "text_to_all"
+superseded_by = "draw"
+note = "Use ctx.map().text(..)."
+
+[[call]]
+path = "trigger.action.setMarkupColor"
+env = "mission"
+args = ["number id", "table color"]
+class = "mutate"
+guards = ["mark_id"]
+live_check = "TRG-L10"
+since_api_rev = 1
+doc = "Changes the outline / text colour of a markup shape in place."
+family = "markup"
+wrapper = "set_markup_color"
+superseded_by = "draw"
+note = "A put of the drawing with the new colour changes it in place."
+
+[[call]]
+path = "trigger.action.setMarkupColorFill"
+env = "mission"
+args = ["number id", "table color"]
+class = "mutate"
+guards = ["mark_id"]
+live_check = "TRG-L10"
+since_api_rev = 1
+doc = "Changes the fill colour of a markup shape in place."
+family = "markup"
+wrapper = "set_markup_color_fill"
+superseded_by = "draw"
+note = "A put of the drawing with the new fill changes it in place."
+
+[[call]]
+path = "trigger.action.setMarkupRadius"
+env = "mission"
+args = ["number id", "number radius"]
+class = "mutate"
+guards = ["mark_id"]
+clamp = { radius = [0, 1000000] }
+live_check = "TRG-L10"
+since_api_rev = 1
+doc = "Changes the radius of a circle in place."
+family = "markup"
+wrapper = "set_markup_radius"
+superseded_by = "draw"
+note = "A put of the drawing with the new radius changes it in place."
+
+[[call]]
+path = "trigger.action.setMarkupText"
+env = "mission"
+args = ["number id", "string text"]
+class = "mutate"
+guards = ["mark_id"]
+live_check = "TRG-L10"
+since_api_rev = 1
+doc = "Changes the text of a text shape in place (nothing happens for a shape without text)."
+family = "markup"
+wrapper = "set_markup_text"
+superseded_by = "draw"
+note = "A put of the drawing with the new text changes it in place."
+
+[[call]]
+path = "trigger.action.setMarkupFontSize"
+env = "mission"
+args = ["number id", "number font_size"]
+class = "mutate"
+guards = ["mark_id"]
+clamp = { font_size = [1, 512] }
+live_check = "TRG-L10"
+since_api_rev = 1
+doc = "Changes the font size of a text shape in place."
+family = "markup"
+wrapper = "set_markup_font_size"
+superseded_by = "draw"
+note = "A put of the drawing with the new font size changes it in place."
+
+[[call]]
+path = "trigger.action.setMarkupTypeLine"
+env = "mission"
+args = ["number id", "number line_type"]
+class = "mutate"
+guards = ["mark_id"]
+clamp = { line_type = [0, 6] }
+live_check = "TRG-L10"
+since_api_rev = 1
+doc = "Changes the line type of a markup shape (not sent to multiplayer clients as of 2.7)."
+family = "markup"
+wrapper = "set_markup_type_line"
+superseded_by = "draw"
+note = "Not synced to clients: a put of the drawing with a new line style draws it again instead."
+
+[[call]]
+path = "trigger.action.setMarkupPositionStart"
+env = "mission"
+args = ["number id", "vec3 point"]
+class = "mutate"
+guards = ["mark_id"]
+live_check = "TRG-L10"
+since_api_rev = 1
+doc = "Moves the first point of a markup shape in place."
+family = "markup"
+wrapper = "set_markup_position_start"
+superseded_by = "draw"
+note = "A put of the drawing with a new first point moves it in place."
+
+[[call]]
+path = "trigger.action.setMarkupPositionEnd"
+env = "mission"
+args = ["number id", "vec3 point"]
+class = "mutate"
+guards = ["mark_id"]
+live_check = "TRG-L10"
+since_api_rev = 1
+doc = "Moves the last point of a markup shape in place."
+family = "markup"
+wrapper = "set_markup_position_end"
+superseded_by = "draw"
+note = "A put of the drawing with a new last point moves it in place."
+
+# ----- Spot (raw handles until the typed Spot of wave 3) -----------------------------------
+
+[[call]]
+path = "Spot.createLaser"
+env = "mission"
+args = ["object:Object source", "vec3? local_ref", "vec3 point", "number? code"]
+returns = ["handle:Spot"]
+class = "mutate"
+creates = "Spot"
+live_check = "TRG-L11"
+since_api_rev = 1
+doc = "A laser spot from an object to a point (code 1111..1788); the handle lives until destroyed or the session ends."
+family = "spots"
+wrapper = "create_laser"
+clamp = { code = [1111, 1788] }
+
+[[call]]
+path = "Spot.createInfraRed"
+env = "mission"
+args = ["object:Object source", "vec3? local_ref", "vec3 point"]
+returns = ["handle:Spot"]
+class = "mutate"
+creates = "Spot"
+live_check = "TRG-L11"
+since_api_rev = 1
+doc = "An infrared pointer from an object to a point; the handle lives until destroyed or the session ends."
+family = "spots"
+wrapper = "create_infra_red"
+
+[[call]]
+path = "Spot.destroy"
+env = "mission"
+receiver = "Spot"
+class = "mutate"
+destroys = true
+live_check = "UC-2"
+since_api_rev = 1
+doc = "Removes the spot and drops its handle."
+wrapper = "destroy"
+
+[[call]]
+path = "Spot.getPoint"
+env = "mission"
+receiver = "Spot"
+returns = ["vec3"]
+class = "read"
+live_check = "UC-2"
+since_api_rev = 1
+doc = "Where the spot points."
+wrapper = "point"
+
+[[call]]
+path = "Spot.setPoint"
+env = "mission"
+receiver = "Spot"
+args = ["vec3 point"]
+class = "mutate"
+live_check = "TRG-L16"
+since_api_rev = 1
+doc = "Moves the spot to a point."
+wrapper = "set_point"
+
+[[call]]
+path = "Spot.getCode"
+env = "mission"
+receiver = "Spot"
+returns = ["number"]
+class = "read"
+live_check = "UC-2"
+since_api_rev = 1
+doc = "Laser code of the spot."
+wrapper = "code"
+
+[[call]]
+path = "Spot.setCode"
+env = "mission"
+receiver = "Spot"
+args = ["number code"]
+class = "mutate"
+live_check = "TRG-L11"
+since_api_rev = 1
+doc = "Changes the laser code (1111..1788)."
+wrapper = "set_code"
+clamp = { code = [1111, 1788] }
+
+# ----- hooks: net and DCS reads ------------------------------------------------------------
+
+[[call]]
+path = "net.get_player_list"
+env = "hooks"
+returns = ["table"]
+class = "read"
+live_check = "PLY-LC7"
+since_api_rev = 1
+doc = "Ids of the connected players (the server is id 1)."
+wrapper = "player_list"
+
+[[call]]
+path = "net.get_player_info"
+env = "hooks"
+args = ["number player_id", "string? attribute"]
+returns = ["any"]
+class = "read"
+guards = ["no_address"]
+live_check = "PLY-LC7"
+since_api_rev = 1
+doc = "A player's table {id, name, side, slot, ping, ucid, lang} or one attribute of it."
+wrapper = "player_info"
+note = "The attribute is one of the seven names above; any other string is refused. The address field (ipaddr) is removed; asking for it is refused."
+
+[[call]]
+path = "net.get_name"
+env = "hooks"
+args = ["number player_id"]
+returns = ["string?"]
+class = "read"
+live_check = "PLY-LC7"
+since_api_rev = 1
+doc = "A player's name."
+wrapper = "name"
+
+[[call]]
+path = "net.get_slot"
+env = "hooks"
+args = ["number player_id"]
+returns = ["number?", "any"]
+class = "read"
+live_check = "PLY-LC4"
+since_api_rev = 1
+doc = "A player's side number and slot id."
+wrapper = "slot"
+
+[[call]]
+path = "net.get_stat"
+env = "hooks"
+args = ["number player_id", "number stat"]
+returns = ["number?"]
+class = "read"
+live_check = "PLY-LC7"
+since_api_rev = 1
+doc = "One statistic of a player (net.PS_* numbers)."
+wrapper = "stat"
+
+[[call]]
+path = "net.get_my_player_id"
+env = "hooks"
+returns = ["number"]
+class = "read"
+live_check = "PLY-LC21"
+since_api_rev = 1
+doc = "The local player's id (1 on a server)."
+wrapper = "my_player_id"
+
+[[call]]
+path = "net.get_server_id"
+env = "hooks"
+returns = ["number"]
+class = "read"
+live_check = "PLY-LC21"
+since_api_rev = 1
+doc = "The server's player id."
+wrapper = "server_id"
+
+[[call]]
+path = "DCS.getMissionName"
+env = "hooks"
+returns = ["string"]
+class = "read"
+live_check = "PLY-LC21"
+since_api_rev = 1
+doc = "Name of the running mission."
+family = "server"
+wrapper = "mission_name"
+
+[[call]]
+path = "DCS.getModelTime"
+env = "hooks"
+returns = ["number"]
+class = "read"
+live_check = "ENV-LC17"
+since_api_rev = 1
+doc = "Model time seen from the hooks environment."
+family = "server"
+wrapper = "model_time"
+
+[[call]]
+path = "DCS.getRealTime"
+env = "hooks"
+returns = ["number"]
+class = "read"
+live_check = "ENV-LC17"
+since_api_rev = 1
+doc = "Real time in seconds since DCS started."
+family = "server"
+wrapper = "real_time"
+
+[[call]]
+path = "DCS.getPause"
+env = "hooks"
+returns = ["boolean"]
+class = "read"
+live_check = "PLY-LC21"
+since_api_rev = 1
+doc = "Whether the simulation is paused."
+family = "server"
+wrapper = "is_paused"
+
+[[call]]
+path = "DCS.isMultiplayer"
+env = "hooks"
+returns = ["boolean"]
+class = "read"
+live_check = "PLY-LC21"
+since_api_rev = 1
+doc = "Whether the mission runs in multiplayer."
+family = "server"
+wrapper = "is_multiplayer"
+
+# Paths whose argument lists are not documented: listed so the capability can say why they
+# cannot be enabled (live check UC-8 records a signature first).
+[[unknown]]
+path = "Unit.LoadOnBoard"
+env = "mission"
+note = "signature not documented (UC-8)"
+
+[[unknown]]
+path = "Group.embarking"
+env = "mission"
+note = "signature not documented (UC-8)"
+
+[[unknown]]
+path = "trigger.misc.addZone"
+env = "mission"
+note = "signature not documented (UC-8)"

@@ -60,6 +60,21 @@ message Attach {
   string scenario = 6;
   // Scenario schema number from the lock file.
   uint32 schema = 7;
+  // W1. Event revision the logic declares (written in the logic's source, not chosen by
+  // the SDK version). 0 = the 0.1.0 event set and behaviour. The engine never sends an
+  // event kind, and never applies an event behaviour change, newer than this revision.
+  // Must not be higher than api_rev (ERROR_CODE_INVALID).
+  uint32 event_rev = 8;
+  // 9 is kept for W4 (mute_kinds), 12 for W4 (hit_merge_s).
+  // W1. API revision the logic declares (0 = 0.1.0, 1 = wave 1, ...). Command and world
+  // behaviour that differs from 0.1.0 is applied only from the revision that introduced
+  // it. It selects behaviour and wire projections, never what the mirror holds.
+  uint32 api_rev = 10;
+  // W1. Capabilities the logic cannot run without ("spawn_static", "draw",
+  // "call:mission:Airbase.setCoalition", ...), collected by the SDK from the logic's
+  // declarations. If one is not AVAILABLE the engine refuses the attach
+  // (AttachRejected.missing_capabilities) instead of failing later in a rare code path.
+  repeated string required_capabilities = 11;
 }
 
 message LogicDown {
@@ -99,6 +114,17 @@ message Start {
   // Campaign turn key (= build_id of the running mission); scopes once_per_turn markers.
   string turn = 5;
   double model_time = 6;
+  // W1. What this engine and the running DCS build support (same data as
+  // Engine.Capabilities at the time of Start). Later changes arrive as CapabilityChanged.
+  repeated Capability capabilities = 7;
+  // W1. API revision of the engine. Absent (0) = a 0.1.0 engine: the SDK then refuses
+  // locally every operation newer than 0.1.0 (the engine could not even see its fields).
+  uint32 api_rev = 8;
+  // W1. The event revision in effect: min(Attach.event_rev, what the engine serves).
+  uint32 event_rev = 9;
+  // W1. The name this logic writes under (ResourceSnap.owner, rate limits): the name of
+  // its API token, or Attach.logic on an engine without tokens.
+  string writer = 10;
 }
 
 // 10 Hz while the session runs (stops while paused, except one Tick with paused = true).
@@ -145,6 +171,8 @@ message AttachRejected {
   string message = 2;
   // Symbols the logic needs that the running manifest lacks (or declares with another kind).
   repeated string missing_symbols = 3;
+  // W1. Entries of Attach.required_capabilities that are not AVAILABLE, with their state.
+  repeated Capability missing_capabilities = 4;
 }
 
 // State documents, once markers, timers and the session report, multiplexed on the stream.

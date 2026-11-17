@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Деревья меню F10 | Sortie SDK</title>
+<meta name="description" content="ctx.menus() строит меню радио F10: пункты и подменю для всех, для одной коалиции или для одной группы. Каждое дерево — именованный ресурс сессии, как рисунок на карте: движок…">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/docs/menus.html">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-doc has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.2.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Страницы документации">
+<nav class="toc">
+<a class="toc-home" href="index.html">Документация</a>
+<ul>
+<li><a href="index.html">Обзор</a></li>
+<li><a href="install-runtime.html">Установка рантайма</a></li>
+<li><a href="quickstart.html">Быстрый старт</a></li>
+<li><a href="dependency.html">Подключение SDK</a></li>
+<li><a href="sdk.html">Логика на Rust</a><ul>
+<li><a href="objects.html">Объекты: статики, уничтожение, мусор</a></li>
+<li><a href="map.html">Рисование на карте</a></li>
+<li><a href="menus.html" aria-current="page">Деревья меню F10</a></li>
+<li><a href="dcs.html">Вызовы DCS</a></li>
+<li><a href="dcs-catalog.html">Справочник каталога DCS API</a></li>
+<li><a href="capabilities.html">Возможности движка</a></li>
+</ul>
+</li>
+<li><a href="generator.html">Сценарий на Python</a></li>
+<li><a href="testing.html">Тестирование</a></li>
+<li><a href="operations.html">Эксплуатация</a></li>
+<li><a href="troubleshooting.html">Диагностика</a></li>
+<li><a href="faq.html">Вопросы и ограничения</a></li>
+<li><a href="changelog.html">Что нового</a></li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="деревья-меню-f10">Деревья меню F10<a class="anchor" href="#деревья-меню-f10" aria-label="Ссылка на этот раздел">#</a></h1>
+<p><code>ctx.menus()</code> строит меню радио F10: пункты и подменю для всех, для одной коалиции или для одной
+группы. Каждое дерево — именованный ресурс сессии, как рисунок на карте: движок помнит его,
+показывает в реплике мира (<code>ctx.world().resources()</code>) и убирает, когда сессия кончается.
+Повторная команда с тем же именем не ставит второе меню, а приводит существующее к новому
+описанию.</p>
+<p>Команды меню из сценария (<code>ctx.menu(коалиция)</code>, страница <a href="sdk.html">Логика на Rust</a>) работают
+как прежде.</p>
+<h2 id="ревизия-api">Ревизия API<a class="anchor" href="#ревизия-api" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Деревья меню — API ревизии 1. Нажатие пункта дерева — событие ревизии 1: логика без
+<code>event_rev = 1</code> его не получает.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">#[sortie::mission(api_rev = 1, event_rev = 1)] // деревья меню — API ревизии 1, нажатия — событий 1
+pub async fn with_menus(ctx: Ctx&lt;MyMission&gt;, _start: Start) -&gt; sortie::Result&lt;()&gt; {
+    let support = ctx
+        .menus()
+        .tree(&quot;support&quot;)
+        .to(Coalition::Blue)
+        .under([&quot;Поддержка&quot;])
+        .command(&quot;sitrep&quot;, &quot;Обстановка&quot;)
+        .submenu(&quot;Дым&quot;, |s| {
+            s.command_arg(&quot;smoke-red&quot;, &quot;Красный&quot;, &quot;red&quot;).command_arg(
+                &quot;smoke-green&quot;,
+                &quot;Зелёный&quot;,
+                &quot;green&quot;,
+            )
+        })
+        .await?;
+    let mut presses = support.presses();
+    while let Some(p) = presses.next().await {
+        if p.item.starts_with(&quot;smoke-&quot;) {
+            let color = if p.arg == &quot;red&quot; {
+                SmokeColor::Red
+            } else {
+                SmokeColor::Green
+            };
+            ctx.smoke(zones::TARGET.center(), color).await?;
+        }
+    }
+    ctx.end_session(Outcome::Draw).await
+}
+</code></pre></div>
+<h2 id="построение">Построение<a class="anchor" href="#построение" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Метод</th><th>Что делает</th></tr></thead><tbody>
+<tr><td><code>tree(имя)</code></td><td>новое дерево; без <code>.to(..)</code> его видят все</td></tr>
+<tr><td><code>.to(кто)</code></td><td><code>Audience::all()</code>, коалиция (<code>Coalition::Blue</code>) или группа (<code>Audience::group(..)</code>)</td></tr>
+<tr><td><code>.under([..])</code></td><td>подменю от корня F10, в которых висит дерево; общие с другими меню той же аудитории</td></tr>
+<tr><td><code>.command(id, надпись)</code></td><td>пункт; <code>id</code> вернётся в нажатии (<code>TreePress.item</code>)</td></tr>
+<tr><td><code>.command_arg(id, надпись, arg)</code></td><td>пункт со своей строкой (до 256 байт), она вернётся в <code>TreePress.arg</code></td></tr>
+<tr><td><code>.manifest_command(id, menus::X)</code></td><td>пункт с надписью команды из сценария</td></tr>
+<tr><td><code>.submenu(надпись, |s| ..)</code></td><td>подменю; внутри те же <code>command</code>, <code>command_arg</code>, <code>submenu</code></td></tr>
+<tr><td><code>.overflow(Overflow::Reject)</code></td><td>уровень длиннее 10 пунктов — отказ вместо листания (по умолчанию <code>Overflow::Page</code>)</td></tr>
+<tr><td><code>.ttl(время)</code></td><td>срок жизни; потом <code>ResourceEnded</code> с причиной <code>EXPIRED</code></td></tr>
+</tbody></table>
+</div>
+<p>Ограничения (иначе <code>Error::Invalid</code> и ничего не меняется):</p>
+<ul>
+<li>на одном уровне нет двух пунктов с одной надписью: DCS находит пункт по пути из надписей;</li>
+<li>на уровне, который листается (см. ниже), нет пункта с надписью его страниц: <code>More...</code>, а на
+корневом уровне дерева ещё и <code>More... (&lt;имя дерева&gt;)</code>;</li>
+<li>не больше 200 узлов в дереве (страницы «More...» не считаются), у каждого пункта есть <code>id</code>,
+<code>id</code> в дереве не повторяются;</li>
+<li>аудитория — все, коалиция или группа; страна, юнит и игрок — нет.</li>
+</ul>
+<h2 id="длинные-уровни-страницы-more">Длинные уровни: страницы «More...»<a class="anchor" href="#длинные-уровни-страницы-more" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>DCS показывает на одном уровне меню не больше 10 пунктов. Уровень дерева длиннее 10 пунктов
+по умолчанию листается (<code>Overflow::Page</code>): DCS показывает первые 9 пунктов и подменю
+<code>More...</code>, в нём остальные, и так дальше — на странице снова 9 пунктов и <code>More...</code>, пока
+осталось больше 10 (уровень из 25 пунктов: 9, потом 9 и <code>More...</code>, потом 7). Листаются только
+уровни самого дерева, но не общие подменю <code>under</code> и не команды меню из сценария.</p>
+<ul>
+<li>Страница корневого уровня дерева называется <code>More... (&lt;имя дерева&gt;)</code>, например
+<code>More... (targets)</code>. Корневой уровень (корень F10 или последнее подменю <code>under</code>) дерево
+делит с другими деревьями и командами меню из сценария, а DCS находит пункт по пути из
+надписей: с одной надписью <code>More...</code> на двоих пункты второго дерева попали бы на страницу
+первого. Надпись зависит только от имени дерева и не меняется, пока дерево живёт. Страницы
+внутри этой страницы и страницы в подменю самого дерева называются просто <code>More...</code>: на этих
+уровнях других деревьев нет.</li>
+<li>Страница — не пункт: её нельзя нажать, в нажатии её нет. Нажатие пункта на странице несёт
+его собственные <code>item</code>, <code>arg</code> и <code>ident</code>, как на первой странице.</li>
+<li>Страницы — тоже вызовы DCS (<code>dcs_calls</code>), но не узлы: в дереве из 200 узлов их не больше 22.</li>
+<li>Изменение считается по тому, как пункты разложены по страницам: вставка в начало уровня из
+14 пунктов ставит заново первую страницу и страницу с остальными (26 вызовов DCS), смена
+надписи на второй странице трогает только вторую страницу, а когда пунктов снова 10 или
+меньше, страница уходит одним вызовом.</li>
+<li><code>.overflow(Overflow::Reject)</code> — прежнее поведение: больше 10 пунктов на уровне —
+<code>Error::Invalid</code>, в DCS ничего не меняется.</li>
+</ul>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">// 14 целей на корневом уровне дерева: DCS покажет 9 и «More... (targets)», а в нём
+// остальные 5.
+let targets = (1..=14).fold(
+    ctx.menus()
+        .tree(&quot;targets&quot;)
+        .to(Coalition::Blue)
+        .under([&quot;Цели&quot;]),
+    |t, i| t.command_arg(&amp;format!(&quot;target-{i}&quot;), &amp;format!(&quot;Цель {i}&quot;), &amp;i.to_string()),
+);
+let m = targets.await?;
+assert_eq!((m.change, m.dcs_calls), (Change::Created, 15)); // 14 пунктов и 1 страница
+let mut presses = m.presses();
+if let Some(p) = presses.next().await {
+    // Нажатие «Цель 12» на странице несёт её id и arg: &quot;target-12&quot;, &quot;12&quot;.
+    ctx.report().set(&quot;target&quot;, &amp;p.item);
+}
+// Без листания: больше 10 пунктов на уровне — Error::Invalid, ничего не меняется.
+let strict = (1..=11).fold(
+    ctx.menus().tree(&quot;strict&quot;).overflow(Overflow::Reject),
+    |t, i| t.command(&amp;format!(&quot;s-{i}&quot;), &amp;format!(&quot;Пункт {i}&quot;)),
+);
+assert!(matches!(strict.await, Err(sortie::Error::Invalid(_))));
+</code></pre></div>
+<h2 id="меню-одной-группы">Меню одной группы<a class="anchor" href="#меню-одной-группы" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>DCS знает меню группы только по её id (<code>Group:getID()</code>), а id есть, только пока в группе сидит
+игрок. Поэтому дерево для группы, заданной именем или символом сценария, следует за слотом:</p>
+<ul>
+<li>в группе никого нет — команда принята, дерево <strong>приостановлено</strong> (<code>is_suspended()</code>, фаза
+<code>SUSPENDED</code>, предупреждение в <code>warnings</code>, вызовов DCS ноль);</li>
+<li>игрок занял слот — движок сам ставит меню для id группы;</li>
+<li>игрок вышел — движок убирает меню, дерево снова приостановлено;</li>
+<li>следующий игрок (в том числе в динамический слот с новым id группы) получает меню заново.</li>
+</ul>
+<p>Нажатие такого пункта несёт группу (<code>TreePress.group</code>), ответить можно только ей. Дерево для
+группы, заданной <code>Eid</code>, живёт одну жизнь группы: когда группа погибла или заменена новой с тем же
+именем, приходит <code>ResourceEnded</code> с причиной <code>SOURCE_GONE</code>.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let jtac = ctx
+    .menus()
+    .tree(&quot;jtac/blue-1&quot;)
+    .to(Audience::group(GroupSel::name(&quot;Blue 1&quot;)))
+    .under([&quot;JTAC&quot;])
+    .command(&quot;check-in&quot;, &quot;Прибыл в район&quot;)
+    .manifest_command(&quot;smoke&quot;, menus::SMOKE_TARGET) // надпись из сценария
+    .await?;
+if jtac.is_suspended() {
+    // В группе пока нет игрока: меню появится, когда игрок займёт слот.
+    ctx.report().set(&quot;jtac&quot;, &quot;waiting&quot;);
+}
+ctx.spawn(async move |ctx| {
+    let mut presses = jtac.presses();
+    while let Some(p) = presses.next().await {
+        if let Some(group) = p.group {
+            ctx.message(group)
+                .text(format!(&quot;Принято: {}&quot;, p.item))
+                .await?;
+        }
+    }
+    Ok(())
+});
+</code></pre></div>
+<p>Нажатия копятся с момента, когда движок подтвердил дерево; <code>ctx.menus().presses(имя)</code> читает
+нажатия дерева, поставленного раньше или другой логикой.</p>
+<h2 id="изменения">Изменения<a class="anchor" href="#изменения" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>DCS не умеет переименовать пункт меню, поэтому движок сравнивает новое дерево с поставленным и
+трогает только то, что изменилось:</p>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th>Результат (<code>MenuTree.change</code>)</th><th>Когда</th><th>Вызовы DCS</th></tr></thead><tbody>
+<tr><td><code>Created</code></td><td>имени ещё нет</td><td>по одному на пункт и подменю</td></tr>
+<tr><td><code>Unchanged</code></td><td>дерево то же</td><td>ни одного</td></tr>
+<tr><td><code>Updated</code></td><td>изменились пункты; или только <code>ttl</code></td><td>удалённые пункты, изменённый пункт и пункты после него на его уровне (так порядок остаётся заданным)</td></tr>
+<tr><td><code>Replaced</code></td><td>другая аудитория или <code>under</code></td><td>всё дерево заново</td></tr>
+</tbody></table>
+</div>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let tree = |extra: bool| {
+    let t = ctx
+        .menus()
+        .tree(&quot;support&quot;)
+        .to(Coalition::Blue)
+        .command(&quot;sitrep&quot;, &quot;Обстановка&quot;);
+    if extra {
+        t.command(&quot;tanker&quot;, &quot;Где заправщик?&quot;)
+    } else {
+        t
+    }
+};
+let m = tree(false).await?;
+assert_eq!(m.change, Change::Created);
+let m = tree(false).await?; // то же дерево: в DCS ничего не уходит
+assert_eq!((m.change, m.dcs_calls), (Change::Unchanged, 0));
+let m = tree(true).await?; // добавлен пункт в конце: один вызов DCS
+assert_eq!((m.change, m.dcs_calls), (Change::Updated, 1));
+ctx.menus().remove(&quot;support&quot;).await?;
+</code></pre></div>
+<p>Команды над одним именем выполняются в порядке отправки. <code>.key(..)</code> не нужен: повтор команды —
+та же команда. <code>remove(имя)</code> убирает дерево (нет такого — <code>Change::Absent</code>),
+<code>remove_prefix("jtac/")</code> — все свои деревья с этим началом имени, <code>clear()</code> — все свои меню.</p>
+<h2 id="ограничения">Ограничения<a class="anchor" href="#ограничения" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li>Что DCS делает с меню группы, когда игрок выходит, садится в другой слот или в динамический
+слот, на сервере 2.9.31 ещё не проверено (проверки PLY-LC1, PLY-LC3, PLY-LC23); Sortie убирает
+меню сам и ставит его заново.</li>
+<li>Порядок пунктов из разных меню на одном общем уровне и поведение при открытом меню у клиента
+ещё не измерены (PLY-LC2, PLY-LC22). Страницы «More...» на сервере 2.9.31 ещё не проверены
+(PLY-LC22): как глубоко DCS вкладывает подменю и что она делает с 11-м пунктом уровня.</li>
+<li>Команды меню из сценария (<code>ctx.menu(..)</code>) с 0.2.0 тоже регистрируются: в реплике мира они
+видны как дерево из одного пункта с именем <code>sortie:menu/..</code>, убираются при конце сессии
+(если в сессии была команда ревизии API 1 или новее; сессия только логик 0.1.0 оставляет их,
+как 0.1.0), а копия команды <code>.per_group()</code> в группе снимается, когда слот группы пустеет, и
+ставится заново следующему игроку.</li>
+</ul>
+</article>
+<nav class="pager" aria-label="Соседние страницы">
+<a class="pager-prev" rel="prev" href="map.html"><span class="pager-dir">Назад</span><span class="pager-title">Рисование на карте</span></a>
+<a class="pager-next" rel="next" href="dcs.html"><span class="pager-dir">Дальше</span><span class="pager-title">Вызовы DCS</span></a>
+</nav>
+<p class="page-source"><a href="menus.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.2.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

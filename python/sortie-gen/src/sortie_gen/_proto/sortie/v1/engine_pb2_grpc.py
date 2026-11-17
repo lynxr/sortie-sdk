@@ -44,6 +44,16 @@ class EngineStub:
                 request_serializer=sortie_dot_v1_dot_engine__pb2.HealthRequest.SerializeToString,
                 response_deserializer=sortie_dot_v1_dot_engine__pb2.HealthResponse.FromString,
                 _registered_method=True)
+        self.Capabilities = channel.unary_unary(
+                '/sortie.v1.Engine/Capabilities',
+                request_serializer=sortie_dot_v1_dot_engine__pb2.CapabilitiesRequest.SerializeToString,
+                response_deserializer=sortie_dot_v1_dot_engine__pb2.CapabilitiesResponse.FromString,
+                _registered_method=True)
+        self.ReleaseQuarantine = channel.unary_unary(
+                '/sortie.v1.Engine/ReleaseQuarantine',
+                request_serializer=sortie_dot_v1_dot_engine__pb2.ReleaseQuarantineRequest.SerializeToString,
+                response_deserializer=sortie_dot_v1_dot_engine__pb2.ReleaseQuarantineResponse.FromString,
+                _registered_method=True)
 
 
 class EngineServicer:
@@ -61,6 +71,24 @@ class EngineServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Capabilities(self, request, context):
+        """W1. Every operation, typed family member and allow-listed DCS function the engine
+        knows, with its state on the running DCS build and its live-check status.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReleaseQuarantine(self, request, context):
+        """W1. Lifts the quarantine of an exec op kind (admin token). `name` is the op kind
+        ("dcs_call", "spawn_static") or any capability it covers ("call:mission:land.getHeight"
+        releases "dcs_call"). The released capabilities report their state again at once.
+        `carried_over` releases every quarantine carried over from another DCS build instead.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_EngineServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -73,6 +101,16 @@ def add_EngineServicer_to_server(servicer, server):
                     servicer.Health,
                     request_deserializer=sortie_dot_v1_dot_engine__pb2.HealthRequest.FromString,
                     response_serializer=sortie_dot_v1_dot_engine__pb2.HealthResponse.SerializeToString,
+            ),
+            'Capabilities': grpc.unary_unary_rpc_method_handler(
+                    servicer.Capabilities,
+                    request_deserializer=sortie_dot_v1_dot_engine__pb2.CapabilitiesRequest.FromString,
+                    response_serializer=sortie_dot_v1_dot_engine__pb2.CapabilitiesResponse.SerializeToString,
+            ),
+            'ReleaseQuarantine': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReleaseQuarantine,
+                    request_deserializer=sortie_dot_v1_dot_engine__pb2.ReleaseQuarantineRequest.FromString,
+                    response_serializer=sortie_dot_v1_dot_engine__pb2.ReleaseQuarantineResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -129,6 +167,60 @@ class Engine:
             '/sortie.v1.Engine/Health',
             sortie_dot_v1_dot_engine__pb2.HealthRequest.SerializeToString,
             sortie_dot_v1_dot_engine__pb2.HealthResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Capabilities(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sortie.v1.Engine/Capabilities',
+            sortie_dot_v1_dot_engine__pb2.CapabilitiesRequest.SerializeToString,
+            sortie_dot_v1_dot_engine__pb2.CapabilitiesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReleaseQuarantine(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sortie.v1.Engine/ReleaseQuarantine',
+            sortie_dot_v1_dot_engine__pb2.ReleaseQuarantineRequest.SerializeToString,
+            sortie_dot_v1_dot_engine__pb2.ReleaseQuarantineResponse.FromString,
             options,
             channel_credentials,
             insecure,

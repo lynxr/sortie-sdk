@@ -24,7 +24,7 @@
 <a class="skip" href="#content">Перейти к содержанию</a>
 <header class="topbar">
 <div class="topbar-inner">
-<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.2.0</span></a>
 <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
 <nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
 <div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
@@ -39,7 +39,15 @@
 <li><a href="install-runtime.html">Установка рантайма</a></li>
 <li><a href="quickstart.html">Быстрый старт</a></li>
 <li><a href="dependency.html">Подключение SDK</a></li>
-<li><a href="sdk.html">Логика на Rust</a></li>
+<li><a href="sdk.html">Логика на Rust</a><ul>
+<li><a href="objects.html">Объекты: статики, уничтожение, мусор</a></li>
+<li><a href="map.html">Рисование на карте</a></li>
+<li><a href="menus.html">Деревья меню F10</a></li>
+<li><a href="dcs.html">Вызовы DCS</a></li>
+<li><a href="dcs-catalog.html">Справочник каталога DCS API</a></li>
+<li><a href="capabilities.html">Возможности движка</a></li>
+</ul>
+</li>
 <li><a href="generator.html">Сценарий на Python</a></li>
 <li><a href="testing.html">Тестирование</a></li>
 <li><a href="operations.html" aria-current="page">Эксплуатация</a></li>
@@ -64,6 +72,7 @@
 <tr><td><code>Sortie\link.secret</code></td><td>общий секрет моста и движка</td></tr>
 <tr><td><code>Sortie\link.addr</code></td><td>адрес, на котором слушает <code>sortied</code>; мост читает его перед каждым подключением</td></tr>
 <tr><td><code>Sortie\tokens.toml</code></td><td>токены API</td></tr>
+<tr><td><code>Sortie\engine.toml</code></td><td>настройки владельца движка (необязательный): скорость спавна, какие <a href="dcs.html">вызовы DCS</a> включены</td></tr>
 <tr><td><code>Sortie\sortie.db</code></td><td>хранилище движка: сборки, состояние, итоги</td></tr>
 <tr><td><code>Sortie\Logs\</code></td><td>логи <code>sortied</code></td></tr>
 <tr><td><code>Logs\sortie-bridge.log</code></td><td>лог моста</td></tr>
@@ -75,7 +84,8 @@
 <h2 id="sortied"><code>sortied</code><a class="anchor" href="#sortied" aria-label="Ссылка на этот раздел">#</a></h2>
 <div class="code"><pre tabindex="0"><code>sortied [--instance &lt;имя&gt;] [--saved-games &lt;папка&gt;] [--dcs &lt;папка DCS&gt;]
         [--api 127.0.0.1:50777] [--link pipe:&lt;имя&gt; | tcp:&lt;host:port&gt;]
-        [--db &lt;файл&gt; | memory] [--tokens &lt;файл&gt;] [--manifest &lt;файл.manifest.pb&gt;]
+        [--db &lt;файл&gt; | memory] [--tokens &lt;файл&gt;] [--engine-config &lt;файл&gt;]
+        [--manifest &lt;файл.manifest.pb&gt;]
         [--dev] [--dev-eval] [--log-dir &lt;папка&gt; | none]
 </code></pre></div>
 <div class="table-wrap" tabindex="0">
@@ -87,13 +97,89 @@
 <tr><td><code>--link</code></td><td><code>SORTIE_LINK</code></td><td>где ждать мост; по умолчанию именованный канал экземпляра</td></tr>
 <tr><td><code>--db</code></td><td><code>SORTIE_DB</code></td><td>файл хранилища; <code>memory</code> — без файла, для экспериментов</td></tr>
 <tr><td><code>--tokens</code></td><td><code>SORTIE_TOKENS</code></td><td>файл токенов вместо <code>Sortie\tokens.toml</code></td></tr>
+<tr><td><code>--engine-config</code></td><td><code>SORTIE_ENGINE_CONFIG</code></td><td>файл настроек вместо <code>Sortie\engine.toml</code>; ошибка в нём не даёт движку стартовать</td></tr>
 <tr><td><code>--manifest</code></td><td><code>SORTIE_MANIFEST</code></td><td>manifest для миссии, которую не регистрировали (собрана <code>build</code> и открыта вручную)</td></tr>
-<tr><td><code>--dev</code></td><td></td><td>локальные программы работают без токена; спавн и уничтожение в логике — только с <code>.key(..)</code></td></tr>
+<tr><td><code>--dev</code></td><td></td><td>локальные программы работают без токена; спавн и уничтожение в логике — только с <code>.key(..)</code>; все изменяющие вызовы DCS включены</td></tr>
 <tr><td><code>--dev-eval</code></td><td></td><td>разрешить отладочные команды <code>DevEval</code> (только роль <code>admin</code>)</td></tr>
 <tr><td><code>--log-dir</code></td><td><code>SORTIE_LOG_DIR</code></td><td>папка логов; <code>none</code> — только консоль</td></tr>
 </tbody></table>
 </div>
 <p>Подробность логов задаёт <code>SORTIE_LOG</code> (по умолчанию <code>info</code>), например <code>SORTIE_LOG=debug</code>.</p>
+<h2 id="enginetoml"><code>engine.toml</code><a class="anchor" href="#enginetoml" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Необязательный файл настроек владельца движка:</p>
+<div class="code" data-lang="toml"><pre tabindex="0"><code class="language-toml"># Saved Games\DCS\Sortie\engine.toml
+spawn_gate = { groups_per_s = 2, units_per_s = 24 }   # спавн в секунду модельного времени
+
+[calls]                     # каталог вызовов DCS
+enable = [&quot;Airbase.setCoalition&quot;, &quot;Warehouse.addItem&quot;]
+disable = [&quot;land.getIP&quot;]
+
+[[calls.call]]              # поменять границы аргумента
+path = &quot;trigger.action.explosion&quot;
+clamp = { power = [0, 2000] }
+
+[operations]                # выключить типизированные операции
+disable = [&quot;remove_junk&quot;]
+
+[quarantine]                # карантин функций каталога и новая сборка DCS
+clear_calls_on_new_build = false   # по умолчанию false
+</code></pre></div>
+<p>Изменяющие вызовы DCS выключены, пока их не перечислят в <code>enable</code> (или не запустят
+<code>sortied --dev</code>). <code>sortied --dev</code> включает и изменяющие записи, которые владелец добавил сам в
+<code>[[calls.call]]</code>; то, что владелец выключил (<code>enabled = false</code> у записи, список <code>disable</code>),
+остаётся выключенным и с <code>--dev</code>. Ошибка в файле останавливает <code>sortied</code> при старте с сообщением
+<code>engine.toml [calls]: ...</code>, в котором назван путь записи. Имена в <code>[operations]</code> — имена
+<a href="capabilities.html">возможностей</a> (<code>remove_junk</code>, <code>draw</code>, <code>dcs_call</code>, ...): такая операция
+<code>DISABLED</code>, её команда — <code>Error::Rejected</code>.</p>
+<p><code>[quarantine] clear_calls_on_new_build</code> решает, снимает ли новая сборка DCS карантин функции
+каталога (<code>call:mission:land.getHeight</code> после падения DCS внутри этого вызова, см. «Наблюдение»
+ниже). По умолчанию <code>false</code>: не снимает, карантин остаётся до <code>sortie caps --release</code> или до
+пройденного испытания. Сервер, который работает без человека, не должен второй раз падать на
+том же вызове, пока человек не решил; вызов на карантине вместо этого получает понятную ошибку
+<code>Error::Quarantined</code>. <code>true</code> — как в спецификации: мост новой сборки DCS снимает такие
+карантины сам, как снимает карантин типизированной операции. Значение — только <code>true</code> или
+<code>false</code>, другие ключи в <code>[quarantine]</code> — ошибка при старте <code>sortied</code>.</p>
+<p>Правила слияния <code>[calls]</code> со встроенным каталогом:</p>
+<ul>
+<li>запись <code>[[calls.call]]</code> для встроенного пути меняет только <code>enabled</code>, <code>note</code>, добавляет
+<code>guards</code> (защиты только добавляются, убрать встроенную нельзя), сужает <code>clamp</code> (расширить
+встроенные границы нельзя) и повышает <code>class</code> (read &lt; mutate &lt; heavy &lt; admin; понизить нельзя);</li>
+<li>защита <code>span_300km</code> (две точки не дальше 300 км друг от друга) допустима только у записи
+ровно с двумя обязательными аргументами <code>vec2</code> или <code>vec3</code>: это и есть точки, которые она
+измеряет. У любой другой записи, встроенной или вашей, она — ошибка при старте;</li>
+<li>подпись (<code>receiver</code>, <code>args</code>, <code>returns</code>, <code>kind</code>, <code>creates</code>, <code>destroys</code>, <code>documented</code>) и то, из
+чего генерируются обёртки SDK (<code>family</code>, <code>wrapper</code>, <code>since_api_rev</code>, <code>superseded_by</code>,
+<code>live_check</code>, <code>doc</code>), не меняются;</li>
+<li>новый путь — полная запись; его класс не ниже <code>mutate</code>, если имя не начинается с get, is или
+has; он начинается с одной из таблиц DCS, с которых слой Lua вызывает функции (<code>land</code>,
+<code>trigger</code>, <code>world</code>, <code>Unit</code>, <code>net</code>, <code>DCS</code> и т. д.); новая запись не может закрыть
+унаследованный встроенный метод (<code>Unit.destroy</code> вместо <code>Object.destroy</code>) — меняйте запись
+того класса, который метод определяет;</li>
+<li>в <code>enable</code> и <code>disable</code> метод пишется под классом, который его определяет, то есть путём
+самой записи каталога: <code>Object.destroy</code>, а не <code>Unit.destroy</code> или <code>Weapon.destroy</code>. Запись
+одна на все классы-наследники, поэтому её включение или выключение действует на юниты,
+статики, аэродромы и оружие сразу; имя через класс-наследник — ошибка при старте, в
+сообщении названа запись (<code>is the entry </code>Object.destroy``);</li>
+<li>пути из списка NEVER (<code>net.dostring_in</code>, <code>loadstring</code>, <code>os</code>, <code>io</code>, <code>_G</code>, обратные вызовы, пути
+к файлам) нельзя включить ни записью, ни через <code>enable</code>, ни с <code>--dev</code>; то же для путей с
+неописанной подписью и для <code>*</code>.</li>
+</ul>
+<h2 id="проверка-сырых-таблиц">Проверка сырых таблиц<a class="anchor" href="#проверка-сырых-таблиц" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Всё, что логика передаёт в DCS сырой таблицей, — <code>Task::raw(..)</code> (<code>SetTask.raw</code>), <code>.raw(..)</code>
+статика (<code>SpawnStatic.raw</code>), аргументы <code>ctx.dcs()</code> и пакетов вызовов, — движок проверяет до
+постановки команды в очередь, для любого клиента и любой ревизии API, включая логики 0.1.0:</p>
+<ul>
+<li>код Lua и имена файлов — отказ <code>sortie::rejected</code>, <code>capability = "dev_eval"</code>, в сообщении путь
+внутри таблицы (<code>SetTask.raw.params.tasks[2].params.action.id</code>). Отклоняются на любой глубине:
+<code>id = "Script"</code> и <code>id = "ScriptFile"</code> (<code>WrappedAction</code>, команды), строка под ключом <code>condition</code>
+(условие <code>ControlledTask</code> в <code>condition</code> и <code>stopCondition</code>), строка <code>command</code> внутри <code>params</code>,
+строка под ключом <code>file</code>. Регистр букв и пробелы вокруг значения не важны;</li>
+<li>NaN и бесконечность в ключах и значениях — <code>sortie::invalid</code> с путём; то же для чисел
+типизированных команд (точка спавна, орбита, дым, метка);</li>
+<li>вложенность до 40 таблиц и до 100 000 значений на команду.</li>
+</ul>
+<p>С <code>sortied --dev-eval</code> команда токена <code>admin</code> с кодом проходит, а в журнал пишется предупреждение;
+токен <code>logic</code> получает отказ и с этим флагом. Для отладки Lua на сервере разработки есть <code>DevEval</code>.</p>
 <h2 id="токены">Токены<a class="anchor" href="#токены" aria-label="Ссылка на этот раздел">#</a></h2>
 <div class="code" data-lang="toml"><pre tabindex="0"><code class="language-toml"># Saved Games\DCS\Sortie\tokens.toml
 [[token]]
@@ -167,7 +253,28 @@ DCSServerBot, эту работу делает он.</p>
 <div class="code"><pre tabindex="0"><code>sortie status                                   # движок, мост, сессия
 sortie events [--kind dead] [--from-seq N] [--limit N]
 sortie top [--interval-ms 1000]                 # здоровье, связи, очереди
+sortie caps [--prefix call:mission:] [--all]    # что не работает и почему
+sortie caps --release call:mission:land.getHeight   # снять карантин (токен admin)
+sortie caps --release-carried-over              # снять все карантины прежних сборок DCS
 </code></pre></div>
+<p>Если DCS упал во время команды, вид этой команды уходит на карантин (<code>QUARANTINED</code> в
+<code>sortie caps</code>, заметка в <code>sortie status</code>) и остаётся там после перезапуска DCS и движка, пока
+владелец не снимет его <code>sortie caps --release &lt;имя&gt;</code>. У универсального вызова на карантин
+уходит одна функция каталога (её называет журнал сбоев моста,
+<code>&lt;Saved Games&gt;\Logs\sortie-bridge.journal</code>); документированную функцию чтения движок один раз
+испытывает при следующем старте миссии (не испытывает, пока универсальный вызов выключен в
+<code>[operations]</code>). Функция, которая прошла испытание и снова дала сбой, остаётся на карантине
+без второго испытания, пока владелец не снимет его. Функция, в которой мост отказал только
+из-за медленных вызовов (три вызова дольше секунды за 10 минут; заметка <code>Slow, not a crash</code>),
+в хранилище не попадает: отказ действует до перезапуска DCS и снимается сам. Обновление DCS такой карантин не снимает
+(если не включён <code>[quarantine] clear_calls_on_new_build</code>), поэтому карантин, записанный на
+прежней сборке,
+движок называет перенесённым: заметка функции в <code>sortie caps</code> говорит «recorded on DCS
+&lt;прежняя&gt;, carried over to the running build &lt;текущая&gt;», <code>sortie status</code> перечисляет все такие
+функции (заметка <code>carried over to the running DCS build ...</code>, поле
+<code>HealthResponse.carried_over_quarantines</code>). Снять их все разом — <code>sortie caps --release-carried-over</code> (<code>Engine.ReleaseQuarantine</code> с <code>carried_over = true</code>); пока с запуска
+движка не подключился ни один мост, текущая сборка неизвестна и команда отказывает.
+Подробности — <a href="capabilities.html">Возможности движка</a>.</p>
 <p>Общие флаги утилиты: <code>--instance</code>, <code>--saved-games</code>, <code>--dcs</code>, <code>--api</code>, <code>--token</code>.</p>
 <h2 id="обновление">Обновление<a class="anchor" href="#обновление" aria-label="Ссылка на этот раздел">#</a></h2>
 <p><strong>Рантайм.</strong> Распакуйте новый архив рядом со старым и выполните из новой папки
@@ -190,7 +297,7 @@ doctor». После каждого обновления DCS запускайт�
 </div>
 <footer class="footer">
 <div class="footer-inner">
-<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p>Sortie SDK 0.2.0. Лицензия SDK: MIT OR Apache-2.0.</p>
 <p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
 </div>
 </footer>

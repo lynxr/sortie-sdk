@@ -30,6 +30,9 @@ pub struct Failure {
     pub lua_traceback: Option<String>,
     /// Rust call site that created the command (`file:line:column`).
     pub origin: Option<String>,
+    /// The capability the refusal names (`CommandError.capability`: missing, switched off or
+    /// quarantined), empty when none; see [`Error::capability`].
+    pub capability: String,
 }
 
 impl Failure {
@@ -92,6 +95,16 @@ pub enum Error {
     Quarantined(Box<Failure>),
     /// A compare-and-swap write lost against another writer.
     Conflict(Box<Failure>),
+    /// A keyed universal call was answered from the key store, which kept no values for it:
+    /// the call ran under this key before, it was not run again, and its result was too large
+    /// to keep (above 64 KiB). Read what you need with a call of its own.
+    ResultNotKept(Box<Failure>),
+    /// The operation needs a newer engine (`Start.api_rev` is below the API revision that
+    /// introduced it); nothing was sent.
+    EngineTooOld(Box<Failure>),
+    /// The operation belongs to an API revision above the one the logic declares
+    /// (`#[sortie::mission(api_rev = N)]`); nothing was sent.
+    Revision(Box<Failure>),
     /// The manifest of the running mission has no such symbol (schema drift).
     UnknownSymbol {
         kind: &'static str,
@@ -160,6 +173,7 @@ impl Error {
             op,
             message: e.message.clone(),
             lua_traceback: (!e.lua_traceback.is_empty()).then(|| e.lua_traceback.clone()),
+            capability: e.capability.clone(),
             ..failure
         };
         Self::with_code(
@@ -215,6 +229,9 @@ impl Error {
             Error::Paused(_) => "sortie::paused",
             Error::Quarantined(_) => "sortie::quarantined",
             Error::Conflict(_) => "sortie::conflict",
+            Error::ResultNotKept(_) => "sortie::result_not_kept",
+            Error::EngineTooOld(_) => "sortie::engine_too_old",
+            Error::Revision(_) => "sortie::revision",
             Error::UnknownSymbol { .. } => "sortie::unknown_symbol",
             Error::NotInWorld { .. } => "sortie::not_in_world",
             Error::State { .. } => "sortie::state",
@@ -238,7 +255,10 @@ impl Error {
             | Error::NameConflict(f)
             | Error::Paused(f)
             | Error::Quarantined(f)
-            | Error::Conflict(f) => Some(f.as_ref()),
+            | Error::Conflict(f)
+            | Error::ResultNotKept(f)
+            | Error::EngineTooOld(f)
+            | Error::Revision(f) => Some(f.as_ref()),
             _ => None,
         }
     }
@@ -252,6 +272,16 @@ impl Error {
             }
             other => other.failure().and_then(|f| f.origin.as_deref()),
         }
+    }
+
+    /// The capability a refusal names (`UNAVAILABLE`, `REJECTED` by a switch, `QUARANTINED`):
+    /// for example `"dcs_call"` or `"call:mission:land.getHeight"`; compare with the
+    /// constants of [`crate::caps`] and look it up in `ctx.capabilities()`.
+    #[must_use]
+    pub fn capability(&self) -> Option<&str> {
+        self.failure()
+            .map(|f| f.capability.as_str())
+            .filter(|c| !c.is_empty())
     }
 
     /// The Lua traceback, for errors raised by the Lua layer.
@@ -299,9 +329,24 @@ impl Error {
                 "the simulation is paused and the command was sent with `.on_pause(Fail)`"
             }
             Error::Quarantined(_) => {
-                "this kind of command is disabled after it faulted; run `sortie doctor`"
+                "this kind of command is quarantined: it was running when DCS crashed, or it \
+                 faulted the bridge; `Error::capability()` names it, the engine owner releases \
+                 it (`sortie caps --release <name>`)"
             }
             Error::Conflict(_) => "another writer changed the document; reload and retry",
+            Error::ResultNotKept(_) => {
+                "the call ran under this key before and was not run again; the engine keeps a \
+                 result above 64 KiB without its values, so read what you need with a call of \
+                 its own"
+            }
+            Error::EngineTooOld(_) => {
+                "the engine is older than this operation: update sortied, or keep to the \
+                 operations of its API revision (`ctx.engine_api_rev()`)"
+            }
+            Error::Revision(_) => {
+                "declare the API revision the operation belongs to: \
+                 `#[sortie::mission(api_rev = N)]` (a logic's revision is written in its source)"
+            }
             Error::UnknownSymbol { .. } => {
                 "the running mission was generated from another scenario lock: run \
                  `sortie-gen lock`, rebuild the logic and the mission"
@@ -404,6 +449,7 @@ mod tests {
             code: v1::ErrorCode::Gone as i32,
             message: "Unit doesn't exist".into(),
             lua_traceback: "layer/exec/set_task.lua:41: Unit doesn't exist".into(),
+            capability: String::new(),
         };
         let base = Failure {
             target: "group \"Red CAP 1\"".into(),
@@ -458,6 +504,47 @@ mod tests {
             "   | session 01SORTIE000000000000000001 · command 0001-fake01-12"
         );
         assert!(lines[4].starts_with(" help: the object no longer exists"));
+    }
+
+    #[test]
+    fn no_help_text_has_a_run_of_spaces() {
+        let f = || Box::new(Failure::new("x", "m"));
+        let all = [
+            Error::Gone(f()),
+            Error::Timeout(f()),
+            Error::Lua(f()),
+            Error::BridgeFault(f()),
+            Error::Rejected(f()),
+            Error::SessionEnded(f()),
+            Error::Invalid(f()),
+            Error::Unavailable(f()),
+            Error::NameConflict(f()),
+            Error::Paused(f()),
+            Error::Quarantined(f()),
+            Error::Conflict(f()),
+            Error::ResultNotKept(f()),
+            Error::EngineTooOld(f()),
+            Error::Revision(f()),
+            Error::UnknownSymbol {
+                kind: "group",
+                ident: "X".into(),
+                origin: None,
+            },
+            Error::NotInWorld {
+                kind: "group",
+                ident: "X".into(),
+                origin: None,
+            },
+            Error::State {
+                name: "n".into(),
+                message: "m".into(),
+            },
+            Error::Transport("t".into()),
+        ];
+        for e in &all {
+            let help = e.help().unwrap_or_default();
+            assert!(!help.contains("  "), "{}: {help:?}", e.code());
+        }
     }
 
     #[test]

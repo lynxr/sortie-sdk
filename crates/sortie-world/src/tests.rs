@@ -975,3 +975,333 @@ fn names_resolve_to_the_newest_object() {
         "falls back to the older one"
     );
 }
+
+#[test]
+fn airbase_hosts_deaths_and_removals_reach_replicas() {
+    let mut w = World::new("s");
+    let farp = w.observe(&Observation {
+        runtime_id: Some(77),
+        name: Some("FARP Dallas".into()),
+        type_name: Some("FARP".into()),
+        category: Some(Category::Static),
+        ..Observation::default()
+    });
+    let base = w.rev();
+    let ab = w.upsert_airbase(v1::AirbaseSnap {
+        name: "FARP Dallas".into(),
+        host_eid: farp.eid().to_u64(),
+        ..Default::default()
+    });
+    let mut replica = World::replica("s");
+    replica.apply_snapshot(&w.snapshot());
+    let snap_rev = w.rev();
+    assert_eq!(replica.airbase(ab).unwrap().host, Some(farp.eid()));
+
+    // An update that does not know the host keeps it; death is final.
+    w.upsert_airbase(v1::AirbaseSnap {
+        name: "FARP Dallas".into(),
+        ..Default::default()
+    });
+    assert_eq!(w.airbase(ab).unwrap().host, Some(farp.eid()));
+    assert!(w.mark_airbase_dead(ab));
+    assert!(!w.mark_airbase_dead(ab));
+    w.upsert_airbase(v1::AirbaseSnap {
+        name: "FARP Dallas".into(),
+        dead: false,
+        ..Default::default()
+    });
+    assert!(w.airbase(ab).unwrap().dead);
+
+    replica.apply_delta(&w.delta_since(snap_rev)).unwrap();
+    assert!(replica.airbase(ab).unwrap().dead);
+
+    let before = w.rev();
+    w.remove_airbase(ab).unwrap();
+    assert!(w.airbase_by_name("FARP Dallas").is_none());
+    let d = w.delta_since(before);
+    assert_eq!(d.airbase_removals, vec![ab.to_u64()]);
+    replica.apply_delta(&d).unwrap();
+    assert!(replica.airbase(ab).is_none());
+    assert!(replica.airbase_by_name("FARP Dallas").is_none());
+    assert_eq!(w.delta_since(base).airbase_removals, vec![ab.to_u64()]);
+
+    // A diff sees the removal too.
+    let mut with = World::new("s");
+    let x = with.upsert_airbase(v1::AirbaseSnap {
+        name: "Ship deck".into(),
+        ..Default::default()
+    });
+    let mut without = with.clone();
+    without.remove_airbase(x);
+    assert_eq!(with.diff(&without).airbase_removals, vec![x.to_u64()]);
+}
+
+#[test]
+fn reply_snaps_apply_as_observations_until_the_replica_catches_up() {
+    let mut mirror = World::new("s");
+    let mut replica = World::replica("s");
+    replica.apply_snapshot(&mirror.snapshot());
+    let g = mirror.observe_group(
+        "Red CAP#ab12-1",
+        None,
+        Some(Coalition::Red),
+        Some(Category::Airplane),
+        Some(5),
+    );
+    let u = mirror
+        .observe(&unit(
+            31,
+            "Red CAP#ab12-1-1",
+            "MiG-29S",
+            "Red CAP#ab12-1",
+            Coalition::Red,
+            Category::Airplane,
+        ))
+        .eid();
+    let reply = v1::Reply {
+        groups: vec![mirror.group_entry(GroupKey::Eid(g)).unwrap().to_snap()],
+        entities: vec![mirror.entity(u).unwrap().to_snap()],
+        ..v1::Reply::default()
+    };
+    let world_rev = mirror.rev();
+    let rev = replica.rev();
+    assert!(replica.apply_reply(&reply, world_rev));
+    assert_eq!(replica.rev(), rev, "a reply never moves the revision");
+    assert_eq!(replica.entity(u).unwrap().name, "Red CAP#ab12-1-1");
+    assert_eq!(
+        replica.group_entry(GroupKey::Eid(g)).unwrap().units,
+        vec![u]
+    );
+    // The delta that carries the same facts still applies.
+    replica.apply_delta(&mirror.delta_since(rev)).unwrap();
+    assert_eq!(replica.rev(), world_rev);
+
+    // An older reply cannot overwrite newer state.
+    mirror.mark_dead(u);
+    replica.apply_delta(&mirror.delta_since(world_rev)).unwrap();
+    assert!(!replica.apply_reply(&reply, world_rev));
+    assert!(replica.entity(u).unwrap().dead);
+    // The mirror itself ignores replies; world_rev 0 means "touched nothing".
+    assert!(!mirror.apply_reply(&reply, mirror.rev() + 1));
+    let mut fresh = World::replica("s");
+    assert!(!fresh.apply_reply(&reply, 0));
+}
+
+fn drawing(name: &str, drifted: bool) -> v1::ResourceSnap {
+    v1::ResourceSnap {
+        kind: v1::ResourceKind::Drawing as i32,
+        name: name.into(),
+        phase: v1::ResourcePhase::Active as i32,
+        owner: "w".into(),
+        drifted,
+        ..v1::ResourceSnap::default()
+    }
+}
+
+#[test]
+fn the_registry_travels_in_snapshots_deltas_diffs_and_replies() {
+    let mut mirror = World::new("s");
+    let before = mirror.clone();
+    assert!(mirror.put_resource(drawing("b", false)));
+    assert!(mirror.put_resource(drawing("a", false)));
+    assert!(
+        !mirror.put_resource(drawing("a", false)),
+        "equal: no change"
+    );
+    let r1 = mirror.rev();
+    assert_eq!(r1, 2);
+    let mut replica = World::from_snapshot(&mirror.snapshot());
+    let names: Vec<_> = replica.resources().map(|r| r.name.as_str()).collect();
+    assert_eq!(names, ["a", "b"], "by kind, then name");
+
+    // A removal and a put of the same name again: removals first, then upserts.
+    mirror.remove_resource(v1::ResourceKind::Drawing, "a");
+    mirror.put_resource(drawing("a", true));
+    mirror.remove_resource(v1::ResourceKind::Drawing, "b");
+    let d = mirror.delta_since(r1);
+    assert_eq!(d.resource_upserts.len(), 1);
+    assert_eq!(d.resource_removals.len(), 2);
+    replica.apply_delta(&d).unwrap();
+    let a = replica.resource(v1::ResourceKind::Drawing, "a").unwrap();
+    assert!(a.drifted);
+    assert!(replica.resource(v1::ResourceKind::Drawing, "b").is_none());
+    assert_eq!(replica.resource_count(), 1);
+
+    // A diff needs no history.
+    let diff = before.diff(&mirror);
+    assert_eq!(diff.resource_upserts.len(), 1);
+    let mut from_scratch = before.clone();
+    from_scratch.apply_delta(&diff).unwrap();
+    assert_eq!(from_scratch.resource_count(), 1);
+
+    // A command's reply shows the resource before the next delta.
+    let reply = v1::Reply {
+        resource: Some(v1::ResourceAck {
+            resource: Some(drawing("c", false)),
+            ..v1::ResourceAck::default()
+        }),
+        ..v1::Reply::default()
+    };
+    assert!(replica.apply_reply(&reply, replica.rev() + 1));
+    assert!(replica.resource(v1::ResourceKind::Drawing, "c").is_some());
+
+    // Forgotten history: the removal log goes with it.
+    mirror.forget_history_through(mirror.rev());
+    assert!(
+        mirror
+            .delta_since(mirror.rev())
+            .resource_removals
+            .is_empty()
+    );
+}
+
+/// Weapons and crew are named in the identity table, never as entities: the Eids come from the
+/// same allocator, the revision does not move, snapshots and deltas do not carry them.
+#[test]
+fn identities_share_the_allocator_and_stay_out_of_the_world() {
+    let mut w = World::new("s");
+    let u = w
+        .observe(&unit(
+            10,
+            "Viper 1-1",
+            "F-16C_50",
+            "Blue 1",
+            Coalition::Blue,
+            Category::Airplane,
+        ))
+        .eid();
+    let rev = w.rev();
+    let missile = w.identify_weapon(500, Some("AIM_120C"), false);
+    assert_ne!(missile, u);
+    assert_eq!(
+        w.identify_weapon(500, None, true),
+        missile,
+        "a gone weapon: id_ only"
+    );
+    assert_eq!(w.identify_weapon(500, Some("AIM_120C"), true), missile);
+    let pilot = w.identify_crew(600, None);
+    assert_eq!(w.identify_crew(600, Some("pilot")), pilot);
+    assert_eq!(w.identity(pilot).unwrap().type_name, "pilot");
+    assert_eq!((w.rev(), w.len()), (rev, 1));
+    assert!(w.snapshot().entities.iter().all(|e| e.eid == u.to_u64()));
+    assert!(w.delta_since(0).upserts.iter().all(|e| e.eid == u.to_u64()));
+    // A crew member's runtime id now names a weapon: the crew identity ends.
+    let other = w.identify_weapon(600, Some("Mk_82"), false);
+    assert_ne!(other, pilot);
+    assert!(!w.identity(pilot).unwrap().is_live(0.0));
+    assert!(w.end_identity(other));
+    assert!(!w.end_identity(other), "ended once");
+    assert!(w.identity_by_runtime_id(600).is_none());
+    // The weapon expires after the strike window; crew never expire by time.
+    let crew = w.identify_crew(700, None);
+    w.set_model_time(WEAPON_AFTER_STRIKE_S + 1.0);
+    assert!(w.identity_by_runtime_id(500).is_none());
+    assert!(w.identity_by_runtime_id(700).is_some_and(|i| i.eid == crew));
+}
+
+/// Review C5: a SHOT names a weapon at the start of its life: it never extends an older live
+/// identity at the same runtime id and type; the older one ends.
+#[test]
+fn a_fired_weapon_always_gets_a_new_identity() {
+    let mut w = World::new("s");
+    let a = w.identify_weapon(5000, Some("AIM_9"), false);
+    w.set_model_time(60.0);
+    let b = w.identify_weapon_fired(5000, Some("AIM_9"));
+    assert_ne!(a, b);
+    assert!(w.identity(a).unwrap().ended);
+    assert_eq!(w.identity_by_runtime_id(5000).unwrap().eid, b);
+    assert_eq!(w.identify_weapon(5000, Some("AIM_9"), true), b);
+}
+
+/// Reviews C3, D4: a mirror entity that takes a runtime id (DCS reused a pilot's `id_`) ends the
+/// identity there: the old crew Eid no longer selects the new holder.
+#[test]
+fn a_mirror_entity_taking_a_runtime_id_ends_its_identity() {
+    let mut w = World::new("s");
+    let pilot = w.identify_crew(600, None);
+    let missile = w.identify_weapon(601, Some("AIM_9"), false);
+    w.observe(&unit(
+        600,
+        "Hawk 1-1",
+        "F-16C_50",
+        "Hawk 1",
+        Coalition::Blue,
+        Category::Airplane,
+    ));
+    assert!(w.identity_by_runtime_id(600).is_none());
+    assert!(w.identity(pilot).unwrap().ended);
+    w.observe_participant(&unit(
+        601,
+        "Hawk 1-2",
+        "F-16C_50",
+        "Hawk 1",
+        Coalition::Blue,
+        Category::Airplane,
+    ));
+    assert!(w.identity(missile).unwrap().ended);
+}
+
+/// A non-finite model time is ignored (it drives identity lifetimes; `inf - inf` is NaN).
+#[test]
+fn a_non_finite_model_time_is_ignored() {
+    let mut w = World::new("s");
+    w.set_model_time(12.0);
+    w.set_model_time(f64::INFINITY);
+    w.set_model_time(f64::NAN);
+    assert_eq!(w.model_time(), 12.0);
+}
+
+/// The table is bounded: ended entries go first, then the ones named longest ago.
+#[test]
+fn the_identity_table_is_bounded() {
+    let mut w = World::new("s");
+    for rid in 0..u32::try_from(MAX_IDENTITIES).unwrap() {
+        w.set_model_time(f64::from(rid) * 0.001);
+        w.identify_crew(rid, None);
+    }
+    assert_eq!(w.identity_count(), MAX_IDENTITIES);
+    let first = w.identity_by_runtime_id(0).unwrap().eid;
+    w.identify_crew(1_000_000, None);
+    assert!(w.identity_count() <= MAX_IDENTITIES * 3 / 4 + 1);
+    assert!(w.identity(first).is_none(), "the oldest went first");
+    assert!(w.identity_by_runtime_id(1_000_000).is_some());
+}
+
+/// A replica adds no weapon and no nameless object it does not know from an event (the engine
+/// names them in its identity table only).
+#[test]
+fn a_replica_adds_no_weapon_or_crew_from_events() {
+    let mut r = World::replica("s");
+    let snap = |eid: u64, name: &str, category: Category| v1::EntitySnap {
+        eid,
+        name: name.into(),
+        category: category.as_i32(),
+        ..v1::EntitySnap::default()
+    };
+    let one = Eid::from_u64(1 << 32 | 1).unwrap().to_u64();
+    let three = Eid::from_u64(1 << 32 | 3).unwrap().to_u64();
+    let seven = Eid::from_u64(1 << 32 | 7).unwrap().to_u64();
+    let hit = v1::Event {
+        kind: Some(v1::event::Kind::Hit(v1::Hit {
+            initiator: Some(snap(one, "Viper 1-1", Category::Airplane)),
+            target: Some(snap(three, "", Category::Static)),
+            weapon: Some(v1::WeaponSnap {
+                eid: seven,
+                ..v1::WeaponSnap::default()
+            }),
+        })),
+        ..v1::Event::default()
+    };
+    r.apply_event(&hit);
+    let kill = v1::Event {
+        kind: Some(v1::event::Kind::Kill(v1::Kill {
+            initiator: Some(snap(one, "Viper 1-1", Category::Airplane)),
+            target: Some(snap(seven, "R-73", Category::Weapon)),
+            weapon: None,
+        })),
+        ..v1::Event::default()
+    };
+    r.apply_event(&kill);
+    let eids: Vec<u64> = r.entities().map(|e| e.eid.to_u64()).collect();
+    assert_eq!(eids, [one]);
+}

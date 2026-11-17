@@ -10,13 +10,13 @@
 
 ## 2. Шаблон миссии
 
-На странице выпуска [v0.1.0](https://github.com/lynxr/sortie-sdk/releases/tag/v0.1.0)
+На странице выпуска [v0.2.0](https://github.com/lynxr/sortie-sdk/releases/tag/v0.2.0)
 скачайте исходники SDK («Source code (zip)») и распакуйте. Скопируйте из них папку `template`
 туда, где будет жить ваша миссия, например в `C:\Missions\my_mission`. Или возьмите шаблон через
 Git:
 
 ```powershell
-git clone --branch v0.1.0 https://github.com/lynxr/sortie-sdk sortie-sdk
+git clone --branch v0.2.0 https://github.com/lynxr/sortie-sdk sortie-sdk
 Copy-Item -Recurse sortie-sdk\template C:\Missions\my_mission
 ```
 

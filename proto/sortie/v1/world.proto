@@ -5,6 +5,7 @@ package sortie.v1;
 
 import "google/protobuf/field_mask.proto";
 import "sortie/v1/common.proto";
+import "sortie/v1/resources.proto";
 
 service World {
   // Full snapshot of the current (or named) session's world.
@@ -63,9 +64,19 @@ message AirbaseSnap {
   Vec3 pos = 5;
   // Airbase:getID() (airdromeId for airfields).
   uint32 airbase_id = 6;
+  // 7..10 and 13..16 are kept for W2 (kind, type_name, callsign, country, ...).
+  // W1. Eid of the entity that carries the base: the FARP static, the ship unit.
+  // 0 = an airfield of the map (or a host the mirror has not linked yet).
+  uint64 host_eid = 11;
+  // W1. The host is destroyed or sunk. A dead base is not found by name any more.
+  bool dead = 12;
 }
 
 message WeaponSnap {
+  // W1: assigned for every client (0.1.0 always sent 0). One Eid from the first event
+  // that names the weapon (SHOT) to its last (HIT, KILL); usable as ObjSel.eid while the
+  // weapon exists. 0: the event named no weapon object (weapon_name only, or a unit in a
+  // collision HIT). Weapons are no world entities.
   uint64 eid = 1;
   string type_name = 2;
   string name = 3;
@@ -80,6 +91,9 @@ message WorldSnapshot {
   repeated GroupSnap groups = 4;
   repeated EntitySnap entities = 5;
   repeated AirbaseSnap airbases = 6;
+  // W1. The resource registry of the session (drawings, ... by kind, then name). After an
+  // attach or a resync this is the truth: what is listed exists, what is not is gone.
+  repeated ResourceSnap resources = 7;
 }
 
 // Changes between two revisions. Upserts carry the full current EntitySnap.
@@ -93,11 +107,24 @@ message WorldDelta {
   repeated GroupSnap group_upserts = 6;
   repeated uint64 group_removals = 7;
   repeated AirbaseSnap airbase_upserts = 8;
+  // W1. Registry changes: every put that changed a ResourceSnap field (also a ttl that
+  // started again), and the removals. A consumer applies resource_removals first, then
+  // resource_upserts.
+  repeated ResourceSnap resource_upserts = 9;
+  repeated ResourceKey resource_removals = 10;
+  // 11..26 are assigned to waves 2..6 (spec, section 8.2).
+  // W1. Airbase Eids removed from the world (a destroyed FARP: sent in the revision that
+  // removes its static). Airbase names can be used again by a later spawn.
+  repeated uint64 airbase_removals = 27;
 }
 
 message GetSnapshotRequest {
   // Empty = current session.
   string session = 1;
+  // W1. API revision the caller was built for; 0 = 0.1.0. It selects how the answer is
+  // projected (enum values newer than the revision are downgraded, spec 8.1); it never
+  // changes what the mirror holds.
+  uint32 api_rev = 2;
 }
 
 message WorldQuery {
@@ -115,4 +142,6 @@ message SubscribeWorldRequest {
   WorldQuery query = 3;
   // EntitySnap fields to fill; empty = all.
   google.protobuf.FieldMask field_mask = 4;
+  // W1. As GetSnapshotRequest.api_rev.
+  uint32 api_rev = 5;
 }

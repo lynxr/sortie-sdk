@@ -50,10 +50,13 @@ is never recorded. A panic is recorded the same way, with its location.
 | `sortie::session_ended` | the session ended before the command completed | normal at the end of a turn → return `Ok(())` |
 | `sortie::unavailable` | the engine cannot run it now | no mission session is running; or a keyed command was in flight when the DCS link dropped ("whether it ran is not known": check the world, then use a new key) |
 | `sortie::paused` | the simulation is paused | the command was sent with `.on_pause(v1::PausePolicy::Fail)` |
-| `sortie::rejected` | the engine refused the command | read the message |
-| `sortie::quarantined` | this command kind is disabled after it faulted the bridge | run `sortie doctor`, report it with `Logs/sortie-bridge.log` |
+| `sortie::rejected` | the engine refused the command | read the message; capability `dev_eval` = a raw table (`Task::raw`, `.raw(..)` of a static, a `ctx.dcs()` argument) holds Lua code or a file name at the path the message names (`Script` / `ScriptFile` actions, `condition`, `command`, `file` strings) → use the typed operation; raw tables carry data only; another capability (`e.capability()`) = the engine owner switched that operation off (`engine.toml [operations]`) |
+| `sortie::quarantined` | this command kind (for a universal call: this catalog function) is quarantined: DCS crashed while one ran, or it faulted the bridge 3 times | `e.capability()` names it (`"call:mission:land.getHeight"`: one catalog function); the engine owner releases it with `sortie caps --release <name>`; report it with `Logs/sortie-bridge.log` |
 | `sortie::bridge_fault` | the bridge caught a fault | report it with `Logs/sortie-bridge.log` |
 | `sortie::conflict` | a state write lost against another writer | `StateDoc::update` retries by itself; seen only after 8 conflicts in a row |
+| `sortie::result_not_kept` | a keyed `ctx.dcs()` call was answered from the key store, which kept no values for it (a result above 64 KiB); the call ran before and was not run again | read what you need with a call of its own; results up to 64 KiB, handles and objects included, come back on a repeat |
+| `sortie::revision` | the operation belongs to a newer API revision than the logic declares; nothing was sent | declare it: `#[sortie::mission(api_rev = 1)]` (revisions are written in the logic's source, default 0) |
+| `sortie::engine_too_old` | the engine's API revision (`ctx.engine_api_rev()`) is below the operation's; nothing was sent | update `sortied`, or keep to the operations of the engine's revision |
 
 ## Lookup and state errors
 

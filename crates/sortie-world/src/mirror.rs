@@ -156,10 +156,13 @@ impl World {
             self.put_entity(next);
             changed = true;
         }
-        if let Some(rid) = obs.runtime_id
-            && self.by_runtime.get(&rid) != Some(&eid)
-        {
-            self.by_runtime.insert(rid, eid);
+        if let Some(rid) = obs.runtime_id {
+            if self.by_runtime.get(&rid) != Some(&eid) {
+                self.by_runtime.insert(rid, eid);
+            }
+            // A mirror entity holds the runtime id: a weapon or crew identity there is another
+            // object (DCS reused the `id_`) and must not select this one (OBJ-T7).
+            self.end_runtime_id(rid);
         }
         if let Some(sweep) = &mut self.sweep {
             sweep.seen.insert(eid);
@@ -242,6 +245,22 @@ impl World {
         }
         e.dead = true;
         e.died_at = Some(t);
+        e.rev = rev;
+        self.commit(rev, true);
+        true
+    }
+
+    /// Forgets the player of an entity (`S_EVENT_PLAYER_LEAVE_UNIT`, spec 7.3: a mirror fact for
+    /// every client). Returns `false` if it had none or is unknown.
+    pub fn clear_player(&mut self, eid: Eid) -> bool {
+        let rev = self.change_rev();
+        let Some(e) = self.entities.get_mut(&eid) else {
+            return false;
+        };
+        if e.player.is_none() {
+            return false;
+        }
+        e.player = None;
         e.rev = rev;
         self.commit(rev, true);
         true
@@ -335,6 +354,8 @@ impl World {
         let rev = rev.min(self.rev);
         self.history.entities.retain(|(r, _)| *r > rev);
         self.history.groups.retain(|(r, _)| *r > rev);
+        self.history.airbases.retain(|(r, _)| *r > rev);
+        self.history.resources.retain(|(r, _)| *r > rev);
         self.history.floor = self.history.floor.max(rev);
     }
 
@@ -493,15 +514,19 @@ impl World {
             coalition: Coalition::from_i32(a.coalition),
             pos: a.pos.map(Into::into),
             airbase_id: (a.airbase_id != 0).then_some(a.airbase_id),
+            host: Eid::from_u64(a.host_eid),
+            dead: a.dead,
             rev,
         };
         let old = self.airbases.get(&eid);
         if let Some(o) = old {
-            // Keep what the update does not know.
+            // Keep what the update does not know; death is final.
             next.ident = next.ident.or_else(|| o.ident.clone());
             next.pos = next.pos.or(o.pos);
             next.airbase_id = next.airbase_id.or(o.airbase_id);
             next.coalition = next.coalition.or(o.coalition);
+            next.host = next.host.or(o.host);
+            next.dead |= o.dead;
         }
         let changed = old.is_none_or(|o| !o.same_state(&next));
         if changed {
@@ -509,6 +534,34 @@ impl World {
         }
         self.commit(rev, changed);
         eid
+    }
+
+    /// Marks an airbase dead (its host was destroyed or sunk). Returns `false` if unknown or
+    /// already dead. A dead base stays in the world until [`World::remove_airbase`].
+    pub fn mark_airbase_dead(&mut self, eid: Eid) -> bool {
+        let rev = self.change_rev();
+        let Some(a) = self.airbases.get_mut(&eid) else {
+            return false;
+        };
+        if a.dead {
+            return false;
+        }
+        a.dead = true;
+        a.rev = rev;
+        self.commit(rev, true);
+        true
+    }
+
+    /// Removes an airbase entirely (it appears in `airbase_removals` of the next delta; its
+    /// name may be used again by a later spawn).
+    pub fn remove_airbase(&mut self, eid: Eid) -> Option<Airbase> {
+        let rev = self.change_rev();
+        let a = self.take_airbase(eid)?;
+        if self.role == Role::Mirror {
+            self.history.airbases.push((rev, eid));
+        }
+        self.commit(rev, true);
+        Some(a)
     }
 
     /// Changes an airbase's owner (BaseCaptured). Returns `false` if unknown or unchanged.

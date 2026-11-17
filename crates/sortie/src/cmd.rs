@@ -19,6 +19,13 @@ use crate::runtime::{Session, Stop};
 use crate::task::Task;
 use crate::{Error, Failure, Result};
 
+mod objects;
+pub use objects::{
+    DestroyObject, Heliport, JunkRemoved, OnConflict, RemoveJunk, SpawnStatic, SpawnedStatic,
+};
+mod batch;
+pub use batch::{BatchItem, BatchOutput, BatchSlot, MAX_BATCH_ITEMS, SpawnBatch, SpawnedBatch};
+
 /// A command body: how to build the proto body and decode the result.
 pub trait CommandBody: Sized + 'static {
     type Output;
@@ -27,6 +34,15 @@ pub trait CommandBody: Sized + 'static {
     /// Dev mode (`sortie dev`, FakeDcs) refuses this command without `.key()`: hot reload
     /// re-runs the mission, and only a key stops it from spawning or destroying twice.
     const KEY_REQUIRED_IN_DEV: bool = false;
+    /// The API revision that introduced this command (0 = 0.1.0).
+    const SINCE_API_REV: u32 = 0;
+    /// The API revision this command needs as built: [`CommandBody::SINCE_API_REV`], or more
+    /// when a builder method that a later revision added was used. It is sent as
+    /// `Command.min_api_rev`; above the logic's declared revision the command fails with
+    /// `Error::Revision`, above the engine's with `Error::EngineTooOld`, and nothing is sent.
+    fn since_api_rev(&self) -> u32 {
+        Self::SINCE_API_REV
+    }
     fn to_proto(&self, session: &Session) -> Result<Body>;
     fn decode(self, session: &Rc<Session>, result: v1::CommandResult) -> Result<Self::Output>;
     /// What the command is aimed at, for error messages (e.g. `group "Red CAP 1"`).
@@ -147,6 +163,7 @@ impl<B: CommandBody> Cmd<B> {
             message: String::new(),
             lua_traceback: None,
             origin: Some(self.origin_string()),
+            capability: String::new(),
         }
     }
 
@@ -162,6 +179,13 @@ impl<B: CommandBody> Cmd<B> {
                 ..self.failure()
             })));
         }
+        let since = self.body.since_api_rev();
+        check_since(
+            self.session.declared.api_rev,
+            self.session.engine_api_rev,
+            since,
+            self.failure(),
+        )?;
         let body = self
             .body
             .to_proto(&self.session)
@@ -177,10 +201,28 @@ impl<B: CommandBody> Cmd<B> {
             after: self.after.clone(),
             origin: Some(self.origin()),
             session: String::new(),
+            min_api_rev: since,
+            // 0 = the revision this logic declared at Attach.
+            api_rev: 0,
             body: Some(body),
         };
+        let sent = std::time::Instant::now();
         let result = match self.session.submit(cmd).await {
-            Ok(result) => result,
+            Ok(result) => {
+                self.session
+                    .timings
+                    .borrow_mut()
+                    .push(crate::timing::CommandTiming {
+                        op: B::OP,
+                        target: self.body.target(),
+                        command_id: self.id.clone(),
+                        ok: !matches!(result.outcome, Some(v1::command_result::Outcome::Err(_))),
+                        cost_us: result.cost_us,
+                        round_trip: sent.elapsed(),
+                        model_time: result.model_time,
+                    });
+                result
+            }
             Err(stop) => {
                 if matches!(stop, Stop::Ended(_))
                     && let Some(out) = self.body.on_session_ended()
@@ -206,9 +248,41 @@ impl<B: CommandBody> Cmd<B> {
                     message: f.message,
                     ..failure
                 })),
+                Error::ResultNotKept(f) => Error::ResultNotKept(Box::new(Failure {
+                    message: f.message,
+                    ..failure
+                })),
                 other => other,
             })
     }
+}
+
+/// The per-builder "since" check: an operation of API revision `since` needs a logic that
+/// declares at least that revision (`declared`) and an engine that has it (`engine`, from
+/// `Start.api_rev`; a 0.1.0 engine sends none, which reads as 0). Nothing is sent when it
+/// fails.
+pub(crate) fn check_since(declared: u32, engine: u32, since: u32, failure: Failure) -> Result<()> {
+    if since > declared {
+        return Err(Error::Revision(Box::new(Failure {
+            message: format!(
+                "`{}` belongs to API revision {since} and this logic declares {declared}; \
+                 declare it with `#[sortie::mission(api_rev = {since})]`",
+                failure.op
+            ),
+            ..failure
+        })));
+    }
+    if since > engine {
+        return Err(Error::EngineTooOld(Box::new(Failure {
+            message: format!(
+                "`{}` needs an engine with API revision {since}; the engine has {engine} \
+                 (update sortied)",
+                failure.op
+            ),
+            ..failure
+        })));
+    }
+    Ok(())
 }
 
 /// Puts the call site on lookup errors raised while building a command.
@@ -483,18 +557,26 @@ impl<K: Kind> CommandBody for SpawnGroup<K> {
         }))
     }
     fn decode(self, s: &Rc<Session>, r: v1::CommandResult) -> Result<Group<K>> {
-        let eid = Eid::from_u64(r.eid).ok_or_else(|| {
-            Error::Invalid(Box::new(Failure::new(
-                Self::OP,
-                "the engine returned no group eid",
-            )))
-        })?;
-        let name = match &r.outcome {
-            Some(v1::command_result::Outcome::Ok(v)) => {
-                v.get("name").and_then(|n| n.as_str()).map(str::to_owned)
-            }
-            _ => None,
-        };
+        // The typed reply (an engine of API revision 1 or later) names the group; `eid` and
+        // the raw `{name}` are what a 0.1.0 engine sends.
+        let typed = r.reply.as_ref().and_then(|x| x.groups.first());
+        let eid = Eid::from_u64(r.eid)
+            .or_else(|| typed.and_then(|g| Eid::from_u64(g.eid)))
+            .ok_or_else(|| {
+                Error::Invalid(Box::new(Failure::new(
+                    Self::OP,
+                    "the engine returned no group eid",
+                )))
+            })?;
+        let name = typed
+            .map(|g| g.name.clone())
+            .filter(|n| !n.is_empty())
+            .or_else(|| match &r.outcome {
+                Some(v1::command_result::Outcome::Ok(v)) => {
+                    v.get("name").and_then(|n| n.as_str()).map(str::to_owned)
+                }
+                _ => None,
+            });
         Ok(Group::new(
             s.clone(),
             eid,
@@ -533,18 +615,33 @@ impl CommandBody for SetTask {
 pub struct Destroy {
     pub(crate) group: v1::GroupSel,
     pub(crate) group_name: String,
+    pub(crate) allow_player: bool,
+}
+
+impl Cmd<Destroy> {
+    /// Destroy the group even when a player occupies one of its units (API revision 1).
+    /// Without it, a logic that declares `api_rev >= 1` gets `Error::Rejected` for such a
+    /// group: destroying a player's aircraft leaves ghosts in multiplayer.
+    pub fn allow_player(mut self) -> Self {
+        self.body.allow_player = true;
+        self
+    }
 }
 
 impl CommandBody for Destroy {
     type Output = ();
     const OP: &'static str = "destroy";
     const KEY_REQUIRED_IN_DEV: bool = true;
+    fn since_api_rev(&self) -> u32 {
+        u32::from(self.allow_player)
+    }
     fn target(&self) -> String {
         format!("group {:?}", self.group_name)
     }
     fn to_proto(&self, _: &Session) -> Result<Body> {
         Ok(Body::Destroy(v1::Destroy {
             target: Some(v1::destroy::Target::Group(self.group.clone())),
+            allow_player: self.allow_player,
         }))
     }
     fn decode(self, s: &Rc<Session>, r: v1::CommandResult) -> Result<()> {
@@ -639,5 +736,35 @@ impl CommandBody for EndSession {
     }
     fn decode(self, s: &Rc<Session>, r: v1::CommandResult) -> Result<()> {
         unit(s, r)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn failure() -> Failure {
+        Failure {
+            op: "spawn_static",
+            command_id: "abcd-p-1".into(),
+            ..Failure::default()
+        }
+    }
+
+    #[test]
+    fn the_since_check_names_the_revision_that_is_missing() {
+        // 0.1.0 operations run everywhere, against a 0.1.0 engine too.
+        assert!(check_since(0, 0, 0, failure()).is_ok());
+        assert!(check_since(1, 1, 1, failure()).is_ok());
+        assert!(check_since(1, 2, 1, failure()).is_ok());
+        // The logic did not declare the revision: Revision, whatever the engine has.
+        let e = check_since(0, 1, 1, failure()).unwrap_err();
+        assert_eq!(e.code(), "sortie::revision");
+        assert!(e.to_string().contains("api_rev = 1"), "{e}");
+        // The engine is older (a 0.1.0 engine reports 0): EngineTooOld.
+        let e = check_since(1, 0, 1, failure()).unwrap_err();
+        assert_eq!(e.code(), "sortie::engine_too_old");
+        assert!(e.to_string().contains("the engine has 0"), "{e}");
+        assert_eq!(e.failure().map(|f| f.command_id.as_str()), Some("abcd-p-1"));
     }
 }

@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Объекты: статики, уничтожение, мусор | Sortie SDK</title>
+<meta name="description" content="Операции ревизии API 1 работают с объектами мира, у которых нет шаблона в сценарии: ctx.spawn_static ставит статический объект, груз или FARP, ctx.destroy убирает любой юнит,…">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/docs/objects.html">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-doc has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.2.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Страницы документации">
+<nav class="toc">
+<a class="toc-home" href="index.html">Документация</a>
+<ul>
+<li><a href="index.html">Обзор</a></li>
+<li><a href="install-runtime.html">Установка рантайма</a></li>
+<li><a href="quickstart.html">Быстрый старт</a></li>
+<li><a href="dependency.html">Подключение SDK</a></li>
+<li><a href="sdk.html">Логика на Rust</a><ul>
+<li><a href="objects.html" aria-current="page">Объекты: статики, уничтожение, мусор</a></li>
+<li><a href="map.html">Рисование на карте</a></li>
+<li><a href="menus.html">Деревья меню F10</a></li>
+<li><a href="dcs.html">Вызовы DCS</a></li>
+<li><a href="dcs-catalog.html">Справочник каталога DCS API</a></li>
+<li><a href="capabilities.html">Возможности движка</a></li>
+</ul>
+</li>
+<li><a href="generator.html">Сценарий на Python</a></li>
+<li><a href="testing.html">Тестирование</a></li>
+<li><a href="operations.html">Эксплуатация</a></li>
+<li><a href="troubleshooting.html">Диагностика</a></li>
+<li><a href="faq.html">Вопросы и ограничения</a></li>
+<li><a href="changelog.html">Что нового</a></li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="объекты-статики-уничтожение-мусор">Объекты: статики, уничтожение, мусор<a class="anchor" href="#объекты-статики-уничтожение-мусор" aria-label="Ссылка на этот раздел">#</a></h1>
+<p>Операции ревизии API 1 работают с объектами мира, у которых нет шаблона в сценарии:
+<code>ctx.spawn_static</code> ставит статический объект, груз или FARP, <code>ctx.destroy</code> убирает любой юнит,
+статик, груз, оружие в полёте или катапультировавшегося пилота, <code>ctx.remove_junk</code> чистит обломки
+и воронки, <code>ctx.spawn_batch</code> ставит много групп и статиков одной командой. Это типизированные
+операции, а не
+<a href="dcs.html">вызовы DCS</a>: движок сам следит за именем, скоростью спавна и сразу сообщает миру, что
+изменилось.</p>
+<h2 id="статики">Статики<a class="anchor" href="#статики" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">#[sortie::mission(api_rev = 1)] // статики, destroy и remove_junk — API ревизии 1
+pub async fn statics(ctx: Ctx&lt;MyMission&gt;, _start: Start) -&gt; sortie::Result&lt;()&gt; {
+    let p = zones::TARGET.center(); // MapPoint
+    // Категорию и модель DCS движок берёт из своей таблицы типов.
+    let depot = ctx
+        .spawn_static(&quot;.Ammunition depot&quot;, &quot;USA&quot;)
+        .named(&quot;Depot North&quot;)
+        .at(p, 0.0)
+        .key(&quot;depot-north&quot;)
+        .await?;
+    // Статик уже в реплике мира; DCS не шлёт BIRTH для статиков, событие Birth делает движок.
+    let alive = ctx.world().entity(depot.eid).is_some_and(|e| e.is_alive());
+    // Рабочий FARP — аэродром с позывным и частотой.
+    let farp = ctx
+        .spawn_static(&quot;FARP&quot;, &quot;USA&quot;)
+        .named(&quot;FARP North&quot;)
+        .at(p.toward(90.0_f64.to_radians(), m(500)), 0.0)
+        .heliport(
+            Heliport::new()
+                .callsign(&quot;London&quot;)
+                .frequency_hz(127_500_000.0),
+        )
+        .key(&quot;farp-north&quot;)
+        .await?;
+    // Груз, который может поднять вертолёт; имя по умолчанию — `ammo_cargo#&lt;сессия&gt;-&lt;n&gt;`.
+    let crate_ = ctx
+        .spawn_static(&quot;ammo_cargo&quot;, &quot;USA&quot;)
+        .cargo(800.0, true)
+        .at(p.toward(0.0, m(50)), 0.0)
+        .key(&quot;crate-1&quot;)
+        .await?;
+    ctx.report().set(&quot;farp_airbase&quot;, farp.airbase.is_some());
+    ctx.report().set(&quot;crate&quot;, crate_.name);
+    let _ = alive;
+    ctx.end_session(Outcome::Draw).await
+}
+</code></pre></div>
+<ul>
+<li>Тип — имя типа DCS (<code>"Cafe"</code>, <code>".Command Center"</code>, <code>"ammo_cargo"</code>, <code>"FARP"</code>, <code>"Mi-8MT"</code>),
+страна — ключ DCS (<code>"USA"</code>, <code>"RUSSIA"</code>); коалиция следует за страной.</li>
+<li>У статика DCS должна быть верная пара «категория — модель», иначе его не видно. Движок берёт
+её по умолчанию из своей таблицы (типы pydcs 1.0.0: укрепления, грузы, склады, FARP,
+самолёты, вертолёты, корабли и техника как статики); заданные <code>.category(..)</code> и <code>.shape(..)</code>
+важнее таблицы. Знает ли DCS тип, решает сам DCS (<code>getDescByName</code> на запущенной сборке):
+неизвестный тип — <code>Error::Invalid</code>. Для типа, которого в таблице нет (мод, новая сборка
+DCS), задайте и <code>.category(..)</code>, и <code>.shape(..)</code>; без одного из них — <code>Error::Invalid</code> с
+именем недостающего поля (для самолётов, вертолётов, кораблей и техники модель не нужна).</li>
+<li><code>.on_unit(корабль, вперёд_м, вправо_м, угол)</code> ставит статик на палубу корабля, он движется вместе
+с ним. <code>.dead()</code> — обломки, <code>.hidden()</code> — не виден на карте F10, <code>.score(n)</code> — очки за
+уничтожение, <code>.livery(..)</code>, <code>.raw(таблица)</code> — дополнительные ключи таблицы DCS (ключ, который
+задаёт метод билдера, отклоняется; код Lua, имена файлов и NaN тоже —
+<a href="operations.html#%D0%BF%D1%80%D0%BE%D0%B2%D0%B5%D1%80%D0%BA%D0%B0-%D1%81%D1%8B%D1%80%D1%8B%D1%85-%D1%82%D0%B0%D0%B1%D0%BB%D0%B8%D1%86">проверка сырых таблиц</a>).</li>
+<li>FARP, площадка и невидимый FARP (<code>"FARP"</code>, <code>"SINGLE_HELIPAD"</code>, <code>"Invisible FARP"</code>) ставятся
+только с <code>.heliport(..)</code>: так DCS делает из них аэродром. <code>SpawnedStatic::airbase</code> — его Eid,
+в мире у него <code>host</code> — статик. Позывной по умолчанию — первый ещё не выданный в этой сессии,
+частота по умолчанию 127,5 МГц AM.</li>
+<li>Статики идут через тот же ограничитель скорости спавна, что и группы (по умолчанию 2 в
+секунду), полосой BULK. В <code>sortie dev</code> спавн без <code>.key(..)</code> отклоняется.</li>
+</ul>
+<h2 id="имя--личность">Имя — личность<a class="anchor" href="#имя--личность" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Имя статика уникально среди юнитов и статиков: DCS молча уничтожает живой объект с тем же именем.
+Поэтому движок по умолчанию отвечает <code>Error::NameConflict</code>, а <code>.on_conflict(..)</code> выбирает другое:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">// Имя — личность статика. Повтор после перезапуска логики:
+let depot = ctx
+    .spawn_static(&quot;.Ammunition depot&quot;, &quot;USA&quot;)
+    .named(&quot;Depot North&quot;)
+    .at(p, 0.0)
+    .on_conflict(OnConflict::Keep) // живой статик того же типа — он и есть результат
+    .key(&quot;depot-north-again&quot;)
+    .await?;
+if depot.kept {
+    // ничего не создано
+}
+// Заменить живой статик новым (игрок в статике не сидит):
+ctx.spawn_static(&quot;.Command Center&quot;, &quot;USA&quot;)
+    .named(&quot;Depot North&quot;)
+    .at(p, 0.0)
+    .on_conflict(OnConflict::Replace) // старый получает UnitGone с причиной Replaced
+    .key(&quot;depot-north-hq&quot;)
+    .await?;
+</code></pre></div>
+<p><code>Replace</code> сначала проверяет всё, потом уничтожает старый статик и ставит новый на следующем кадре
+DCS. Юнит с этим именем не заменяется: <code>Error::NameConflict</code>. Перед постановкой слой Lua ещё
+раз смотрит на имя: если DCS не убрал старый статик (так, по сообщениям, бывает с FARP; не
+измерено), команда отвечает <code>Error::Lua</code> («DCS did not remove …»), новый статик не ставится, а
+старый остаётся в мире живым.</p>
+<p><code>Keep</code> для живого FARP возвращает и его аэродром в <code>SpawnedStatic::airbase</code>, как при первой
+постановке: после перезапуска логики повтор спавна снова даёт Eid аэродрома.</p>
+<h2 id="уничтожение-и-мусор">Уничтожение и мусор<a class="anchor" href="#уничтожение-и-мусор" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">ctx.destroy(Obj::static_object(&quot;Depot North&quot;))
+    .key(&quot;depot-north-gone&quot;)
+    .await?;
+// Юнит с игроком не уничтожается без .allow_player(): у клиентов остаются «призраки».
+match ctx.destroy(Obj::unit(&quot;Viper 1-1&quot;)).key(&quot;viper-gone&quot;).await {
+    Ok(()) | Err(Error::Gone(_)) =&gt; {}
+    Err(Error::Rejected(_)) =&gt; ctx.report().set(&quot;viper&quot;, &quot;occupied by a player&quot;),
+    Err(e) =&gt; return Err(e),
+}
+// Обломки, воронки и мусор в объёмах DCS; результат — что насчитала DCS.
+let center = zones::TARGET.center();
+let junk = ctx
+    .remove_junk([Volume::sphere_on_ground(center, 2_000.0)])
+    .await?;
+ctx.report().set(&quot;junk_removed&quot;, junk.total);
+</code></pre></div>
+<ul>
+<li><code>ctx.destroy</code> принимает всё, что превращается в <code>Obj</code>: Eid, сущность мира, имя юнита или
+статика. DCS не шлёт события; мир сразу получает <code>UnitGone</code> с причиной <code>Despawned</code>, а FARP
+вместе со статиком теряет свой аэродром.</li>
+<li>Уничтожение FARP не обещано: по сообщениям, DCS не убирает FARP вызовом <code>destroy()</code> (на
+живом DCS это ещё не измерено). Поэтому после <code>destroy()</code> статика или груза слой Lua на
+следующем кадре DCS проверяет, исчез ли объект. Если DCS его оставил, <code>ctx.destroy</code> отвечает
+<code>Error::Lua</code> («DCS did not remove …»): <code>UnitGone</code> не приходит, статик и аэродром FARP в мире
+остаются живыми. Ответ на уничтожение статика из-за этого приходит на кадр позже; юниты,
+группы и оружие отвечают как раньше.</li>
+<li>Объекты карты (здания, мосты) не уничтожаются: <code>Error::Unavailable</code> (в DCS это работает
+неправильно).</li>
+<li>Оружие в полёте и катапультировавшиеся пилоты уничтожаются по Eid из события:
+<code>Obj::weapon(&amp;w)</code> для <code>WeaponSnap</code> из <code>Shot</code> или <code>Hit</code>, <code>Obj::snap(&amp;s)</code> для снимка пилота
+(оба — <code>None</code> для Eid 0; страница <a href="sdk.html">Логика на Rust</a>, «Оружие и катапультировавшиеся
+пилоты»). Они не сущности мира: <code>UnitGone</code> не приходит, повтор — <code>Error::Gone</code>. Что DCS
+делает с ракетой и пилотом после <code>destroy</code>, ещё не измерено (живые проверки EVT-L10, EVT-L8).</li>
+<li>С ревизией 1 <code>group.destroy()</code> тоже не трогает группу с игроком; <code>.allow_player()</code> снимает
+защиту.</li>
+<li><code>ctx.remove_junk</code> берёт от 1 до 16 объёмов: шар, бокс, отрезок, пирамида и круг на карте (или
+круглая зона сценария). Многоугольник, зона-четырёхугольник и область вокруг объекта DCS
+точно не выразит — <code>Error::Invalid</code>, движок не расширяет объём молча. Повтор безопасен: второй
+раз удалять нечего. Что именно DCS считает мусором, не документировано.</li>
+</ul>
+<h2 id="пакет-спавнов">Пакет спавнов<a class="anchor" href="#пакет-спавнов" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Постоянный сервер начинает с восстановления кампании: сотни групп и статиков. <code>ctx.spawn_batch()</code>
+собирает их в одну команду с одним ключом: элементы строятся как обычно (<code>ctx.spawn_group(..)</code>,
+<code>ctx.spawn_static(..)</code>), но не ожидаются, а добавляются в пакет.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">// Восстановление кампании: одна команда, один ключ; движок проверяет весь пакет сразу.
+let mut batch = ctx.spawn_batch();
+let cap = batch.add_group(
+    ctx.spawn_group(templates::RED_CAP.named(&quot;Red CAP 1&quot;))
+        .from_airbase(airbases::NALCHIK, StartType::Runway),
+);
+let farp = batch.add_static(
+    ctx.spawn_static(&quot;FARP&quot;, &quot;USA&quot;)
+        .named(&quot;FARP North&quot;)
+        .at(zones::TARGET.center(), 0.0)
+        .heliport(Heliport::new()),
+);
+for (name, p) in saved {
+    batch = batch.static_object(
+        ctx.spawn_static(&quot;.Ammunition depot&quot;, &quot;USA&quot;)
+            .named(name.as_str())
+            .at(*p, 0.0)
+            .on_conflict(OnConflict::Keep),
+    );
+}
+// Ограничитель спавна раздаёт элементы по времени: ответ приходит после последнего.
+let out = batch.key(&quot;restore-turn-7&quot;).await?;
+let cap: Group&lt;Air&gt; = out.get(&amp;cap)?; // типизированный результат элемента
+let farp: SpawnedStatic = out.get(&amp;farp)?;
+for item in out.items.iter().filter(|i| !i.is_ok()) {
+    // Ничего не откатывается: у каждого элемента свой результат.
+    ctx.report().set(
+        item.name.as_str(),
+        item.error().map_or(&quot;skipped&quot;, |e| e.code()),
+    );
+}
+</code></pre></div>
+<ul>
+<li>Пакет проверяется целиком до отправки: каждый элемент — проверками своей команды (шаблон,
+имя, таблица типов статиков), имена внутри пакета не повторяются. Один плохой элемент — ошибка
+всей команды с номером элемента, в DCS не уходит ничего. От 1 до 512 элементов. Имя, которое
+уже занято в мире (живая группа, статик) или спавном в полёте, — ошибка только этого элемента
+(<code>NAME_CONFLICT</code>), остальные ставятся; с <code>.stop_on_error()</code> элементы после него пропускаются.
+Ограничитель спавна пакет делит по очереди с другими спавнами: спавн другой логики не ждёт
+конца пакета.</li>
+<li>Ограничитель спавна (по умолчанию 2 группы и 24 юнита в секунду; статик считается одной
+группой и одним юнитом) раздаёт элементы по кадрам: ответ приходит, когда ответил последний,
+а уже поставленные элементы тем временем в мире и видны игрокам. Каждый элемент сразу
+применяется к миру как своя команда: статик получает <code>Birth</code>, задачу новой группе движок
+придерживает, как после <code>spawn_group</code>. Срок по умолчанию — срок полосы BULK плюс время,
+которое нужно ограничителю.</li>
+<li>Ничего не откатывается. Команда успешна, если пакет запустился, что бы ни сделали элементы:
+<code>SpawnedBatch::items</code> — результат каждого по порядку, <code>out.get(&amp;slot)</code> — типизированный
+(<code>Group&lt;K&gt;</code> или <code>SpawnedStatic</code>) либо ошибка, которую вернула бы команда элемента.</li>
+<li><code>.stop_on_error()</code>: элементы идут по одному, первая ошибка останавливает пакет, остальные
+помечены <code>skipped</code> (<code>Error::Rejected</code>) и в DCS не уходят. Срок пакета тоже останавливает его
+(<code>skipped</code> с <code>Error::Timeout</code>).</li>
+<li>Один ключ на пакет: повтор с тем же ключом и тем же телом — сохранённый результат, ничего не
+ставится второй раз. Свои <code>.key</code>, <code>.timeout</code>, <code>.after</code> у элементов не действуют. В
+<code>sortie dev</code> пакет без <code>.key(..)</code> отклоняется.</li>
+<li>Если связь с миссией оборвалась посреди пакета, команда — <code>Error::Unavailable</code>. Повтор с тем же
+ключом до полного снимка мира после переподключения отвечает <code>Error::Unavailable</code> и называет
+элементы, о которых неизвестно, запустились ли они. После снимка повтор продолжает пакет:
+найденные по имени элементы отмечены <code>settled</code> (их Eid — найденный объект), остальные
+ставятся, ни один не ставится дважды.</li>
+<li>Возможность — <code>caps::SPAWN_BATCH</code> (<a href="capabilities.html">Возможности движка</a>). Если владелец
+движка выключил <code>spawn_static</code> или <code>spawn_group</code>, пакет с таким элементом отклоняется
+(<code>Error::Rejected</code>, <code>Error::capability()</code> называет операцию элемента).</li>
+<li>Живая проверка OBJ-T31 (300 групп и 100 статиков, время кадра сервера, обрыв связи посреди
+пакета) ещё не проведена; <code>kept</code> у статика из пакета всегда <code>false</code>.</li>
+</ul>
+</article>
+<nav class="pager" aria-label="Соседние страницы">
+<a class="pager-prev" rel="prev" href="sdk.html"><span class="pager-dir">Назад</span><span class="pager-title">Логика на Rust</span></a>
+<a class="pager-next" rel="next" href="map.html"><span class="pager-dir">Дальше</span><span class="pager-title">Рисование на карте</span></a>
+</nav>
+<p class="page-source"><a href="objects.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.2.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

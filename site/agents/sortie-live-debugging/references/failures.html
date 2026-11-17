@@ -24,7 +24,7 @@
 <a class="skip" href="#content">Перейти к содержанию</a>
 <header class="topbar">
 <div class="topbar-inner">
-<a class="brand" href="../../../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<a class="brand" href="../../../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.2.0</span></a>
 <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
 <nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="../../../docs/quickstart.html">Быстрый старт</a><a href="../../../docs/index.html">Документация</a><a href="../../../agents.html" aria-current="true">Для агентов</a><a href="../../../downloads.html">Загрузки</a><a href="../../../changelog.html">Изменения</a></nav>
 <div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
@@ -100,6 +100,7 @@
 <tr><td><code>sortie status</code> shows the session, but <code>wait_until</code> on units never fires and <code>sortie events</code> stays silent</td><td>the world stays empty: an older runtime reads DCS 2.9.31's string unit ids as numbers</td><td>install the current runtime, restart DCS</td></tr>
 <tr><td><code>sortie::invalid</code>: spawn or destroy without a key</td><td><code>sortied --dev</code> or the logic's <code>--dev</code></td><td><code>.key("step-name")</code></td></tr>
 <tr><td>a spawn twice after a logic restart</td><td>the spawn had no key, or its key changes between runs</td><td>a stable key per step</td></tr>
+<tr><td><code>ctx.destroy</code> of a static, or <code>spawn_static</code> with <code>Replace</code>, → <code>sortie::lua_error</code>: <code>DCS did not remove the static `X`: it still exists 10 pumps after destroy()</code></td><td>DCS kept the object (reported for FARPs; not measured); the world keeps the static and its airbase alive</td><td>do not plan on removing a FARP; give the new static another name, or leave the old one</td></tr>
 <tr><td><code>sortie::timeout</code> on spawns, note <code>N command(s) waiting: spawn rate limit (2 groups / 24 units per second)</code></td><td>too many spawns at once</td><td>spawn in a loop, cap the count, raise <code>.timeout(..)</code></td></tr>
 <tr><td>commands hang, <code>sortie status</code> says <code>PAUSED</code></td><td>DCS is paused: mission commands wait</td><td>unpause, or <code>.on_pause(v1::PausePolicy::Fail)</code></td></tr>
 <tr><td><code>ctx.group(groups::X)</code> → <code>sortie::not_in_world</code></td><td>late activation or the group is dead</td><td>spawn it from a template instead; check <code>alive_count()</code></td></tr>
@@ -129,7 +130,7 @@
 </div>
 <footer class="footer">
 <div class="footer-inner">
-<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p>Sortie SDK 0.2.0. Лицензия SDK: MIT OR Apache-2.0.</p>
 <p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
 </div>
 </footer>

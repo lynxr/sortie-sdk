@@ -20,7 +20,7 @@ use crate::cmd::{self, Cmd};
 use crate::events::Events;
 use crate::group::{AnyGroup, Group};
 use crate::menu::{CoalitionWide, MenuBuilder};
-use crate::runtime::{Session, SessionEnd};
+use crate::runtime::{Revisions, Session, SessionEnd};
 use crate::state::StateDoc;
 use crate::{Error, Result};
 
@@ -270,6 +270,13 @@ impl<M: Scenario> Ctx<M> {
         self.session.model_time()
     }
 
+    /// What the commands of this session cost since the last take, oldest first: per command
+    /// the time DCS spent on it (`cost_us`) and the round trip as this logic saw it. At most
+    /// [`crate::timing::KEPT_TIMINGS`] are kept; `dropped` counts the older ones that went.
+    pub fn take_command_timings(&self) -> crate::timing::CommandTimings {
+        self.session.timings.borrow_mut().take()
+    }
+
     /// The local world replica. Do not hold the borrow across `.await` (the runtime could not
     /// apply the next tick; clippy's `await_holding_refcell_ref` catches it).
     #[must_use]
@@ -287,6 +294,49 @@ impl<M: Scenario> Ctx<M> {
     #[must_use]
     pub fn is_session_ended(&self) -> bool {
         self.session.is_ended()
+    }
+
+    /// The revisions this logic declares (`#[sortie::mission(api_rev = .., event_rev = ..)]`).
+    #[must_use]
+    pub fn declared_revisions(&self) -> Revisions {
+        self.session.declared
+    }
+
+    /// The engine's API revision (`Start.api_rev`; 0 for a 0.1.0 engine). An operation
+    /// introduced by a higher revision fails with `Error::EngineTooOld` before it is sent.
+    #[must_use]
+    pub fn engine_api_rev(&self) -> u32 {
+        self.session.engine_api_rev
+    }
+
+    /// The event revision in effect: the lower of the declared one and the engine's.
+    #[must_use]
+    pub fn event_rev(&self) -> u32 {
+        self.session.event_rev
+    }
+
+    /// The name this logic writes under (its API token's name, or the logic name); empty
+    /// from a 0.1.0 engine.
+    #[must_use]
+    pub fn writer(&self) -> &str {
+        &self.session.writer
+    }
+
+    /// What the engine, its Lua layer and the running DCS build can do now (a copy): the
+    /// table of `Start`, updated by every `CapabilityChanged` the engine sent since (sent to a
+    /// logic that declares `event_rev = 1`). Empty from a 0.1.0 engine. Names are the
+    /// constants of [`crate::caps`]: `ctx.capabilities().is_available(caps::REMOVE_JUNK)`.
+    #[must_use]
+    pub fn capabilities(&self) -> crate::caps::Capabilities {
+        self.session.capabilities.borrow().clone()
+    }
+
+    /// The current entry of one capability (`caps::DRAW`, `"call:mission:land.getHeight"`),
+    /// if the engine lists it: a copy of that entry alone, cheaper than
+    /// [`Ctx::capabilities`] when a logic asks about one name.
+    #[must_use]
+    pub fn capability(&self, name: &str) -> Option<v1::Capability> {
+        self.session.capabilities.borrow().get(name).cloned()
     }
 
     // ----- reading -----------------------------------------------------------------------------
@@ -526,6 +576,28 @@ impl<M: Scenario> Ctx<M> {
         )
     }
 
+    /// DCS functions of the DCS API catalog with typed wrappers (`ctx.dcs().land().height(p)`),
+    /// for what has no typed operation yet. See [`crate::dcs`].
+    #[must_use]
+    pub fn dcs(&self) -> crate::dcs::Dcs {
+        crate::dcs::Dcs::new(self.session.clone())
+    }
+
+    /// Drawings on the F10 map, kept by name (`ctx.map().circle("zones/a", c, 5_000.0)`).
+    /// See [`crate::map`].
+    #[must_use]
+    pub fn map(&self) -> crate::map::Map {
+        crate::map::Map::new(self.session.clone())
+    }
+
+    /// F10 radio menu trees, kept by name, for everyone, a coalition or one group
+    /// (`ctx.menus().tree("jtac").to(&flight).command("smoke", "Smoke")`). See
+    /// [`crate::menu_tree`].
+    #[must_use]
+    pub fn menus(&self) -> crate::menu_tree::Menus {
+        crate::menu_tree::Menus::new(self.session.clone())
+    }
+
     /// A radio (F10) menu for `coalition`; `.per_group()` installs it per group.
     #[must_use]
     pub fn menu(&self, coalition: Coalition) -> MenuBuilder<M, CoalitionWide> {
@@ -562,6 +634,61 @@ impl<M: Scenario> Ctx<M> {
         Cmd::new(
             self.session.clone(),
             cmd::SpawnGroup::new(t.template.ident(), t.name.map(Into::into)),
+            Location::caller(),
+        )
+    }
+
+    /// Spawns a static object, cargo or FARP of DCS type `type_name` for `country` (a DCS
+    /// country key such as `"USA"`): place it with `.at(..)` or `.on_unit(..)`, then `.await`
+    /// (API revision 1; see [`cmd::SpawnStatic`]).
+    #[track_caller]
+    pub fn spawn_static(
+        &self,
+        type_name: impl Into<String>,
+        country: impl Into<String>,
+    ) -> Cmd<cmd::SpawnStatic> {
+        Cmd::new(
+            self.session.clone(),
+            cmd::SpawnStatic::new(type_name.into(), country.into()),
+            Location::caller(),
+        )
+    }
+
+    /// Many group and static spawns in one command with one key, the restore of a persistent
+    /// campaign (API revision 1; see [`cmd::SpawnBatch`]): add items built with
+    /// `ctx.spawn_group(..)` / `ctx.spawn_static(..)` (not awaited), then `.key(..).await`.
+    /// The spawn gate spreads the items over time; each item has its own result.
+    #[track_caller]
+    pub fn spawn_batch(&self) -> Cmd<cmd::SpawnBatch> {
+        Cmd::new(
+            self.session.clone(),
+            cmd::SpawnBatch::new(),
+            Location::caller(),
+        )
+    }
+
+    /// Destroys a unit, static or cargo (API revision 1). DCS raises no event; the world
+    /// reports `UnitGone` with `Despawned`. A unit a player occupies is refused unless
+    /// `.allow_player()`.
+    #[track_caller]
+    pub fn destroy(&self, object: impl Into<crate::sel::Obj>) -> Cmd<cmd::DestroyObject> {
+        Cmd::new(
+            self.session.clone(),
+            cmd::DestroyObject::new(object.into()),
+            Location::caller(),
+        )
+    }
+
+    /// Removes wrecks, craters and debris inside 1 to 16 DCS volumes (API revision 1); the
+    /// result is what DCS counted.
+    #[track_caller]
+    pub fn remove_junk(
+        &self,
+        volumes: impl IntoIterator<Item = crate::sel::Volume>,
+    ) -> Cmd<cmd::RemoveJunk> {
+        Cmd::new(
+            self.session.clone(),
+            cmd::RemoveJunk::new(volumes.into_iter().collect()),
             Location::caller(),
         )
     }

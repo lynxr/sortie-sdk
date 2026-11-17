@@ -24,7 +24,7 @@
 <a class="skip" href="#content">Перейти к содержанию</a>
 <header class="topbar">
 <div class="topbar-inner">
-<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.1.0</span></a>
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.2.0</span></a>
 <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
 <nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
 <div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
@@ -39,7 +39,15 @@
 <li><a href="install-runtime.html">Установка рантайма</a></li>
 <li><a href="quickstart.html">Быстрый старт</a></li>
 <li><a href="dependency.html">Подключение SDK</a></li>
-<li><a href="sdk.html">Логика на Rust</a></li>
+<li><a href="sdk.html">Логика на Rust</a><ul>
+<li><a href="objects.html">Объекты: статики, уничтожение, мусор</a></li>
+<li><a href="map.html">Рисование на карте</a></li>
+<li><a href="menus.html">Деревья меню F10</a></li>
+<li><a href="dcs.html">Вызовы DCS</a></li>
+<li><a href="dcs-catalog.html">Справочник каталога DCS API</a></li>
+<li><a href="capabilities.html">Возможности движка</a></li>
+</ul>
+</li>
 <li><a href="generator.html" aria-current="page">Сценарий на Python</a></li>
 <li><a href="testing.html">Тестирование</a></li>
 <li><a href="operations.html">Эксплуатация</a></li>
@@ -177,6 +185,17 @@ sc.player_flight(&quot;Blue 1&quot;, planes.Su_25T, country=&quot;Georgia&quot;,
 <ul>
 <li><code>sc.airbase(имя, ident=...)</code> делает аэродром символом <code>airbases::NALCHIK</code> для логики.
 <code>coalition</code> меняет владельца аэродрома в миссии; без него остаётся владелец по умолчанию.</li>
+<li><code>munitions={wsType: количество}</code> ограничивает боезапас склада аэродрома и задаёт начальный
+запас. По умолчанию склад каждого аэродрома безлимитный (самолёты, боеприпасы, топливо), а
+безлимитный запас DCS, по сообщениям, не считает: <code>add_item</code>, <code>remove_item</code> и <code>set_item</code>
+его не меняют (не измерено).
+Оружие названо своим wsType, четырьмя числами из <code>Scripts/Database/wsTypes.lua</code> игры:
+<code>sc.airbase("Nalchik", ident="NALCHIK", munitions={(4, 4, 7, 106): 20})</code> — 20 AIM-120C
+(<code>weapons.missiles.AIM_120C</code>) и больше ничего. Количество — целое от 0 до 1 000 000. Назвать
+нужно хотя бы одно оружие: пустой словарь — ошибка, потому что ограниченный склад без
+записей редактор миссий читает как запас по умолчанию (по 100 штук каждого оружия). Склад
+без оружия — это одно оружие с количеством 0: неназванное тогда начинается с нуля. Что сам
+DCS даёт оружию без записи, не измерено (ожидается 0, как в редакторе). Самолёты и топливо остаются безлимитными.</li>
 <li><code>sc.player_flight(..)</code> создаёт клиентские слоты. Старт: <code>StartType.Cold</code>, <code>Hot</code>, <code>Runway</code> или
 <code>Air</code> (тогда нужны <code>at</code> и <code>altitude</code>). Ещё есть <code>task</code>, <code>skill</code>, <code>payload</code>. Полёты игроков
 попадают в manifest, но не в lock: символов для них нет.</li>
@@ -332,7 +351,7 @@ sortie-gen lock|build|validate|register|launch|restart|watch|results &lt;scenari
 <p><code>sortie-gen worker</code> (цикл кампании) в этой версии не работает и выходит с кодом 2.</p>
 </article>
 <nav class="pager" aria-label="Соседние страницы">
-<a class="pager-prev" rel="prev" href="sdk.html"><span class="pager-dir">Назад</span><span class="pager-title">Логика на Rust</span></a>
+<a class="pager-prev" rel="prev" href="capabilities.html"><span class="pager-dir">Назад</span><span class="pager-title">Возможности движка</span></a>
 <a class="pager-next" rel="next" href="testing.html"><span class="pager-dir">Дальше</span><span class="pager-title">Тестирование</span></a>
 </nav>
 <p class="page-source"><a href="generator.md">Эта страница в Markdown</a></p>
@@ -340,7 +359,7 @@ sortie-gen lock|build|validate|register|launch|restart|watch|results &lt;scenari
 </div>
 <footer class="footer">
 <div class="footer-inner">
-<p>Sortie SDK 0.1.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p>Sortie SDK 0.2.0. Лицензия SDK: MIT OR Apache-2.0.</p>
 <p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
 </div>
 </footer>

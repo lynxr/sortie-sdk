@@ -40,13 +40,119 @@ use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tokio::task::AbortHandle;
 
 use crate::menu::MenuInbox;
+use crate::menu_tree::TreeInbox;
 use crate::{Ctx, Error, Failure, Result, Start};
+
+/// The future of one run of a mission function.
+pub type MissionFuture = LocalBoxFuture<'static, Result<()>>;
+
+/// The revisions a logic declares (`Attach.api_rev`, `Attach.event_rev`), written in its
+/// source: `#[sortie::mission(api_rev = 1, event_rev = 0)]`. The default, 0 and 0, is the
+/// 0.1.0 behaviour. They are not chosen by the SDK version: a logic moves to a newer revision
+/// by changing the attribute, and only then do the behaviour changes of that revision apply.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Revisions {
+    /// API revision: 0 = 0.1.0, 1 = wave 1 (0.2.0), ...
+    pub api_rev: u32,
+    /// Event revision; at most `api_rev` (the engine refuses more).
+    pub event_rev: u32,
+}
+
+impl Revisions {
+    /// The 0.1.0 behaviour.
+    pub const V0_1_0: Revisions = Revisions {
+        api_rev: 0,
+        event_rev: 0,
+    };
+
+    #[must_use]
+    pub const fn new(api_rev: u32, event_rev: u32) -> Self {
+        Self { api_rev, event_rev }
+    }
+}
 
 /// The per-session entry point. Implemented for every
 /// `Fn(Ctx<M>, Start) -> impl Future<Output = sortie::Result<()>> + 'static`, i.e. for every
-/// `#[sortie::mission] async fn run(ctx: Ctx<M>, start: Start) -> sortie::Result<()>`.
+/// `#[sortie::mission] async fn run(ctx: Ctx<M>, start: Start) -> sortie::Result<()>`, and for
+/// the [`Declared`] value `#[sortie::mission(api_rev = .., event_rev = ..)]` makes of one.
 pub trait Mission<M>: 'static {
     fn start(&self, ctx: Ctx<M>, start: Start) -> LocalBoxFuture<'static, Result<()>>;
+
+    /// The revisions the logic declares at Attach; 0 and 0 unless the mission attribute names
+    /// them.
+    fn revisions(&self) -> Revisions {
+        Revisions::V0_1_0
+    }
+
+    /// The capabilities the logic cannot run without (`Attach.required_capabilities`); none
+    /// unless the mission attribute names them (`requires = [..]`).
+    fn required_capabilities(&self) -> &'static [&'static str] {
+        &[]
+    }
+}
+
+/// A mission function with declared revisions: what
+/// `#[sortie::mission(api_rev = 1, event_rev = 0)] async fn run(..)` defines under the
+/// function's name (a constant, so `sortie::main!(run)` and `FakeDcs::run(run)` take it as
+/// before; call it with [`Declared::call`]).
+#[derive(Clone, Copy, Debug)]
+pub struct Declared<F> {
+    mission: F,
+    revisions: Revisions,
+    requires: &'static [&'static str],
+}
+
+impl<F> Declared<F> {
+    #[must_use]
+    pub const fn new(mission: F, revisions: Revisions) -> Self {
+        Self {
+            mission,
+            revisions,
+            requires: &[],
+        }
+    }
+
+    /// With required capabilities (`#[sortie::mission(requires = [..])]`; names as in
+    /// [`crate::caps`]).
+    #[must_use]
+    pub const fn requires(mut self, capabilities: &'static [&'static str]) -> Self {
+        self.requires = capabilities;
+        self
+    }
+
+    /// The declared revisions.
+    #[must_use]
+    pub const fn declared(&self) -> Revisions {
+        self.revisions
+    }
+
+    /// The declared required capabilities.
+    #[must_use]
+    pub const fn required(&self) -> &'static [&'static str] {
+        self.requires
+    }
+
+    /// Runs the mission function (what the runtime does once per session).
+    pub fn call<M>(&self, ctx: Ctx<M>, start: Start) -> MissionFuture
+    where
+        F: Mission<M>,
+    {
+        self.mission.start(ctx, start)
+    }
+}
+
+impl<M, F: Mission<M>> Mission<M> for Declared<F> {
+    fn start(&self, ctx: Ctx<M>, start: Start) -> LocalBoxFuture<'static, Result<()>> {
+        self.mission.start(ctx, start)
+    }
+
+    fn revisions(&self) -> Revisions {
+        self.revisions
+    }
+
+    fn required_capabilities(&self) -> &'static [&'static str] {
+        self.requires
+    }
 }
 
 impl<M, F, Fut> Mission<M> for F
@@ -130,9 +236,26 @@ pub(crate) fn base36(mut n: u64, len: usize) -> String {
     out.into_iter().map(char::from).collect()
 }
 
-/// The `Attach` message for scenario `M`.
+/// The `Attach` message for scenario `M`, declaring the 0.1.0 revisions.
 #[must_use]
 pub fn attach_message<M: Scenario>(opts: &AttachOptions) -> v1::Attach {
+    attach_message_with::<M>(opts, Revisions::V0_1_0)
+}
+
+/// The `Attach` message for scenario `M` of a logic that declares `revisions`.
+#[must_use]
+pub fn attach_message_with<M: Scenario>(opts: &AttachOptions, revisions: Revisions) -> v1::Attach {
+    attach_message_for::<M>(opts, revisions, &[])
+}
+
+/// The `Attach` message for scenario `M` of a logic that declares `revisions` and requires
+/// `capabilities` (`Attach.required_capabilities`).
+#[must_use]
+pub fn attach_message_for<M: Scenario>(
+    opts: &AttachOptions,
+    revisions: Revisions,
+    capabilities: &[&str],
+) -> v1::Attach {
     v1::Attach {
         logic: opts.logic.clone(),
         build_id: opts.build_id.clone(),
@@ -143,6 +266,9 @@ pub fn attach_message<M: Scenario>(opts: &AttachOptions) -> v1::Attach {
         mode: opts.mode as i32,
         scenario: M::NAME.to_owned(),
         schema: M::SCHEMA,
+        api_rev: revisions.api_rev,
+        event_rev: revisions.event_rev,
+        required_capabilities: capabilities.iter().map(|c| (*c).to_owned()).collect(),
     }
 }
 
@@ -238,10 +364,22 @@ pub struct Session {
     pub(crate) scenario: String,
     pub(crate) manifest: Rc<Manifest>,
     pub(crate) dev: bool,
+    /// The revisions this logic declared at Attach.
+    pub(crate) declared: Revisions,
+    /// `Start.api_rev`: the engine's API revision (0 = a 0.1.0 engine).
+    pub(crate) engine_api_rev: u32,
+    /// `Start.event_rev`: the event revision in effect.
+    pub(crate) event_rev: u32,
+    /// `Start.writer`: the name this logic writes under (empty from a 0.1.0 engine).
+    pub(crate) writer: String,
+    /// `Start.capabilities`, kept current by `CapabilityChanged` (`ctx.capabilities()`).
+    pub(crate) capabilities: RefCell<crate::caps::Capabilities>,
     pub(crate) world: RefCell<World>,
     pub(crate) shared: Rc<LogicShared>,
     up: mpsc::UnboundedSender<v1::LogicUp>,
     pending: RefCell<HashMap<String, oneshot::Sender<Result<v1::CommandResult, Stop>>>>,
+    /// What the commands cost (`ctx.take_command_timings()`).
+    pub(crate) timings: RefCell<crate::timing::Timings>,
     pending_state: RefCell<HashMap<u64, oneshot::Sender<Result<v1::StateResult, Stop>>>>,
     detached_state: RefCell<HashMap<u64, &'static str>>,
     /// Model time, bumped on every tick (wakes `sleep` and timers).
@@ -254,6 +392,8 @@ pub struct Session {
     resyncing: Cell<bool>,
     pub(crate) events: broadcast::Sender<v1::Event>,
     menus: RefCell<Vec<Weak<MenuInbox>>>,
+    /// Menu tree presses (`ctx.menus()`).
+    trees: RefCell<Vec<Weak<TreeInbox>>>,
     pub(crate) end: watch::Sender<Option<SessionEnd>>,
     tasks: RefCell<Vec<TrackedTask>>,
 }
@@ -271,6 +411,7 @@ impl Session {
     fn new(
         start: &v1::Start,
         opts: &AttachOptions,
+        declared: Revisions,
         up: &mpsc::UnboundedSender<v1::LogicUp>,
         shared: &Rc<LogicShared>,
     ) -> Self {
@@ -289,10 +430,16 @@ impl Session {
             scenario: manifest.scenario.clone(),
             manifest: Rc::new(manifest),
             dev: opts.dev,
+            declared,
+            engine_api_rev: start.api_rev,
+            event_rev: start.event_rev,
+            writer: start.writer.clone(),
+            capabilities: RefCell::new(crate::caps::Capabilities::from_proto(&start.capabilities)),
             world: RefCell::new(world),
             shared: shared.clone(),
             up: up.clone(),
             pending: RefCell::default(),
+            timings: RefCell::default(),
             pending_state: RefCell::default(),
             detached_state: RefCell::default(),
             clock: watch::Sender::new(start.model_time),
@@ -301,6 +448,7 @@ impl Session {
             resyncing: Cell::new(false),
             events: broadcast::Sender::new(1024),
             menus: RefCell::default(),
+            trees: RefCell::default(),
             end: watch::Sender::new(None),
             tasks: RefCell::default(),
         }
@@ -442,6 +590,12 @@ impl Session {
         menus.push(Rc::downgrade(inbox));
     }
 
+    pub(crate) fn register_tree(&self, inbox: &Rc<TreeInbox>) {
+        let mut trees = self.trees.borrow_mut();
+        trees.retain(|m| m.strong_count() > 0);
+        trees.push(Rc::downgrade(inbox));
+    }
+
     fn on_tick(&self, tick: &v1::Tick) {
         match self.world.try_borrow_mut() {
             Ok(mut world) => {
@@ -510,9 +664,17 @@ impl Session {
                 for inbox in self.menus.borrow().iter().filter_map(Weak::upgrade) {
                     inbox.offer(p, ev.model_time);
                 }
+                for inbox in self.trees.borrow().iter().filter_map(Weak::upgrade) {
+                    inbox.offer(p, ev.model_time);
+                }
             }
             Some(Kind::SimulationPaused(_)) => self.paused.set(true),
             Some(Kind::SimulationResumed(_)) => self.paused.set(false),
+            Some(Kind::CapabilityChanged(c)) => {
+                if let Some(cap) = &c.capability {
+                    self.capabilities.borrow_mut().put(cap.clone());
+                }
+            }
             _ => {}
         }
         let _ = self.events.send(ev);
@@ -520,6 +682,23 @@ impl Session {
     }
 
     fn deliver_result(&self, r: v1::CommandResult) {
+        // The snaps of a reply are observations at `world_rev`: the replica takes them before
+        // the caller resumes, so a lookup right after `.await` sees the new objects.
+        if let Some(reply) = &r.reply {
+            let changed = match self.world.try_borrow_mut() {
+                Ok(mut world) => world.apply_reply(reply, r.world_rev),
+                Err(_) => {
+                    self.shared.record_error(
+                        "a command result arrived while the world replica was borrowed across \
+                         an `.await`; its reply was not applied",
+                    );
+                    false
+                }
+            };
+            if changed {
+                self.changes.send_modify(|n| *n += 1);
+            }
+        }
         if let Some(tx) = self.pending.borrow_mut().remove(&r.id) {
             let _ = tx.send(Ok(r));
         } else {
@@ -558,6 +737,7 @@ impl Session {
         }
         self.shared.retire(tasks);
         self.menus.borrow_mut().clear();
+        self.trees.borrow_mut().clear();
     }
 }
 
@@ -738,7 +918,8 @@ async fn drive<M: Scenario, F: Mission<M>>(
 ) -> Exit {
     install_panic_hook();
     let LogicConn { up, mut down } = conn;
-    let attach = attach_message::<M>(opts);
+    let revisions = mission.revisions();
+    let attach = attach_message_for::<M>(opts, revisions, mission.required_capabilities());
     if up
         .send(v1::LogicUp {
             msg: Some(logic_up::Msg::Attach(attach)),
@@ -763,8 +944,21 @@ async fn drive<M: Scenario, F: Mission<M>>(
                     )
                     .await;
                 }
-                let s = Rc::new(Session::new(&start, opts, &up, shared));
+                let s = Rc::new(Session::new(&start, opts, revisions, &up, shared));
                 shared.sessions.set(shared.sessions.get() + 1);
+                // A 0.1.0 engine ignores Attach.required_capabilities: the SDK keeps the
+                // promise that a logic with requirements never runs without them.
+                let required = mission.required_capabilities();
+                if !required.is_empty() && start.api_rev == 0 {
+                    shared.record_error(format!(
+                        "the mission requires {} but the engine is 0.1.0 (API revision 0), which \
+                         has no capability table; update sortied (the mission function did not \
+                         run)",
+                        required.join(", ")
+                    ));
+                    session = Some(s);
+                    continue;
+                }
                 let kind = Start::from_proto(start.kind());
                 tracing::info!(session = %s.id, ?kind, scenario = %s.scenario, "session started");
                 let run = mission.start(Ctx::<M>::from_session(s.clone()), kind);

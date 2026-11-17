@@ -63,6 +63,24 @@ class FakeEngine(
         self._auth(context)
         return engine_pb2.HealthResponse(status=engine_pb2.HEALTH_STATUS_OK, session="s1", scenario="op_north", model_time=12)
 
+    CAPS = [
+        common_pb2.Capability(name="dcs_call", state=common_pb2.CAPABILITY_STATE_QUARANTINED, note="crashed"),
+        common_pb2.Capability(name="draw", state=common_pb2.CAPABILITY_STATE_AVAILABLE),
+    ]
+
+    def Capabilities(self, request, context):
+        self._auth(context)
+        caps = [c for c in self.CAPS if c.name.startswith(request.prefix)]
+        return engine_pb2.CapabilitiesResponse(capabilities=caps, api_rev=1, event_rev=1, dcs_version="2.9.31")
+
+    def ReleaseQuarantine(self, request, context):
+        self._auth(context)
+        if request.carried_over and not request.name:
+            return engine_pb2.ReleaseQuarantineResponse(released=["call:mission:land.getHeight"])
+        if request.name not in ("dcs_call", "call:mission:land.getHeight"):
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, f"`{request.name}` is not a capability")
+        return engine_pb2.ReleaseQuarantineResponse(released=["dcs_call"])
+
     def BeginBuild(self, request, context):
         self._auth(context)
         if request.scenario != "op_north" or not request.schema_sha256:
@@ -181,6 +199,19 @@ def test_register_streams_the_miz_in_chunks(fake_engine, op_north):
     assert reg.path == "Missions/Sortie/op_north.miz"
     assert fake_engine.chunks == [1024 * 1024, 1024 * 1024, len(miz) - 2 * 1024 * 1024]
     assert fake_engine.registered[build_id]["miz"] == miz
+
+
+def test_capabilities_and_release(fake_engine):
+    client = enginemod.EngineClient(fake_engine.address)
+    r = client.capabilities()
+    assert [c.name for c in r.capabilities] == ["dcs_call", "draw"]
+    assert r.capabilities[0].state == common_pb2.CAPABILITY_STATE_QUARANTINED
+    assert r.dcs_version == "2.9.31" and r.api_rev == 1
+    assert [c.name for c in client.capabilities("dr").capabilities] == ["draw"]
+    assert list(client.release_quarantine("call:mission:land.getHeight").released) == ["dcs_call"]
+    assert list(client.release_carried_over().released) == ["call:mission:land.getHeight"]
+    with pytest.raises(EngineError, match="is not a capability"):
+        client.release_quarantine("teleport")
 
 
 def test_unimplemented_names_the_milestone(fake_engine):

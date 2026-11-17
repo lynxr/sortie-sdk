@@ -30,6 +30,110 @@ use syn::{
 
 pub(crate) const SHAPE: &str = "async fn run(ctx: Ctx<M>, start: Start) -> sortie::Result<()>";
 
+/// What the attribute accepts.
+const ARGS: &str = "#[sortie::mission] takes only `api_rev = <n>`, `event_rev = <n>` and \
+                    `requires = [<capability>, ..]`";
+
+/// The revisions and required capabilities declared in the attribute; `None` without
+/// arguments (0.1.0 behaviour, the function is emitted unchanged).
+#[derive(Clone, Default)]
+struct Declared {
+    api_rev: u32,
+    event_rev: u32,
+    /// `requires = [caps::DRAW, "call:mission:land.getHeight"]`: `&'static str` expressions.
+    requires: Vec<syn::Expr>,
+}
+
+/// Parses `api_rev = 1, event_rev = 0, requires = [..]` (each optional, each once; revisions
+/// are integers, `requires` an array of `&'static str` expressions).
+fn parse_args(attr: TokenStream, errors: &mut Errors) -> Option<Declared> {
+    use syn::parse::Parser as _;
+    use syn::punctuated::Punctuated;
+    if attr.is_empty() {
+        return None;
+    }
+    let pairs = match Punctuated::<syn::MetaNameValue, syn::Token![,]>::parse_terminated
+        .parse2(attr.clone())
+    {
+        Ok(p) => p,
+        Err(_) => {
+            errors.push(syn::Error::new_spanned(&attr, ARGS));
+            return None;
+        }
+    };
+    let mut out = Declared::default();
+    let (mut api, mut event) = (None, None);
+    let mut requires: Option<Vec<syn::Expr>> = None;
+    for nv in &pairs {
+        let key = nv
+            .path
+            .get_ident()
+            .map(ToString::to_string)
+            .unwrap_or_default();
+        if key == "requires" {
+            if requires.is_some() {
+                errors.push(syn::Error::new_spanned(
+                    &nv.path,
+                    "`requires` is given twice",
+                ));
+                continue;
+            }
+            match &nv.value {
+                syn::Expr::Array(a) => requires = Some(a.elems.iter().cloned().collect()),
+                other => errors.push(syn::Error::new_spanned(
+                    other,
+                    "`requires` is a list of capability names, e.g. `requires = \
+                     [sortie::caps::SPAWN_STATIC, sortie::caps::DRAW]`",
+                )),
+            }
+            continue;
+        }
+        let slot = match key.as_str() {
+            "api_rev" => &mut api,
+            "event_rev" => &mut event,
+            _ => {
+                errors.push(syn::Error::new_spanned(&nv.path, ARGS));
+                continue;
+            }
+        };
+        if slot.is_some() {
+            errors.push(syn::Error::new_spanned(
+                &nv.path,
+                format!("`{key}` is given twice"),
+            ));
+            continue;
+        }
+        let value = match &nv.value {
+            syn::Expr::Lit(syn::ExprLit {
+                lit: syn::Lit::Int(i),
+                ..
+            }) => i.base10_parse::<u32>().ok(),
+            _ => None,
+        };
+        match value {
+            Some(v) => *slot = Some(v),
+            None => errors.push(syn::Error::new_spanned(
+                &nv.value,
+                format!("`{key}` is a revision number, e.g. `{key} = 1`"),
+            )),
+        }
+    }
+    out.api_rev = api.unwrap_or(0);
+    out.event_rev = event.unwrap_or(0);
+    out.requires = requires.unwrap_or_default();
+    if out.event_rev > out.api_rev {
+        errors.push(syn::Error::new_spanned(
+            &attr,
+            format!(
+                "event_rev {} is above api_rev {}: a logic declares at least the API revision \
+                 of the events it reads",
+                out.event_rev, out.api_rev
+            ),
+        ));
+    }
+    Some(out)
+}
+
 /// The expected order, for the messages about misplaced arguments.
 const ORDER: &str = "a mission takes `ctx: Ctx<M>` first, then `start: Start`";
 
@@ -46,22 +150,72 @@ pub(crate) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         Err(err) => return with_item(err, item),
     };
     let mut errors = Errors::default();
-    if !attr.is_empty() {
-        errors.push(syn::Error::new_spanned(
-            &attr,
-            "#[sortie::mission] takes no arguments",
-        ));
-    }
+    let declared = parse_args(attr, &mut errors);
     check_signature(&func, &mut errors);
     match errors.into_error() {
         Some(err) => with_item(err, func.to_token_stream()),
         None => {
             let checks = type_checks(&func);
-            quote! {
-                #func
-                #checks
+            match declared {
+                None => quote! {
+                    #func
+                    #checks
+                },
+                Some(d) => with_revisions(func, d, &checks),
             }
         }
+    }
+}
+
+/// A mission with declared revisions: the function under a hidden name, and under its own
+/// name a `::sortie::runtime::Declared` constant that carries the revisions. It implements
+/// `Mission<M>` like the function does, so `sortie::main!(run)` and `FakeDcs::run(run)` take
+/// it unchanged; only a direct call needs `run.call(ctx, start)`.
+fn with_revisions(mut func: ItemFn, d: Declared, checks: &TokenStream) -> TokenStream {
+    let name = func.sig.ident.clone();
+    let hidden = quote::format_ident!("__sortie_mission_{}", name);
+    let vis = std::mem::replace(&mut func.vis, syn::Visibility::Inherited);
+    func.sig.ident = hidden.clone();
+    let docs: Vec<&syn::Attribute> = func
+        .attrs
+        .iter()
+        .filter(|a| a.path().is_ident("doc"))
+        .collect();
+    let docs = quote!(#(#docs)*);
+    func.attrs.retain(|a| !a.path().is_ident("doc"));
+    let tys: Vec<&Type> = func
+        .sig
+        .inputs
+        .iter()
+        .filter_map(|a| match a {
+            FnArg::Typed(pt) => Some(&*pt.ty),
+            FnArg::Receiver(_) => None,
+        })
+        .collect();
+    let (ctx_ty, start_ty) = (tys[0], tys[1]);
+    let (api, event) = (d.api_rev, d.event_rev);
+    let requires = &d.requires;
+    quote! {
+        #[doc(hidden)]
+        #func
+        #checks
+        #docs
+        #[allow(non_upper_case_globals)]
+        #vis const #name: ::sortie::runtime::Declared<
+            fn(#ctx_ty, #start_ty) -> ::sortie::runtime::MissionFuture,
+        > = ::sortie::runtime::Declared::new(
+            {
+                fn __sortie_boxed(
+                    ctx: #ctx_ty,
+                    start: #start_ty,
+                ) -> ::sortie::runtime::MissionFuture {
+                    ::std::boxed::Box::pin(#hidden(ctx, start))
+                }
+                __sortie_boxed as fn(#ctx_ty, #start_ty) -> ::sortie::runtime::MissionFuture
+            },
+            ::sortie::runtime::Revisions::new(#api, #event),
+        )
+        .requires(&[#(#requires),*]);
     }
 }
 
@@ -527,6 +681,91 @@ mod tests {
     }
 
     #[test]
+    fn declared_revisions_make_a_constant_that_carries_them() {
+        let out = expand(
+            quote!(api_rev = 1, event_rev = 1),
+            quote! {
+                /// The mission.
+                pub async fn run(ctx: Ctx<op_north::OpNorth>, _start: Start) -> sortie::Result<()> {
+                    Ok(())
+                }
+            },
+        )
+        .to_string();
+        assert!(!out.contains("compile_error"), "{out}");
+        assert!(out.contains("async fn __sortie_mission_run"), "{out}");
+        assert!(out.contains("pub const run"), "{out}");
+        assert!(out.contains("Revisions :: new (1u32 , 1u32)"), "{out}");
+        assert!(out.contains("__sortie_check"), "{out}");
+        // Only the event revision: the API revision defaults to 0, which is below it.
+        let errs = errors_of(quote!(event_rev = 1), quote! { pub async fn run() {} });
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("event_rev 1 is above api_rev 0")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn revision_arguments_are_checked() {
+        let item =
+            || quote! { pub async fn run(ctx: Ctx<M>, s: Start) -> sortie::Result<()> { Ok(()) } };
+        let cases = [
+            (quote!(api_rev = 1, api_rev = 2), "given twice"),
+            (quote!(api_rev = "1"), "is a revision number"),
+            (quote!(api_rev = -1), "is a revision number"),
+            (quote!(speed = 1), "takes only"),
+            (quote!(fast), "takes only"),
+            (quote!(requires = caps::DRAW), "a list of capability names"),
+            (
+                quote!(requires = [], requires = []),
+                "`requires` is given twice",
+            ),
+        ];
+        for (attr, needle) in cases {
+            let errs = errors_of(attr.clone(), item());
+            assert!(errs.iter().any(|e| e.contains(needle)), "{attr}: {errs:?}");
+        }
+        assert!(errors_of(quote!(api_rev = 1), item()).is_empty());
+        assert!(errors_of(quote!(api_rev = 2, event_rev = 1,), item()).is_empty());
+        assert!(errors_of(quote!(api_rev = 1, requires = [caps::DRAW, "x"]), item()).is_empty());
+    }
+
+    #[test]
+    fn required_capabilities_ride_on_the_constant() {
+        let out = expand(
+            quote!(
+                api_rev = 1,
+                requires = [sortie::caps::DRAW, "call:mission:land.getHeight"]
+            ),
+            quote! {
+                pub async fn run(ctx: Ctx<op_north::OpNorth>, _start: Start) -> sortie::Result<()> {
+                    Ok(())
+                }
+            },
+        )
+        .to_string();
+        assert!(!out.contains("compile_error"), "{out}");
+        assert!(
+            out.contains(
+                ". requires (& [sortie :: caps :: DRAW , \"call:mission:land.getHeight\"])"
+            ),
+            "{out}"
+        );
+        // Without `requires` the list is empty.
+        let out = expand(
+            quote!(api_rev = 1),
+            quote! {
+                pub async fn run(ctx: Ctx<op_north::OpNorth>, _start: Start) -> sortie::Result<()> {
+                    Ok(())
+                }
+            },
+        )
+        .to_string();
+        assert!(out.contains(". requires (& [])"), "{out}");
+    }
+
+    #[test]
     fn every_mistake_is_reported_at_once() {
         let errs = errors_of(
             quote!(foo),
@@ -534,7 +773,7 @@ mod tests {
         );
         let joined = errs.join("\n");
         for needle in [
-            "takes no arguments",
+            "takes only `api_rev = <n>`, `event_rev = <n>` and `requires = [<capability>, ..]`",
             "cannot be `const`",
             "cannot be `unsafe`",
             "must be an `async fn`",
