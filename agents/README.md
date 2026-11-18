@@ -1,6 +1,6 @@
 # Sortie for AI coding agents
 
-This folder helps coding agents work on a Sortie mission (Sortie SDK 0.2.0). It is
+This folder helps coding agents work on a Sortie mission (Sortie SDK 0.2.1). It is
 written in English; the SDK docs are in Russian.
 
 | File | For | What it is |
@@ -12,7 +12,7 @@ written in English; the SDK docs are in Russian.
 | [llms.txt](llms.txt) | any agent that reads the web | an index of the docs and skills ([llmstxt.org](https://llmstxt.org) format) |
 
 The site build packs this whole folder into a zip:
-[sortie-agent-skills-0.2.0.zip](https://lynxr.github.io/sortie-sdk/agents/sortie-agent-skills-0.2.0.zip).
+[sortie-agent-skills-0.2.1.zip](https://lynxr.github.io/sortie-sdk/agents/sortie-agent-skills-0.2.1.zip).
 Its root holds the three skill folders, `AGENTS.md`, `llms.txt` and this file.
 
 ## Claude Code

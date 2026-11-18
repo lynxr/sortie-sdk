@@ -16,6 +16,7 @@ from typing import Any
 from ._proto.sortie.v1 import common_pb2
 from .dcs import (
     Point2,
+    Item,
     Point3,
     Side,
     Target,
@@ -23,6 +24,7 @@ from .dcs import (
     arg_coalition,
     arg_enum,
     arg_id,
+    arg_item,
     arg_name,
     arg_nil,
     arg_number,
@@ -1766,40 +1768,40 @@ class WarehouseCalls:
             "Warehouse.getInventory", "mission", self._recv, [arg_nil() if item is None else arg_string(item)], ["table"], key=key, timeout=timeout
         )
 
-    def item_count(self, item: str, *, key: str = "", timeout: float | None = None) -> Any:
-        """Stock of one item (aircraft type or weapon name).
+    def item_count(self, item: Item, *, key: str = "", timeout: float | None = None) -> Any:
+        """Stock of one item, named by its name (aircraft type or weapon name) or its wsType {a, b, c, d}.
 
-        ``mission:Warehouse.getItemCount(self: Warehouse, item: string) -> [number]``; class read, live check AWC-T6.
+        ``mission:Warehouse.getItemCount(self: Warehouse, item: item) -> [number]``; class read, live check AWC-T6.
         """
         return self._client.dcs_call(
-            "Warehouse.getItemCount", "mission", self._recv, [arg_string(item)], ["number"], key=key, timeout=timeout
+            "Warehouse.getItemCount", "mission", self._recv, [arg_item(item)], ["number"], key=key, timeout=timeout
         )
 
-    def add_item(self, item: str, count: float, *, key: str = "", timeout: float | None = None) -> Any:
+    def add_item(self, item: Item, count: float, *, key: str = "", timeout: float | None = None) -> Any:
         """Adds count of an item.
 
-        ``mission:Warehouse.addItem(self: Warehouse, item: string, count: number) -> []``; class mutate, live check AWC-T6.
+        ``mission:Warehouse.addItem(self: Warehouse, item: item, count: number) -> []``; class mutate, live check AWC-T6.
         """
         return self._client.dcs_call(
-            "Warehouse.addItem", "mission", self._recv, [arg_string(item), arg_number(count)], [], key=key, timeout=timeout
+            "Warehouse.addItem", "mission", self._recv, [arg_item(item), arg_number(count)], [], key=key, timeout=timeout
         )
 
-    def remove_item(self, item: str, count: float, *, key: str = "", timeout: float | None = None) -> Any:
+    def remove_item(self, item: Item, count: float, *, key: str = "", timeout: float | None = None) -> Any:
         """Removes count of an item.
 
-        ``mission:Warehouse.removeItem(self: Warehouse, item: string, count: number) -> []``; class mutate, live check AWC-T6.
+        ``mission:Warehouse.removeItem(self: Warehouse, item: item, count: number) -> []``; class mutate, live check AWC-T6.
         """
         return self._client.dcs_call(
-            "Warehouse.removeItem", "mission", self._recv, [arg_string(item), arg_number(count)], [], key=key, timeout=timeout
+            "Warehouse.removeItem", "mission", self._recv, [arg_item(item), arg_number(count)], [], key=key, timeout=timeout
         )
 
-    def set_item(self, item: str, count: float, *, key: str = "", timeout: float | None = None) -> Any:
+    def set_item(self, item: Item, count: float, *, key: str = "", timeout: float | None = None) -> Any:
         """Sets the stock of an item.
 
-        ``mission:Warehouse.setItem(self: Warehouse, item: string, count: number) -> []``; class mutate, live check AWC-T6.
+        ``mission:Warehouse.setItem(self: Warehouse, item: item, count: number) -> []``; class mutate, live check AWC-T6.
         """
         return self._client.dcs_call(
-            "Warehouse.setItem", "mission", self._recv, [arg_string(item), arg_number(count)], [], key=key, timeout=timeout
+            "Warehouse.setItem", "mission", self._recv, [arg_item(item), arg_number(count)], [], key=key, timeout=timeout
         )
 
     def liquid_amount(self, liquid: float, *, key: str = "", timeout: float | None = None) -> Any:

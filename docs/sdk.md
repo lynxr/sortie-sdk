@@ -6,7 +6,7 @@
 возвращают результат из игры.
 
 Готовый проект — шаблон из [быстрого старта](quickstart.md). Большой пример —
-[examples/op_north](https://github.com/lynxr/sortie-sdk/tree/v0.2.0/examples/op_north)
+[examples/op_north](https://github.com/lynxr/sortie-sdk/tree/v0.2.1/examples/op_north)
 в репозитории SDK.
 
 ## Крейт логики

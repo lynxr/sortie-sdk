@@ -1,6 +1,6 @@
 # Builds and tests the SDK on every push and pull request.
 #
-# template/ and examples/ depend on the SDK through git (v0.2.0), the form client
+# template/ and examples/ depend on the SDK through git (v0.2.1), the form client
 # projects copy. A cargo [patch] would still fetch that repository first, so CI builds a copy
 # of each project whose two git dependencies are rewritten to the crates of this commit.
 name: CI

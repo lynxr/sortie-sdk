@@ -299,10 +299,10 @@
 | Функция DCS | Обёртка | Аргументы | Результат | Класс | Проверка | Описание |
 | --- | --- | --- | --- | --- | --- | --- |
 | `mission:Warehouse.getInventory` | `inventory` | `item: string?` | `table` | heavy | AWC-T6 | Stock: {aircraft = {[type] = n}, weapon = {[name] = n}, liquids = {[0..3] = amount}}; an unlimited class is an empty table. |
-| `mission:Warehouse.getItemCount` | `item_count` | `item: string` | `number` | read | AWC-T6 | Stock of one item (aircraft type or weapon name). |
-| `mission:Warehouse.addItem` | `add_item` | `item: string, count: number` | — | mutate | AWC-T6 | Adds count of an item. |
-| `mission:Warehouse.removeItem` | `remove_item` | `item: string, count: number` | — | mutate | AWC-T6 | Removes count of an item. |
-| `mission:Warehouse.setItem` | `set_item` | `item: string, count: number` | — | mutate | AWC-T6 | Sets the stock of an item. |
+| `mission:Warehouse.getItemCount` | `item_count` | `item: item` | `number` | read | AWC-T6 | Stock of one item, named by its name (aircraft type or weapon name) or its wsType {a, b, c, d}. |
+| `mission:Warehouse.addItem` | `add_item` | `item: item, count: number` | — | mutate | AWC-T6 | Adds count of an item. |
+| `mission:Warehouse.removeItem` | `remove_item` | `item: item, count: number` | — | mutate | AWC-T6 | Removes count of an item. |
+| `mission:Warehouse.setItem` | `set_item` | `item: item, count: number` | — | mutate | AWC-T6 | Sets the stock of an item. |
 | `mission:Warehouse.getLiquidAmount` | `liquid_amount` | `liquid: number` | `number` | read | AWC-T9 | Stock of a liquid (0 jet fuel, 1 aviation gasoline, 2 MW50, 3 diesel); the unit is not documented (kg assumed). |
 | `mission:Warehouse.addLiquid` | `add_liquid` | `liquid: number, amount: number` | — | mutate | AWC-T9 | Adds an amount of a liquid. |
 | `mission:Warehouse.removeLiquid` | `remove_liquid` | `liquid: number, amount: number` | — | mutate | AWC-T9 | Removes an amount of a liquid. |

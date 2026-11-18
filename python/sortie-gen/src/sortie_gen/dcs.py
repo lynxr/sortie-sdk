@@ -30,6 +30,9 @@ from ._proto.sortie.v1 import commands_pb2, common_pb2
 
 Point2 = Union[tuple[float, float], common_pb2.MapPoint]
 Point3 = Union[tuple[float, float, float], common_pb2.Vec3]
+#: A warehouse item: its name (``"weapons.missiles.AIM_9"``) or its wsType, four whole numbers
+#: (``(4, 4, 7, 22)``, DCS's ``Scripts/Database/wsTypes.lua``).
+Item = Union[str, tuple[int, int, int, int], list[int]]
 Side = Union[str, int]
 Target = Any
 
@@ -131,6 +134,16 @@ def arg_string(s: str) -> commands_pb2.DcsArg:
 
 def arg_boolean(b: bool) -> commands_pb2.DcsArg:
     return commands_pb2.DcsArg(value=lua_value(bool(b)))
+
+
+def arg_item(item: Item) -> commands_pb2.DcsArg:
+    """A warehouse item: a name as a string, a wsType as the table ``{a, b, c, d}``."""
+    if isinstance(item, str):
+        return arg_string(item)
+    ws = list(item)
+    if len(ws) != 4 or any(isinstance(n, bool) or not isinstance(n, int) or n < 0 for n in ws):
+        raise ValueError(f"a wsType is four whole numbers such as (4, 4, 7, 22), not {item!r}")
+    return commands_pb2.DcsArg(value=lua_value([float(n) for n in ws]))
 
 
 def _has_object(v: Any) -> bool:

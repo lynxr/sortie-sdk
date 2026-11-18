@@ -22,7 +22,7 @@ The Saved Games folder is `%USERPROFILE%\Saved Games\DCS` (a dedicated server st
 
 ## Setup on a machine with DCS
 
-1. Unzip `sortie-runtime-0.2.0-win64.zip` from the GitHub release of
+1. Unzip `sortie-runtime-0.2.1-win64.zip` from the GitHub release of
    `lynxr/sortie-sdk` and follow its README; check it against `SHA256SUMS`.
 2. `sortie.exe install` from a console **run as administrator**: it copies the Lua layer, the
    hook and the bridge DLL into Saved Games, creates `Sortie\link.secret` and
@@ -96,7 +96,7 @@ The Saved Games folder is `%USERPROFILE%\Saved Games\DCS` (a dedicated server st
   with `.on_pause(Fail)`), `ctx.sleep` and timers stop, and the type check of `register` cannot
   run.
 - **Measurements of DCS itself** (event ids, timer cadence, sampling cost) are not part of SDK
-  0.2.0: `sortie probe` prints "`sortie probe` lands in M0" and exits with code 2;
+  0.2.1: `sortie probe` prints "`sortie probe` lands in M0" and exits with code 2;
   `sortie dev`, `sortie trace` and `sortie record` are not built yet either (M4). Report what
   you measure with the DCS version, FPS and hardware.
 

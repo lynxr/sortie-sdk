@@ -121,10 +121,20 @@ stock
     .key("resupply-1")
     .await?;
 let left: f64 = stock.item_count("weapons.missiles.AIM_120C").await?;
+// Или по wsType, четырём числам из Scripts/Database/wsTypes.lua игры.
+let aim9: f64 = stock.item_count([4, 4, 7, 22]).await?;
 let inventory: Value = stock.inventory(None).await?; // большая таблица: класс heavy
 ```
 
 ## Эффекты и звуки
+
+Предмет склада называется так, как его принимает DCS: именем (`"weapons.missiles.AIM_120C"`,
+тип самолёта) или wsType — четырьмя целыми числами из `Scripts/Database/wsTypes.lua` игры
+(`[4, 4, 7, 22]` или `(4, 4, 7, 22)`, тип `sortie::dcs::WarehouseItem`; в Python — кортеж). Так
+принимают `item_count`, `add_item`, `remove_item` и `set_item`; фильтр `inventory(..)` — только
+имя. Другая таблица — `Error::Invalid`, в DCS вызов не уходит. Последнее число wsType, по
+сообщениям, у некоторых предметов меняется между сборками DCS. FakeDcs хранит запас по
+wsType отдельно от запаса по имени: какое имя у wsType, он не знает.
 
 Взрывы, ракеты, звуки и радиопередачи — в семействах `effects()` и `sounds()`. Числовые
 аргументы с ценой или радиусом ограничены каталогом (мощность взрыва — не больше 5000);

@@ -150,7 +150,7 @@ pub mod call {
         pub const AIRBASE_GET_WAREHOUSE: &str = "call:mission:Airbase.getWarehouse";
         /// `Warehouse.getInventory`: Stock: {aircraft = {[type] = n}, weapon = {[name] = n}, liquids = {[0..3] = amount}}; an unlimited class is an empty table.
         pub const WAREHOUSE_GET_INVENTORY: &str = "call:mission:Warehouse.getInventory";
-        /// `Warehouse.getItemCount`: Stock of one item (aircraft type or weapon name).
+        /// `Warehouse.getItemCount`: Stock of one item, named by its name (aircraft type or weapon name) or its wsType {a, b, c, d}.
         pub const WAREHOUSE_GET_ITEM_COUNT: &str = "call:mission:Warehouse.getItemCount";
         /// `Warehouse.addItem`: Adds count of an item.
         pub const WAREHOUSE_ADD_ITEM: &str = "call:mission:Warehouse.addItem";

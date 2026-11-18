@@ -19,9 +19,10 @@
 #   receiver       "" for a plain function, else the class of the method's receiver
 #   args           argument types in order, each "<type> <name>"; a type ending in "?" may be nil
 #                  (and left out at the end). Types: number string boolean table vec2 vec3 any
-#                  mizpath side_number side_name player object:<Class> id:<Class> name:<Class>
-#                  enum:<table path>. vec2 is a map point {x = north, y = east}; vec3 is
-#                  {x, y, z} in runtime axes (x north, y up, z east)
+#                  mizpath side_number side_name player item object:<Class> id:<Class>
+#                  name:<Class> enum:<table path>. vec2 is a map point {x = north, y = east}; vec3
+#                  is {x, y, z} in runtime axes (x north, y up, z east); item is a warehouse item,
+#                  its name or its wsType {a, b, c, d} (four whole numbers)
 #   returns        return types in order (same notation; also list:<type>, handle:<Class>). A
 #                  `number` DCS returns as a numeric string comes back as the number
 #   class          "read" | "mutate" | "heavy" | "admin"
@@ -868,19 +869,19 @@ wrapper = "inventory"
 path = "Warehouse.getItemCount"
 env = "mission"
 receiver = "Warehouse"
-args = ["string item"]
+args = ["item item"]
 returns = ["number"]
 class = "read"
 live_check = "AWC-T6"
 since_api_rev = 1
-doc = "Stock of one item (aircraft type or weapon name)."
+doc = "Stock of one item, named by its name (aircraft type or weapon name) or its wsType {a, b, c, d}."
 wrapper = "item_count"
 
 [[call]]
 path = "Warehouse.addItem"
 env = "mission"
 receiver = "Warehouse"
-args = ["string item", "number count"]
+args = ["item item", "number count"]
 class = "mutate"
 live_check = "AWC-T6"
 since_api_rev = 1
@@ -892,7 +893,7 @@ clamp = { count = [0, 1000000] }
 path = "Warehouse.removeItem"
 env = "mission"
 receiver = "Warehouse"
-args = ["string item", "number count"]
+args = ["item item", "number count"]
 class = "mutate"
 live_check = "AWC-T6"
 since_api_rev = 1
@@ -904,7 +905,7 @@ clamp = { count = [0, 1000000] }
 path = "Warehouse.setItem"
 env = "mission"
 receiver = "Warehouse"
-args = ["string item", "number count"]
+args = ["item item", "number count"]
 class = "mutate"
 live_check = "AWC-T6"
 since_api_rev = 1

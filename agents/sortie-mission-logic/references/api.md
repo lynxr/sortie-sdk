@@ -487,6 +487,10 @@ pub async fn run(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
   is still an `f64` where the catalog says `number` (`static_object(o).id()`).
 - Point arguments follow the catalog entry: `vec2` is a `MapPoint` (`land().height(p)`), `vec3`
   a `Vec3` in DCS axes, x north, y up, z east (`land().profile(a, b)`: DCS reads x and z).
+- A warehouse item (`item_count`, `add_item`, `remove_item`, `set_item`) is its name
+  (`"weapons.missiles.AIM_9"`) or its wsType, four whole numbers: `[4, 4, 7, 22]` or
+  `(4, 4, 7, 22)` (`sortie::dcs::WarehouseItem`); MOOSE's `ENUMS.Storage` uses both forms.
+  `inventory(Some(..))` takes a name only. FakeDcs keeps a wsType's stock apart from its name's.
 - Reads (`read`, `heavy`) take no key: a key on a read is `Error::Invalid`. Mutators (`mutate`)
   are off until the engine owner enables them in `<Saved Games>/Sortie/engine.toml` (`[calls]
   enable = [..]`) or runs `sortied --dev`; until then `Error::Rejected` naming the capability

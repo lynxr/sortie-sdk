@@ -70,9 +70,11 @@ pub async fn mutators(ctx: Ctx<MyMission>) -> sortie::Result<()> {
         .key("resupply-1")
         .await?;
     let left: f64 = stock.item_count("weapons.missiles.AIM_120C").await?;
+    // Или по wsType, четырём числам из Scripts/Database/wsTypes.lua игры.
+    let aim9: f64 = stock.item_count([4, 4, 7, 22]).await?;
     let inventory: Value = stock.inventory(None).await?; // большая таблица: класс heavy
     // snippet:end sdk-dcs-mutators
-    let _ = (left, inventory);
+    let _ = (left, aim9, inventory);
     Ok(())
 }
 

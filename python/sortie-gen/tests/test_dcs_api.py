@@ -143,6 +143,13 @@ def test_arguments_of_every_kind(client):
     dcs.warehouse("Kutaisi").add_item("weapons.missiles.AIM_120C", 8)
     wh = client.fake.commands[-1].dcs_call.receiver.warehouse
     assert wh.airbase.name == "Kutaisi"
+    # A warehouse item by its wsType goes as the table {4, 4, 7, 22}.
+    dcs.warehouse("Kutaisi").set_item((4, 4, 7, 22), 20)
+    item = client.fake.commands[-1].dcs_call.args[0].value.table
+    assert [(p.key.number, p.value.number) for p in item.pairs] == [(1, 4), (2, 4), (3, 7), (4, 22)]
+    for bad in [(4, 4, 7), (4, 4, 7, -1), (4, 4, 7.5, 22), (True, 4, 7, 22)]:
+        with pytest.raises(ValueError, match="wsType"):
+            dcs.warehouse("Kutaisi").item_count(bad)
     assert dcsmod.arg_value({"a": [1, 2], "b": True}).value.table.pairs[0].key.string == "a"
     with pytest.raises(ValueError):
         dcsmod.coalition("purple")

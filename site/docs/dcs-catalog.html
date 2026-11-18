@@ -24,7 +24,7 @@
 <a class="skip" href="#content">Перейти к содержанию</a>
 <header class="topbar">
 <div class="topbar-inner">
-<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.2.0</span></a>
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.2.1</span></a>
 <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
 <nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
 <div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
@@ -355,10 +355,10 @@
 <div class="table-wrap" tabindex="0">
 <table><thead><tr><th>Функция DCS</th><th>Обёртка</th><th>Аргументы</th><th>Результат</th><th>Класс</th><th>Проверка</th><th>Описание</th></tr></thead><tbody>
 <tr><td><code>mission:Warehouse.getInventory</code></td><td><code>inventory</code></td><td><code>item: string?</code></td><td><code>table</code></td><td>heavy</td><td>AWC-T6</td><td>Stock: {aircraft = {[type] = n}, weapon = {[name] = n}, liquids = {[0..3] = amount}}; an unlimited class is an empty table.</td></tr>
-<tr><td><code>mission:Warehouse.getItemCount</code></td><td><code>item_count</code></td><td><code>item: string</code></td><td><code>number</code></td><td>read</td><td>AWC-T6</td><td>Stock of one item (aircraft type or weapon name).</td></tr>
-<tr><td><code>mission:Warehouse.addItem</code></td><td><code>add_item</code></td><td><code>item: string, count: number</code></td><td>—</td><td>mutate</td><td>AWC-T6</td><td>Adds count of an item.</td></tr>
-<tr><td><code>mission:Warehouse.removeItem</code></td><td><code>remove_item</code></td><td><code>item: string, count: number</code></td><td>—</td><td>mutate</td><td>AWC-T6</td><td>Removes count of an item.</td></tr>
-<tr><td><code>mission:Warehouse.setItem</code></td><td><code>set_item</code></td><td><code>item: string, count: number</code></td><td>—</td><td>mutate</td><td>AWC-T6</td><td>Sets the stock of an item.</td></tr>
+<tr><td><code>mission:Warehouse.getItemCount</code></td><td><code>item_count</code></td><td><code>item: item</code></td><td><code>number</code></td><td>read</td><td>AWC-T6</td><td>Stock of one item, named by its name (aircraft type or weapon name) or its wsType {a, b, c, d}.</td></tr>
+<tr><td><code>mission:Warehouse.addItem</code></td><td><code>add_item</code></td><td><code>item: item, count: number</code></td><td>—</td><td>mutate</td><td>AWC-T6</td><td>Adds count of an item.</td></tr>
+<tr><td><code>mission:Warehouse.removeItem</code></td><td><code>remove_item</code></td><td><code>item: item, count: number</code></td><td>—</td><td>mutate</td><td>AWC-T6</td><td>Removes count of an item.</td></tr>
+<tr><td><code>mission:Warehouse.setItem</code></td><td><code>set_item</code></td><td><code>item: item, count: number</code></td><td>—</td><td>mutate</td><td>AWC-T6</td><td>Sets the stock of an item.</td></tr>
 <tr><td><code>mission:Warehouse.getLiquidAmount</code></td><td><code>liquid_amount</code></td><td><code>liquid: number</code></td><td><code>number</code></td><td>read</td><td>AWC-T9</td><td>Stock of a liquid (0 jet fuel, 1 aviation gasoline, 2 MW50, 3 diesel); the unit is not documented (kg assumed).</td></tr>
 <tr><td><code>mission:Warehouse.addLiquid</code></td><td><code>add_liquid</code></td><td><code>liquid: number, amount: number</code></td><td>—</td><td>mutate</td><td>AWC-T9</td><td>Adds an amount of a liquid.</td></tr>
 <tr><td><code>mission:Warehouse.removeLiquid</code></td><td><code>remove_liquid</code></td><td><code>liquid: number, amount: number</code></td><td>—</td><td>mutate</td><td>AWC-T9</td><td>Removes an amount of a liquid.</td></tr>
@@ -394,7 +394,7 @@
 </div>
 <footer class="footer">
 <div class="footer-inner">
-<p>Sortie SDK 0.2.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p>Sortie SDK 0.2.1. Лицензия SDK: MIT OR Apache-2.0.</p>
 <p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
 </div>
 </footer>

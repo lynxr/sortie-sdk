@@ -728,11 +728,59 @@ impl<A: FromValue + 'static, B: FromValue + 'static, C: FromValue + 'static> Fro
 
 // ----- arguments and receivers (used by the generated wrappers) -----------------------------------
 
+/// A warehouse item as DCS's `Warehouse` functions take it: by its name or by its wsType.
+///
+/// ```ignore
+/// let stock = ctx.dcs().warehouse(airbases::SENAKI);
+/// let by_name = stock.item_count("weapons.missiles.AIM_9").await?;
+/// let by_type = stock.item_count([4, 4, 7, 22]).await?; // the same missile, by wsType
+/// ```
+///
+/// A wsType is four whole numbers (DCS's `Scripts/Database/wsTypes.lua`); the last one is
+/// reported to change between DCS builds for some items.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum WarehouseItem {
+    /// `weapons.missiles.AIM_9`, an aircraft type, ...
+    Name(String),
+    /// `{4, 4, 7, 22}`.
+    WsType([u32; 4]),
+}
+
+impl From<&str> for WarehouseItem {
+    fn from(s: &str) -> Self {
+        WarehouseItem::Name(s.to_owned())
+    }
+}
+
+impl From<String> for WarehouseItem {
+    fn from(s: String) -> Self {
+        WarehouseItem::Name(s)
+    }
+}
+
+impl From<&String> for WarehouseItem {
+    fn from(s: &String) -> Self {
+        WarehouseItem::Name(s.clone())
+    }
+}
+
+impl From<[u32; 4]> for WarehouseItem {
+    fn from(t: [u32; 4]) -> Self {
+        WarehouseItem::WsType(t)
+    }
+}
+
+impl From<(u32, u32, u32, u32)> for WarehouseItem {
+    fn from((a, b, c, d): (u32, u32, u32, u32)) -> Self {
+        WarehouseItem::WsType([a, b, c, d])
+    }
+}
+
 /// Builders of [`v1::DcsArg`] (for code that builds calls itself).
 pub mod arg {
     use super::{
         AirbaseSel, Coalition, DcsObject, GroupSel, Handle, LuaValue, MapPoint, Obj, PlayerSel,
-        UnitSel, Value, Vec3, WarehouseSel, v1,
+        UnitSel, Value, Vec3, WarehouseItem, WarehouseSel, v1,
     };
     use v1::dcs_arg::Kind as K;
 
@@ -758,6 +806,17 @@ pub mod arg {
     #[must_use]
     pub fn boolean(b: bool) -> v1::DcsArg {
         a(K::Value(LuaValue::boolean(b)))
+    }
+
+    /// A warehouse item: its name as a string, its wsType as the table `{a, b, c, d}`.
+    #[must_use]
+    pub fn item(i: impl Into<WarehouseItem>) -> v1::DcsArg {
+        match i.into() {
+            WarehouseItem::Name(s) => string(s),
+            WarehouseItem::WsType(t) => a(K::Value(LuaValue::table(
+                sortie_proto::LuaTable::from_array(t.map(f64::from)),
+            ))),
+        }
     }
 
     #[must_use]

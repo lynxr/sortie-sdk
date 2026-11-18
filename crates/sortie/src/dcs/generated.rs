@@ -8,7 +8,7 @@
 use sortie_proto::v1;
 use sortie_types::{Coalition, MapPoint, Vec3};
 
-use super::{Call, Dcs, DcsObject, Handle, Value, arg};
+use super::{Call, Dcs, DcsObject, Handle, Value, WarehouseItem, arg};
 use crate::cmd::Cmd;
 #[allow(unused_imports)]
 use crate::sel::{AirbaseSel, ControllerSel, GroupSel, Obj, PlayerSel, UnitSel, WarehouseSel};
@@ -2977,61 +2977,61 @@ impl WarehouseCalls {
         )
     }
 
-    /// Stock of one item (aircraft type or weapon name).
+    /// Stock of one item, named by its name (aircraft type or weapon name) or its wsType {a, b, c, d}.
     ///
-    /// `mission:Warehouse.getItemCount(self: Warehouse, item: string) -> [number]`; class read, live check AWC-T6.
+    /// `mission:Warehouse.getItemCount(self: Warehouse, item: item) -> [number]`; class read, live check AWC-T6.
     #[track_caller]
-    pub fn item_count(&self, item: impl Into<String>) -> Cmd<Call<f64>> {
+    pub fn item_count(&self, item: impl Into<WarehouseItem>) -> Cmd<Call<f64>> {
         self.0.typed(
             "Warehouse.getItemCount",
             v1::Env::Mission,
             Some(self.1.clone()),
-            vec![arg::string(item)],
+            vec![arg::item(item)],
             1,
         )
     }
 
     /// Adds count of an item.
     ///
-    /// `mission:Warehouse.addItem(self: Warehouse, item: string, count: number) -> []`; class mutate, live check AWC-T6.
+    /// `mission:Warehouse.addItem(self: Warehouse, item: item, count: number) -> []`; class mutate, live check AWC-T6.
     /// Off until the engine owner enables it (`engine.toml [calls]`, or `sortied --dev`).
     #[track_caller]
-    pub fn add_item(&self, item: impl Into<String>, count: f64) -> Cmd<Call<()>> {
+    pub fn add_item(&self, item: impl Into<WarehouseItem>, count: f64) -> Cmd<Call<()>> {
         self.0.typed(
             "Warehouse.addItem",
             v1::Env::Mission,
             Some(self.1.clone()),
-            vec![arg::string(item), arg::number(count)],
+            vec![arg::item(item), arg::number(count)],
             1,
         )
     }
 
     /// Removes count of an item.
     ///
-    /// `mission:Warehouse.removeItem(self: Warehouse, item: string, count: number) -> []`; class mutate, live check AWC-T6.
+    /// `mission:Warehouse.removeItem(self: Warehouse, item: item, count: number) -> []`; class mutate, live check AWC-T6.
     /// Off until the engine owner enables it (`engine.toml [calls]`, or `sortied --dev`).
     #[track_caller]
-    pub fn remove_item(&self, item: impl Into<String>, count: f64) -> Cmd<Call<()>> {
+    pub fn remove_item(&self, item: impl Into<WarehouseItem>, count: f64) -> Cmd<Call<()>> {
         self.0.typed(
             "Warehouse.removeItem",
             v1::Env::Mission,
             Some(self.1.clone()),
-            vec![arg::string(item), arg::number(count)],
+            vec![arg::item(item), arg::number(count)],
             1,
         )
     }
 
     /// Sets the stock of an item.
     ///
-    /// `mission:Warehouse.setItem(self: Warehouse, item: string, count: number) -> []`; class mutate, live check AWC-T6.
+    /// `mission:Warehouse.setItem(self: Warehouse, item: item, count: number) -> []`; class mutate, live check AWC-T6.
     /// Off until the engine owner enables it (`engine.toml [calls]`, or `sortied --dev`).
     #[track_caller]
-    pub fn set_item(&self, item: impl Into<String>, count: f64) -> Cmd<Call<()>> {
+    pub fn set_item(&self, item: impl Into<WarehouseItem>, count: f64) -> Cmd<Call<()>> {
         self.0.typed(
             "Warehouse.setItem",
             v1::Env::Mission,
             Some(self.1.clone()),
-            vec![arg::string(item), arg::number(count)],
+            vec![arg::item(item), arg::number(count)],
             1,
         )
     }
