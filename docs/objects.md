@@ -151,6 +151,51 @@ ctx.report().set("junk_removed", junk.total);
   точно не выразит — `Error::Invalid`, движок не расширяет объём молча. Повтор безопасен: второй
   раз удалять нечего. Что именно DCS считает мусором, не документировано.
 
+## Поиск объектов
+
+`ctx.search_objects(объём)` (ревизия API 2: `#[sortie::mission(api_rev = 2)]`) — что DCS находит
+внутри объёма функцией `world.searchObjects`: юниты, статики, объекты карты (здания, мосты),
+по желанию оружие, грузы и аэродромы. Это чтение: ни в DCS, ни в мире ничего не меняется.
+
+<!-- snippet: sdk-objects-search -->
+```rust
+#[sortie::mission(api_rev = 2)] // ctx.search_objects — API ревизии 2
+pub async fn search(ctx: Ctx<MyMission>, _start: Start) -> sortie::Result<()> {
+    use sortie::cmd::ObjectCategory as C;
+    let p = zones::TARGET.center();
+    // Шар радиусом 300 м на земле: юниты, статики и объекты карты (по умолчанию).
+    let found = ctx
+        .search_objects(Volume::sphere_on_ground(p, 300.0))
+        .categories([C::Unit, C::Static, C::Scenery])
+        .await?;
+    for o in &found.objects {
+        // Юнит или статик из мира — с его Eid; у объекта карты Eid нет, есть его id в DCS.
+        let intact = match (o.life, o.life_max) {
+            (Some(life), Some(max)) if max > 0.0 => life / max,
+            _ => 1.0,
+        };
+        let in_world = o
+            .eid
+            .and_then(|eid| ctx.world().entity(eid).map(|e| e.is_alive()));
+        let _ = (intact, in_world, o.dcs_id, &o.type_name);
+    }
+    // Больше лимита (по умолчанию 500, не больше 2000) — `truncated`, остальное не прочитано.
+    let busy = found.truncated || !found.objects.is_empty();
+```
+
+* У каждого объекта — то, что DCS ответил в момент поиска: категория, имя, тип, точка, `life`
+  и `life_max` (жизнь целого объекта, `getDesc().life`), коалиция и id в DCS. Юнит, статик или
+  груз, который знает мир, назван своим `eid`: остальное о нём — в `ctx.world()`.
+* Объект карты не сущность мира: `eid` нет, есть `dcs_id` — его id на карте. Имя объекта карты —
+  тоже этот id текстом (по сообщениям; не измерено).
+* Объём — шар, бокс, отрезок, пирамида или круг на карте (круглая зона сценария), как у
+  `ctx.remove_junk`; многоугольник и область вокруг объекта — `Error::Invalid`.
+* Читается не больше `.limit(n)` объектов (по умолчанию 500, не больше 2000); если в объёме
+  больше, `truncated = true`, а остальные не перечислены. Каждый объект — около десятка вызовов
+  DCS, так что большой поиск стоит кадра.
+* Логика ревизии ниже 2 получает `Error::Revision`, движок ревизии 1 (0.2.x) —
+  `Error::EngineTooOld`. Нужен новый слой Lua: `sortie install` и перезапуск DCS.
+
 ## Пакет спавнов
 
 Постоянный сервер начинает с восстановления кампании: сотни групп и статиков. `ctx.spawn_batch()`

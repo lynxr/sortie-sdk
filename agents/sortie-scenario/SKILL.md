@@ -21,7 +21,7 @@ only in the `.miz`, and a group is in the `.miz` and the manifest but has no Rus
 ## Setup
 
 ```powershell
-uv add "sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.2.1#subdirectory=python/sortie-gen"
+uv add "sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.3.0#subdirectory=python/sortie-gen"
 ```
 
 Or install the `sortie_gen` wheel from the GitHub release. Python 3.11+.

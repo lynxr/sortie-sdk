@@ -59,6 +59,8 @@ pub const DESTROY_SCENERY: &str = "destroy.scenery";
 /// Destroying a weapon in flight or an ejected crew member by its Eid (`ctx.destroy(eid)`).
 pub const DESTROY_WEAPON: &str = "destroy.weapon";
 pub const REMOVE_JUNK: &str = "remove_junk";
+/// Objects DCS finds inside a volume (`ctx.search_objects(..)`, API revision 2).
+pub const SEARCH_OBJECTS: &str = "search_objects";
 pub const DRAW: &str = "draw";
 /// F10 menu trees (`ctx.menus().tree(..)`).
 pub const MENU_TREE: &str = "menu_tree";
@@ -89,6 +91,7 @@ pub const TYPED: &[&str] = &[
     DESTROY_SCENERY,
     DESTROY_WEAPON,
     REMOVE_JUNK,
+    SEARCH_OBJECTS,
     DRAW,
     MENU_TREE,
 ];

@@ -589,6 +589,14 @@ pub async fn run(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
   and its airbase stay alive in the world. FakeDcs: `dcs.survives_destroy(name, true)`.
 - `ctx.remove_junk(volumes)` (1 to 16) -> `JunkRemoved { total, per_volume }`. DCS volume types
   and map circles only; a polygon is `Error::Invalid`, never widened. Safe to repeat.
+- `ctx.search_objects(volume)` (API revision 2: `#[sortie::mission(api_rev = 2)]`) -> `Found {
+  objects, truncated }`: what `world.searchObjects` finds in one volume (DCS volume types and
+  map circles, as `remove_junk`). `.categories([ObjectCategory::Unit, Static, Scenery, ..])`
+  (the default: units, statics, scenery), `.limit(n)` (default 500, at most 2000; more in the
+  volume sets `truncated`). Each `FoundObject { category, eid, name, type_name, point, life,
+  life_max, coalition, dcs_id }` is what DCS answered then; `eid` is set for a unit, static or
+  cargo the world holds (read the rest from `ctx.world()`); scenery has only `dcs_id` (its map
+  id). A read: it changes nothing. Types in `sortie::cmd`.
 
 Many spawns at once (a campaign restore) are one `ctx.spawn_batch()` command with one key:
 

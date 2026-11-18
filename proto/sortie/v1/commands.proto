@@ -149,7 +149,9 @@ message Reply {
   // SpawnBatch: one per item, in item order (`groups` and `entities` then hold the snaps of
   // the items that ran, in item order).
   repeated SpawnResult spawns = 8;
-  // 10..39 are assigned to waves 2..6 (spec, section 8.2).
+  // Query.search_objects (API revision 2).
+  FoundObjects found = 10;
+  // 11..39 are assigned to waves 2..6 (spec, section 8.2).
 }
 
 // GroupSel and UnitSel moved to common.proto in 0.2.0 (same package, same numbers).
@@ -457,6 +459,8 @@ message Query {
     DescByType desc_by_type = 1;
     LandHeight land_height = 2;
     FlagValue flag_value = 3;
+    // API revision 2 (send min_api_rev = 2).
+    SearchObjects search_objects = 4;
   }
 }
 
@@ -473,6 +477,63 @@ message LandHeight {
 // trigger.misc.getUserFlag; ok = number.
 message FlagValue {
   string ident = 1;
+}
+
+// ---- W2: SearchObjects (API revision 2) ----
+// world.searchObjects over one volume; a read (lane QUERY, nothing changes in DCS or in the
+// mirror). The Lua layer collects the objects DCS hands its search function and reads each
+// one: category, name, type, position, life, the life of the undamaged object, coalition.
+// The engine names an object its mirror holds by its Eid. Result: reply.found; `ok` = the
+// number of objects found.
+message SearchObjects {
+  // A DCS volume type (sphere, axis_box, segment, pyramid), passed as it is; an `area` only as
+  // a circle (or a circular manifest zone) without floor or ceiling, searched as a sphere on
+  // the ground; any other area is ERROR_CODE_INVALID, as for RemoveJunk.
+  Volume volume = 1;
+  // Object.Category values to search; empty = units, statics and scenery.
+  repeated ObjectCategory categories = 2;
+  // At most this many objects are read: 0 = 500, at most 2000. With more in the volume
+  // `found.truncated` is set and the rest is not listed.
+  uint32 limit = 3;
+}
+
+// Object.Category of DCS.
+enum ObjectCategory {
+  OBJECT_CATEGORY_UNSPECIFIED = 0;
+  OBJECT_CATEGORY_UNIT = 1;
+  OBJECT_CATEGORY_WEAPON = 2;
+  OBJECT_CATEGORY_STATIC = 3;
+  OBJECT_CATEGORY_BASE = 4;
+  // Map objects: buildings, bridges, trees of the terrain.
+  OBJECT_CATEGORY_SCENERY = 5;
+  OBJECT_CATEGORY_CARGO = 6;
+}
+
+message FoundObjects {
+  // In the order DCS handed them over.
+  repeated FoundObject objects = 1;
+  // The volume held more than `limit` objects; the rest is not listed.
+  bool truncated = 2;
+}
+
+// One object as DCS answered when the search ran. Fields DCS did not answer stay unset.
+message FoundObject {
+  ObjectCategory category = 1;
+  // The mirror's Eid of a unit, static or cargo it holds; 0 for scenery, weapons, airbases and
+  // objects the mirror does not hold.
+  uint64 eid = 2;
+  // getName(); a scenery object answers its map id as a string.
+  string name = 3;
+  string type_name = 4;
+  Vec3 point = 5;
+  // getLife().
+  optional double life = 6;
+  // getDesc().life: the life of the undamaged object.
+  optional double life_max = 7;
+  // COALITION_UNSPECIFIED when the object has none (scenery).
+  Coalition coalition = 8;
+  // The object's `id_` in DCS (a scenery object's map id).
+  uint64 dcs_id = 9;
 }
 
 // Hooks-environment server control (LANE_CONTROL).

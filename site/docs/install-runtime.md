@@ -5,14 +5,14 @@
 
 ## Архив
 
-Скачайте `sortie-runtime-0.2.1-win64.zip` со страницы выпуска
-[v0.2.1](https://github.com/lynxr/sortie-sdk/releases/tag/v0.2.1). Всё содержимое
-архива лежит в одной папке `sortie-runtime-0.2.1-win64`. Распакуйте архив и
+Скачайте `sortie-runtime-0.3.0-win64.zip` со страницы выпуска
+[v0.3.0](https://github.com/lynxr/sortie-sdk/releases/tag/v0.3.0). Всё содержимое
+архива лежит в одной папке `sortie-runtime-0.3.0-win64`. Распакуйте архив и
 перенесите эту папку в постоянное место, например в `C:\Sortie`:
 
 ```powershell
-Expand-Archive .\sortie-runtime-0.2.1-win64.zip -DestinationPath .
-Move-Item .\sortie-runtime-0.2.1-win64 C:\Sortie
+Expand-Archive .\sortie-runtime-0.3.0-win64.zip -DestinationPath .
+Move-Item .\sortie-runtime-0.3.0-win64 C:\Sortie
 ```
 
 Внутри папки:

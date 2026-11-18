@@ -104,8 +104,9 @@ match ctx.dcs().land().height(MapPoint::new(0.0, 0.0)).await {
   Saved Games остался прежний слой, `sortie install` не запускали) отвечает, что такой операции
   нет; движок считает его слоем 0.1.0, и все операции волны 1 (`spawn_static`, `draw`,
   `menu_tree`, `remove_junk`, `dcs_call`, `dcs_batch`, все `call:*`) — `NOT_IMPLEMENTED` с
-  подсказкой «run `sortie install`». Логика с `requires = [...]` получает отказ при
-  подключении, а не ошибку на первой команде.
+  подсказкой «run `sortie install`»; слой 0.2.x так же показывает `search_objects` (ревизия
+  2). Логика с `requires = [...]` получает отказ при подключении, а не ошибку на первой
+  команде.
 * **Владелец движка.** `engine.toml`: `[calls]` включает и выключает функции каталога,
   `[operations] disable = ["remove_junk"]` выключает типизированные операции (они `DISABLED`,
   команда — `Error::Rejected` с `capability()`).

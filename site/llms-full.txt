@@ -1,6 +1,6 @@
-# Sortie SDK 0.2.1: the full documentation
+# Sortie SDK 0.3.0: the full documentation
 
-> Every page of the Sortie SDK documentation (written in Russian), then the instructions and skills for agents (English), in one Markdown file. Site: https://lynxr.github.io/sortie-sdk/. Repository: https://github.com/lynxr/sortie-sdk (tag v0.2.1).
+> Every page of the Sortie SDK documentation (written in Russian), then the instructions and skills for agents (English), in one Markdown file. Site: https://lynxr.github.io/sortie-sdk/. Repository: https://github.com/lynxr/sortie-sdk (tag v0.3.0).
 
 <!-- source: docs/index.md -->
 
@@ -10,7 +10,7 @@ Sortie — внешний движок миссий для DCS World. Повед
 отдельном процессе рядом с DCS. Статическая часть миссии описывается на Python и собирается в
 обычный `.miz`.
 
-Это SDK версии 0.2.1: библиотеки для логики на Rust, генератор миссий на Python,
+Это SDK версии 0.3.0: библиотеки для логики на Rust, генератор миссий на Python,
 шаблон проекта и документация. Движок и мост для DCS поставляются отдельно, готовым архивом
 рантайма.
 
@@ -65,7 +65,7 @@ Sortie — внешний движок миссий для DCS World. Повед
 Логику и сценарий можно собирать и на Linux. Рантайм (`sortied`, мост) работает только на
 Windows рядом с DCS.
 
-## Состояние версии 0.2.1
+## Состояние версии 0.3.0
 
 * В живом DCS 2.9.31 проверены одиночная игра и сетевая игра, где хост — обычный клиент DCS.
 * На dedicated server Sortie ещё не запускался. Перезапуск миссии (`restart`), запуск сборки
@@ -86,7 +86,7 @@ Windows рядом с DCS.
 Исходники SDK, шаблон и пример `op_north` лежат в репозитории
 [lynxr/sortie-sdk](https://github.com/lynxr/sortie-sdk). Инструкции для ИИ-агентов, которые
 пишут миссии на этом SDK, — в папке
-[agents](https://github.com/lynxr/sortie-sdk/tree/v0.2.1/agents) репозитория.
+[agents](https://github.com/lynxr/sortie-sdk/tree/v0.3.0/agents) репозитория.
 
 <!-- source: docs/install-runtime.md -->
 
@@ -97,14 +97,14 @@ Windows рядом с DCS.
 
 ## Архив
 
-Скачайте `sortie-runtime-0.2.1-win64.zip` со страницы выпуска
-[v0.2.1](https://github.com/lynxr/sortie-sdk/releases/tag/v0.2.1). Всё содержимое
-архива лежит в одной папке `sortie-runtime-0.2.1-win64`. Распакуйте архив и
+Скачайте `sortie-runtime-0.3.0-win64.zip` со страницы выпуска
+[v0.3.0](https://github.com/lynxr/sortie-sdk/releases/tag/v0.3.0). Всё содержимое
+архива лежит в одной папке `sortie-runtime-0.3.0-win64`. Распакуйте архив и
 перенесите эту папку в постоянное место, например в `C:\Sortie`:
 
 ```powershell
-Expand-Archive .\sortie-runtime-0.2.1-win64.zip -DestinationPath .
-Move-Item .\sortie-runtime-0.2.1-win64 C:\Sortie
+Expand-Archive .\sortie-runtime-0.3.0-win64.zip -DestinationPath .
+Move-Item .\sortie-runtime-0.3.0-win64 C:\Sortie
 ```
 
 Внутри папки:
@@ -257,13 +257,13 @@ C:\Sortie\bin\sortie.exe status
 
 ## 2. Шаблон миссии
 
-На странице выпуска [v0.2.1](https://github.com/lynxr/sortie-sdk/releases/tag/v0.2.1)
+На странице выпуска [v0.3.0](https://github.com/lynxr/sortie-sdk/releases/tag/v0.3.0)
 скачайте исходники SDK («Source code (zip)») и распакуйте. Скопируйте из них папку `template`
 туда, где будет жить ваша миссия, например в `C:\Missions\my_mission`. Или возьмите шаблон через
 Git:
 
 ```powershell
-git clone --branch v0.2.1 https://github.com/lynxr/sortie-sdk sortie-sdk
+git clone --branch v0.3.0 https://github.com/lynxr/sortie-sdk sortie-sdk
 Copy-Item -Recurse sortie-sdk\template C:\Missions\my_mission
 ```
 
@@ -474,19 +474,19 @@ C:\Sortie\bin\sortie.exe status     # движок, мост, сессия
 # Подключение SDK
 
 SDK не публикуется на crates.io и PyPI. Cargo и uv берут его прямо из Git-репозитория
-[lynxr/sortie-sdk](https://github.com/lynxr/sortie-sdk) по тегу выпуска `v0.2.1`.
+[lynxr/sortie-sdk](https://github.com/lynxr/sortie-sdk) по тегу выпуска `v0.3.0`.
 В шаблоне миссии это уже настроено; ниже — как подключить SDK к своему проекту.
 
 ## Логика на Rust
 
 ```toml
 [dependencies]
-sortie = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.2.1" }
+sortie = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.3.0" }
 # Только если логика хранит свои структуры через ctx.state (derive Serialize/Deserialize):
 serde = { version = "1", features = ["derive"] }
 
 [build-dependencies]
-sortie-build = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.2.1" }
+sortie-build = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.3.0" }
 ```
 
 * `sortie` — сам SDK: контекст миссии, команды, мир, события, макросы.
@@ -503,14 +503,14 @@ sortie-build = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.2.1" }
 Добавьте `sortie-gen` в свой uv-проект из того же репозитория:
 
 ```powershell
-uv add "sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.2.1#subdirectory=python/sortie-gen"
+uv add "sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.3.0#subdirectory=python/sortie-gen"
 ```
 
-Или из wheel со страницы выпуска [v0.2.1](https://github.com/lynxr/sortie-sdk/releases/tag/v0.2.1),
+Или из wheel со страницы выпуска [v0.3.0](https://github.com/lynxr/sortie-sdk/releases/tag/v0.3.0),
 если Git недоступен:
 
 ```powershell
-uv add .\sortie_gen-0.2.1-py3-none-any.whl
+uv add .\sortie_gen-0.3.0-py3-none-any.whl
 ```
 
 `sortie-gen` требует Python 3.11 или новее и ставит pydcs 1.0.0, grpcio и protobuf. Сценарий
@@ -547,7 +547,7 @@ Git: в Git для Windows уже есть Git Credential Manager.
 
 ## Версии
 
-Версия SDK, генератора и рантайма одна: 0.2.1. Обновляйте их вместе: новый тег в
+Версия SDK, генератора и рантайма одна: 0.3.0. Обновляйте их вместе: новый тег в
 `Cargo.toml` и `pyproject.toml` и новый архив рантайма (см.
 [Эксплуатацию](https://lynxr.github.io/sortie-sdk/docs/operations.html#обновление)).
 
@@ -561,7 +561,7 @@ Git: в Git для Windows уже есть Git Credential Manager.
 возвращают результат из игры.
 
 Готовый проект — шаблон из [быстрого старта](https://lynxr.github.io/sortie-sdk/docs/quickstart.md). Большой пример —
-[examples/op_north](https://github.com/lynxr/sortie-sdk/tree/v0.2.1/examples/op_north)
+[examples/op_north](https://github.com/lynxr/sortie-sdk/tree/v0.3.0/examples/op_north)
 в репозитории SDK.
 
 ## Крейт логики
@@ -1263,6 +1263,7 @@ my_mission_logic [--engine <url>] [--build-id <id>] [--logic <name>] [--dev]
 | группы | `ctx.group(..)`, `group.set_option(..)`, `push_task`, `set_task`, `destroy` |
 | спавн | `ctx.spawn_group(templates::X)`, `.named`, `.from_airbase`, `.at` |
 | статики, уничтожение, мусор (ревизия 1) | `ctx.spawn_static(тип, страна)`, `ctx.destroy(obj)`, `ctx.remove_junk(объёмы)` ([Объекты](https://lynxr.github.io/sortie-sdk/docs/objects.md)) |
+| поиск объектов в объёме (ревизия 2) | `ctx.search_objects(объём)`, `.categories(..)`, `.limit(n)` ([Объекты](https://lynxr.github.io/sortie-sdk/docs/objects.html#поиск-объектов)) |
 | пакет спавнов (ревизия 1) | `ctx.spawn_batch()`, `.group(..)`, `.static_object(..)`, `.add_group(..)`, `.add_static(..)`, `.stop_on_error()` ([Объекты](https://lynxr.github.io/sortie-sdk/docs/objects.html#пакет-спавнов)) |
 | сообщения, дым, флаги | `ctx.message(..)`, `ctx.smoke(..)`, `ctx.flag(..).set(..)` / `.get()` |
 | меню | `ctx.menu(coalition)`, `.per_group()`, `.command(menus::X)`, `presses()`, `remove()` |
@@ -1426,6 +1427,50 @@ ctx.report().set("junk_removed", junk.total);
   круглая зона сценария). Многоугольник, зона-четырёхугольник и область вокруг объекта DCS
   точно не выразит — `Error::Invalid`, движок не расширяет объём молча. Повтор безопасен: второй
   раз удалять нечего. Что именно DCS считает мусором, не документировано.
+
+## Поиск объектов
+
+`ctx.search_objects(объём)` (ревизия API 2: `#[sortie::mission(api_rev = 2)]`) — что DCS находит
+внутри объёма функцией `world.searchObjects`: юниты, статики, объекты карты (здания, мосты),
+по желанию оружие, грузы и аэродромы. Это чтение: ни в DCS, ни в мире ничего не меняется.
+
+```rust
+#[sortie::mission(api_rev = 2)] // ctx.search_objects — API ревизии 2
+pub async fn search(ctx: Ctx<MyMission>, _start: Start) -> sortie::Result<()> {
+    use sortie::cmd::ObjectCategory as C;
+    let p = zones::TARGET.center();
+    // Шар радиусом 300 м на земле: юниты, статики и объекты карты (по умолчанию).
+    let found = ctx
+        .search_objects(Volume::sphere_on_ground(p, 300.0))
+        .categories([C::Unit, C::Static, C::Scenery])
+        .await?;
+    for o in &found.objects {
+        // Юнит или статик из мира — с его Eid; у объекта карты Eid нет, есть его id в DCS.
+        let intact = match (o.life, o.life_max) {
+            (Some(life), Some(max)) if max > 0.0 => life / max,
+            _ => 1.0,
+        };
+        let in_world = o
+            .eid
+            .and_then(|eid| ctx.world().entity(eid).map(|e| e.is_alive()));
+        let _ = (intact, in_world, o.dcs_id, &o.type_name);
+    }
+    // Больше лимита (по умолчанию 500, не больше 2000) — `truncated`, остальное не прочитано.
+    let busy = found.truncated || !found.objects.is_empty();
+```
+
+* У каждого объекта — то, что DCS ответил в момент поиска: категория, имя, тип, точка, `life`
+  и `life_max` (жизнь целого объекта, `getDesc().life`), коалиция и id в DCS. Юнит, статик или
+  груз, который знает мир, назван своим `eid`: остальное о нём — в `ctx.world()`.
+* Объект карты не сущность мира: `eid` нет, есть `dcs_id` — его id на карте. Имя объекта карты —
+  тоже этот id текстом (по сообщениям; не измерено).
+* Объём — шар, бокс, отрезок, пирамида или круг на карте (круглая зона сценария), как у
+  `ctx.remove_junk`; многоугольник и область вокруг объекта — `Error::Invalid`.
+* Читается не больше `.limit(n)` объектов (по умолчанию 500, не больше 2000); если в объёме
+  больше, `truncated = true`, а остальные не перечислены. Каждый объект — около десятка вызовов
+  DCS, так что большой поиск стоит кадра.
+* Логика ревизии ниже 2 получает `Error::Revision`, движок ревизии 1 (0.2.x) —
+  `Error::EngineTooOld`. Нужен новый слой Lua: `sortie install` и перезапуск DCS.
 
 ## Пакет спавнов
 
@@ -2603,8 +2648,9 @@ match ctx.dcs().land().height(MapPoint::new(0.0, 0.0)).await {
   Saved Games остался прежний слой, `sortie install` не запускали) отвечает, что такой операции
   нет; движок считает его слоем 0.1.0, и все операции волны 1 (`spawn_static`, `draw`,
   `menu_tree`, `remove_junk`, `dcs_call`, `dcs_batch`, все `call:*`) — `NOT_IMPLEMENTED` с
-  подсказкой «run `sortie install`». Логика с `requires = [...]` получает отказ при
-  подключении, а не ошибку на первой команде.
+  подсказкой «run `sortie install`»; слой 0.2.x так же показывает `search_objects` (ревизия
+  2). Логика с `requires = [...]` получает отказ при подключении, а не ошибку на первой
+  команде.
 * **Владелец движка.** `engine.toml`: `[calls]` включает и выключает функции каталога,
   `[operations] disable = ["remove_junk"]` выключает типизированные операции (они `DISABLED`,
   команда — `Error::Rejected` с `capability()`).
@@ -3062,10 +3108,10 @@ sortie-gen lock|build|validate|register|launch|restart|watch|results <scenario.p
 
 # Тестирование
 
-## Что есть в 0.2.1
+## Что есть в 0.3.0
 
 В этой версии SDK нет тестов без DCS: фальшивая DCS (FakeDcs) содержит движок, а движок в SDK
-не входит. Атрибут `#[sortie::test]` в SDK 0.2.1 не компилируется и говорит об этом
+не входит. Атрибут `#[sortie::test]` в SDK 0.3.0 не компилируется и говорит об этом
 прямо:
 
 ```text
@@ -3451,8 +3497,8 @@ doctor». После каждого обновления DCS запускайт�
 
 Связь есть, сессия есть, а `ctx.world()` пустой. В DCS 2.9.31 `Unit:getID()` возвращает строку,
 а не число, и мост старых сборок из-за этого не мог передать ни одного юнита. Рантайм
-0.2.1 понимает оба вида. Если вы видите пустой мир, проверьте, что установлен
-рантайм 0.2.1 (`sortie status` показывает версию моста в строке `bridge`), и
+0.3.0 понимает оба вида. Если вы видите пустой мир, проверьте, что установлен
+рантайм 0.3.0 (`sortie status` показывает версию моста в строке `bridge`), и
 перезапустите DCS.
 
 ## Игроки не могут занять слоты в сетевой игре
@@ -3543,7 +3589,7 @@ DCS.
 ваш выбор. Рантайм (`sortied`, `sortie`, мост) распространяется под своей лицензией: файл
 `LICENSE` в архиве рантайма.
 
-## Ограничения версии 0.2.1
+## Ограничения версии 0.3.0
 
 **Проверка в игре.** Проверены одиночная игра и сетевая игра с хостом-клиентом в DCS 2.9.31.
 Dedicated server, `restart`, `launch` и проверка типов в живой игре ещё не проверялись.
@@ -3576,10 +3622,10 @@ Dedicated server, `restart`, `launch` и проверка типов в живо
 # Что нового
 
 Полная история изменений — в
-[CHANGELOG.md](https://github.com/lynxr/sortie-sdk/blob/v0.2.1/CHANGELOG.md) репозитория
+[CHANGELOG.md](https://github.com/lynxr/sortie-sdk/blob/v0.3.0/CHANGELOG.md) репозитория
 SDK.
 
-## 0.2.1
+## 0.3.0
 
 Первый выпуск SDK для авторов миссий.
 
@@ -3592,7 +3638,7 @@ SDK.
   правило аэродрома игроков, проверка типов через запущенную DCS, регистрация, запуск,
   перезапуск, события и итоги, миссия-заглушка `lobby`, разбор миссий `adopt`.
 * Шаблон миссии и пример `op_north`.
-* Рантайм 0.2.1: `sortied`, `sortie` (`install`, `doctor`, `status`, `events`,
+* Рантайм 0.3.0: `sortied`, `sortie` (`install`, `doctor`, `status`, `events`,
   `top`) и мост для DCS 2.9.31.
 
 Тесты без DCS появятся в SDK 0.2.
@@ -3601,8 +3647,8 @@ SDK.
 
 # Agent instructions: a Sortie mission repository
 
-This repository is one DCS World mission built on the Sortie SDK 0.2.1
-(`https://github.com/lynxr/sortie-sdk`, tag `v0.2.1`). It has two halves:
+This repository is one DCS World mission built on the Sortie SDK 0.3.0
+(`https://github.com/lynxr/sortie-sdk`, tag `v0.3.0`). It has two halves:
 
 - `scenario.py`: the static mission in Python (sortie-gen over pydcs). It builds the `.miz`,
   its manifest and `scenario.lock.json`, the list of symbols the logic may use.
@@ -3659,7 +3705,7 @@ uv run python scenario.py watch               # live events; `results` after the
    `ctx.once_per_turn`.
 4. **One thread, short borrows.** No blocking calls; background work through `ctx.spawn`;
    `ctx.world()` and `StateDoc::get()` are dropped before the next `.await`.
-5. **No tests without DCS in SDK 0.2.1.** FakeDcs and `#[sortie::test]` arrive in
+5. **No tests without DCS in SDK 0.3.0.** FakeDcs and `#[sortie::test]` arrive in
    SDK 0.2 (`#[sortie::test]` is a compile error until then). Unit-test plain functions with
    `#[test]`; test the mission in DCS with `sortied --dev`.
 6. **The `.miz` comes from `scenario.py`.** Change groups, units and zones there, not in the
@@ -3673,7 +3719,7 @@ uv run python scenario.py watch               # live events; `results` after the
 - Skills, one per task: `sortie-mission-logic` (the Rust logic), `sortie-scenario`
   (`scenario.py` and its commands), `sortie-live-debugging` (install, logs, failures in DCS).
   They are in the `agents/` folder of the SDK repository and in
-  [the skills zip](https://lynxr.github.io/sortie-sdk/agents/sortie-agent-skills-0.2.1.zip); online:
+  [the skills zip](https://lynxr.github.io/sortie-sdk/agents/sortie-agent-skills-0.3.0.zip); online:
   [mission logic](https://lynxr.github.io/sortie-sdk/agents/sortie-mission-logic/SKILL.html),
   [scenario](https://lynxr.github.io/sortie-sdk/agents/sortie-scenario/SKILL.html),
   [live debugging](https://lynxr.github.io/sortie-sdk/agents/sortie-live-debugging/SKILL.html).
@@ -3686,7 +3732,7 @@ uv run python scenario.py watch               # live events; `results` after the
 
 # Sortie for AI coding agents
 
-This folder helps coding agents work on a Sortie mission (Sortie SDK 0.2.1). It is
+This folder helps coding agents work on a Sortie mission (Sortie SDK 0.3.0). It is
 written in English; the SDK docs are in Russian.
 
 | File | For | What it is |
@@ -3698,7 +3744,7 @@ written in English; the SDK docs are in Russian.
 | [llms.txt](https://lynxr.github.io/sortie-sdk/llms.txt) | any agent that reads the web | an index of the docs and skills ([llmstxt.org](https://llmstxt.org) format) |
 
 The site build packs this whole folder into a zip:
-[sortie-agent-skills-0.2.1.zip](https://lynxr.github.io/sortie-sdk/agents/sortie-agent-skills-0.2.1.zip).
+[sortie-agent-skills-0.3.0.zip](https://lynxr.github.io/sortie-sdk/agents/sortie-agent-skills-0.3.0.zip).
 Its root holds the three skill folders, `AGENTS.md`, `llms.txt` and this file.
 
 ## Claude Code
@@ -3772,7 +3818,7 @@ The Saved Games folder is `%USERPROFILE%\Saved Games\DCS` (a dedicated server st
 
 ## Setup on a machine with DCS
 
-1. Unzip `sortie-runtime-0.2.1-win64.zip` from the GitHub release of
+1. Unzip `sortie-runtime-0.3.0-win64.zip` from the GitHub release of
    `lynxr/sortie-sdk` and follow its README; check it against `SHA256SUMS`.
 2. `sortie.exe install` from a console **run as administrator**: it copies the Lua layer, the
    hook and the bridge DLL into Saved Games, creates `Sortie\link.secret` and
@@ -3846,7 +3892,7 @@ The Saved Games folder is `%USERPROFILE%\Saved Games\DCS` (a dedicated server st
   with `.on_pause(Fail)`), `ctx.sleep` and timers stop, and the type check of `register` cannot
   run.
 - **Measurements of DCS itself** (event ids, timer cadence, sampling cost) are not part of SDK
-  0.2.1: `sortie probe` prints "`sortie probe` lands in M0" and exits with code 2;
+  0.3.0: `sortie probe` prints "`sortie probe` lands in M0" and exits with code 2;
   `sortie dev`, `sortie trace` and `sortie record` are not built yet either (M4). Report what
   you measure with the DCS version, FPS and hardware.
 
@@ -3967,11 +4013,11 @@ edition = "2024"
 rust-version = "1.89"
 
 [dependencies]
-sortie = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.2.1" }
+sortie = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.3.0" }
 serde = { version = "1", features = ["derive"] }   # only for state documents
 
 [build-dependencies]
-sortie-build = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.2.1" }
+sortie-build = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.3.0" }
 
 [lints.clippy]
 await_holding_refcell_ref = "deny"   # catches a world borrow held across .await
@@ -4039,7 +4085,7 @@ site; the session goes on.
 2. **Write the step replay-safe** (rules below), then `cargo build` and `cargo clippy`.
    Done when both pass and every `spawn_group` and `destroy` in the diff carries `.key(..)`.
 3. **Run it in DCS** with `sortied --dev` and the logic's `--dev` (see the
-   sortie-live-debugging skill). SDK 0.2.1 has no tests without DCS: FakeDcs
+   sortie-live-debugging skill). SDK 0.3.0 has no tests without DCS: FakeDcs
    arrives in SDK 0.2, and `#[sortie::test]` is a compile error until then. Put pure decisions
    (which wave, which target) in plain functions and test them with ordinary `#[test]`.
 
@@ -4718,6 +4764,14 @@ pub async fn run(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
   and its airbase stay alive in the world. FakeDcs: `dcs.survives_destroy(name, true)`.
 - `ctx.remove_junk(volumes)` (1 to 16) -> `JunkRemoved { total, per_volume }`. DCS volume types
   and map circles only; a polygon is `Error::Invalid`, never widened. Safe to repeat.
+- `ctx.search_objects(volume)` (API revision 2: `#[sortie::mission(api_rev = 2)]`) -> `Found {
+  objects, truncated }`: what `world.searchObjects` finds in one volume (DCS volume types and
+  map circles, as `remove_junk`). `.categories([ObjectCategory::Unit, Static, Scenery, ..])`
+  (the default: units, statics, scenery), `.limit(n)` (default 500, at most 2000; more in the
+  volume sets `truncated`). Each `FoundObject { category, eid, name, type_name, point, life,
+  life_max, coalition, dcs_id }` is what DCS answered then; `eid` is set for a unit, static or
+  cargo the world holds (read the rest from `ctx.world()`); scenery has only `dcs_id` (its map
+  id). A read: it changes nothing. Types in `sortie::cmd`.
 
 Many spawns at once (a campaign restore) are one `ctx.spawn_batch()` command with one key:
 
@@ -5256,7 +5310,7 @@ only in the `.miz`, and a group is in the `.miz` and the manifest but has no Rus
 ## Setup
 
 ```powershell
-uv add "sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.2.1#subdirectory=python/sortie-gen"
+uv add "sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.3.0#subdirectory=python/sortie-gen"
 ```
 
 Or install the `sortie_gen` wheel from the GitHub release. Python 3.11+.

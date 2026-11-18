@@ -693,6 +693,25 @@ impl<M: Scenario> Ctx<M> {
         )
     }
 
+    /// The units, statics and map objects DCS finds inside `volume`, each with its state as
+    /// DCS answered (API revision 2: declare `#[sortie::mission(api_rev = 2)]`). A read.
+    ///
+    /// ```ignore
+    /// let found = ctx
+    ///     .search_objects(Volume::sphere(center, 300.0))
+    ///     .categories([ObjectCategory::Unit, ObjectCategory::Static, ObjectCategory::Scenery])
+    ///     .await?;
+    /// let blocked = found.objects.iter().any(|o| o.life.unwrap_or(0.0) > 0.0);
+    /// ```
+    #[track_caller]
+    pub fn search_objects(&self, volume: crate::sel::Volume) -> Cmd<cmd::SearchObjects> {
+        Cmd::new(
+            self.session.clone(),
+            cmd::SearchObjects::new(volume),
+            Location::caller(),
+        )
+    }
+
     /// Ends the session (the turn) with `outcome`.
     #[track_caller]
     pub fn end_session(&self, outcome: Outcome) -> Cmd<cmd::EndSession> {

@@ -21,7 +21,8 @@ use crate::{Error, Failure, Result};
 
 mod objects;
 pub use objects::{
-    DestroyObject, Heliport, JunkRemoved, OnConflict, RemoveJunk, SpawnStatic, SpawnedStatic,
+    DestroyObject, Found, FoundObject, Heliport, JunkRemoved, ObjectCategory, OnConflict,
+    RemoveJunk, SearchObjects, SpawnStatic, SpawnedStatic,
 };
 mod batch;
 pub use batch::{BatchItem, BatchOutput, BatchSlot, MAX_BATCH_ITEMS, SpawnBatch, SpawnedBatch};

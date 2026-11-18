@@ -1,10 +1,10 @@
 # Что нового
 
 Полная история изменений — в
-[CHANGELOG.md](https://github.com/lynxr/sortie-sdk/blob/v0.2.1/CHANGELOG.md) репозитория
+[CHANGELOG.md](https://github.com/lynxr/sortie-sdk/blob/v0.3.0/CHANGELOG.md) репозитория
 SDK.
 
-## 0.2.1
+## 0.3.0
 
 Первый выпуск SDK для авторов миссий.
 
@@ -17,7 +17,7 @@ SDK.
   правило аэродрома игроков, проверка типов через запущенную DCS, регистрация, запуск,
   перезапуск, события и итоги, миссия-заглушка `lobby`, разбор миссий `adopt`.
 * Шаблон миссии и пример `op_north`.
-* Рантайм 0.2.1: `sortied`, `sortie` (`install`, `doctor`, `status`, `events`,
+* Рантайм 0.3.0: `sortied`, `sortie` (`install`, `doctor`, `status`, `events`,
   `top`) и мост для DCS 2.9.31.
 
 Тесты без DCS появятся в SDK 0.2.

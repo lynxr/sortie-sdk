@@ -129,3 +129,31 @@ pub async fn batch(ctx: Ctx<MyMission>, saved: &[(String, MapPoint)]) -> sortie:
     let _ = (cap, farp);
     Ok(())
 }
+
+// snippet:start sdk-objects-search
+#[sortie::mission(api_rev = 2)] // ctx.search_objects — API ревизии 2
+pub async fn search(ctx: Ctx<MyMission>, _start: Start) -> sortie::Result<()> {
+    use sortie::cmd::ObjectCategory as C;
+    let p = zones::TARGET.center();
+    // Шар радиусом 300 м на земле: юниты, статики и объекты карты (по умолчанию).
+    let found = ctx
+        .search_objects(Volume::sphere_on_ground(p, 300.0))
+        .categories([C::Unit, C::Static, C::Scenery])
+        .await?;
+    for o in &found.objects {
+        // Юнит или статик из мира — с его Eid; у объекта карты Eid нет, есть его id в DCS.
+        let intact = match (o.life, o.life_max) {
+            (Some(life), Some(max)) if max > 0.0 => life / max,
+            _ => 1.0,
+        };
+        let in_world = o
+            .eid
+            .and_then(|eid| ctx.world().entity(eid).map(|e| e.is_alive()));
+        let _ = (intact, in_world, o.dcs_id, &o.type_name);
+    }
+    // Больше лимита (по умолчанию 500, не больше 2000) — `truncated`, остальное не прочитано.
+    let busy = found.truncated || !found.objects.is_empty();
+    // snippet:end sdk-objects-search
+    let _ = busy;
+    Ok(())
+}

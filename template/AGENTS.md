@@ -1,7 +1,7 @@
 # Agent instructions: a Sortie mission repository
 
-This repository is one DCS World mission built on the Sortie SDK 0.2.1
-(`https://github.com/lynxr/sortie-sdk`, tag `v0.2.1`). It has two halves:
+This repository is one DCS World mission built on the Sortie SDK 0.3.0
+(`https://github.com/lynxr/sortie-sdk`, tag `v0.3.0`). It has two halves:
 
 - `scenario.py`: the static mission in Python (sortie-gen over pydcs). It builds the `.miz`,
   its manifest and `scenario.lock.json`, the list of symbols the logic may use.
@@ -58,7 +58,7 @@ uv run python scenario.py watch               # live events; `results` after the
    `ctx.once_per_turn`.
 4. **One thread, short borrows.** No blocking calls; background work through `ctx.spawn`;
    `ctx.world()` and `StateDoc::get()` are dropped before the next `.await`.
-5. **No tests without DCS in SDK 0.2.1.** FakeDcs and `#[sortie::test]` arrive in
+5. **No tests without DCS in SDK 0.3.0.** FakeDcs and `#[sortie::test]` arrive in
    SDK 0.2 (`#[sortie::test]` is a compile error until then). Unit-test plain functions with
    `#[test]`; test the mission in DCS with `sortied --dev`.
 6. **The `.miz` comes from `scenario.py`.** Change groups, units and zones there, not in the
@@ -72,7 +72,7 @@ uv run python scenario.py watch               # live events; `results` after the
 - Skills, one per task: `sortie-mission-logic` (the Rust logic), `sortie-scenario`
   (`scenario.py` and its commands), `sortie-live-debugging` (install, logs, failures in DCS).
   They are in the `agents/` folder of the SDK repository and in
-  [the skills zip](https://lynxr.github.io/sortie-sdk/agents/sortie-agent-skills-0.2.1.zip); online:
+  [the skills zip](https://lynxr.github.io/sortie-sdk/agents/sortie-agent-skills-0.3.0.zip); online:
   [mission logic](https://lynxr.github.io/sortie-sdk/agents/sortie-mission-logic/SKILL.html),
   [scenario](https://lynxr.github.io/sortie-sdk/agents/sortie-scenario/SKILL.html),
   [live debugging](https://lynxr.github.io/sortie-sdk/agents/sortie-live-debugging/SKILL.html).

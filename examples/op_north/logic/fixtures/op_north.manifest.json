@@ -2,7 +2,7 @@
   "scenario": "op_north",
   "schema": 3,
   "schema_sha256": "066934cb939700310641d6371b1f6140cfc86c2c3e04757d5a10f8a4664f270b",
-  "build_id": "01M6AWSXJ0ECZD194VKVEY4JK3",
+  "build_id": "01M6AWSXJ0JECERFANJ3PF8KVJ",
   "theatre": "Caucasus",
   "start_time": "2026-11-01T06:30:00Z",
   "time_limit_s": 10800,
@@ -257,7 +257,7 @@
     "unit_id": 9
   },
   "tools": {
-    "generator": "sortie-gen 0.2.1",
+    "generator": "sortie-gen 0.3.0",
     "pydcs": "1.0.0",
     "python": "3.13",
     "extra": {

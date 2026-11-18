@@ -10,12 +10,15 @@
 //!   FARPs, not measured) is `Error::Lua` ("DCS did not remove .."): the world keeps it alive.
 //! * [`RemoveJunk`] (`ctx.remove_junk(volumes)`): wrecks, craters and debris inside DCS
 //!   volumes.
+//! * [`SearchObjects`] (`ctx.search_objects(volume)`, API revision 2): the units, statics,
+//!   map objects (scenery) and others DCS finds inside a volume, each with its state as DCS
+//!   answered when the search ran.
 
 use std::rc::Rc;
 
 use sortie_proto::LuaValue;
 use sortie_proto::v1::{self, command::Body};
-use sortie_types::{Eid, MapPoint};
+use sortie_types::{Coalition, Eid, MapPoint, Vec3};
 
 use super::{Cmd, CommandBody, unit};
 use crate::runtime::Session;
@@ -359,6 +362,157 @@ impl CommandBody for RemoveJunk {
         Ok(JunkRemoved {
             total: junk.total,
             per_volume: junk.per_volume,
+        })
+    }
+}
+
+/// DCS's `Object.Category`: what [`SearchObjects`] looks for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ObjectCategory {
+    Unit,
+    Weapon,
+    Static,
+    /// Airbases, FARPs and ship decks.
+    Base,
+    /// Map objects: buildings, bridges and the like of the terrain.
+    Scenery,
+    Cargo,
+}
+
+impl ObjectCategory {
+    fn to_proto(self) -> v1::ObjectCategory {
+        match self {
+            ObjectCategory::Unit => v1::ObjectCategory::Unit,
+            ObjectCategory::Weapon => v1::ObjectCategory::Weapon,
+            ObjectCategory::Static => v1::ObjectCategory::Static,
+            ObjectCategory::Base => v1::ObjectCategory::Base,
+            ObjectCategory::Scenery => v1::ObjectCategory::Scenery,
+            ObjectCategory::Cargo => v1::ObjectCategory::Cargo,
+        }
+    }
+
+    fn from_proto(v: i32) -> Option<Self> {
+        Some(match v1::ObjectCategory::try_from(v).ok()? {
+            v1::ObjectCategory::Unit => ObjectCategory::Unit,
+            v1::ObjectCategory::Weapon => ObjectCategory::Weapon,
+            v1::ObjectCategory::Static => ObjectCategory::Static,
+            v1::ObjectCategory::Base => ObjectCategory::Base,
+            v1::ObjectCategory::Scenery => ObjectCategory::Scenery,
+            v1::ObjectCategory::Cargo => ObjectCategory::Cargo,
+            v1::ObjectCategory::Unspecified => return None,
+        })
+    }
+}
+
+/// One object a [`SearchObjects`] found, as DCS answered when the search ran. A field DCS did
+/// not answer is `None` (or empty).
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct FoundObject {
+    pub category: Option<ObjectCategory>,
+    /// The world's Eid of a unit, static or cargo it holds: `ctx.world()` has the rest of its
+    /// state. `None` for scenery, weapons, airbases and objects the world does not hold.
+    pub eid: Option<Eid>,
+    /// `getName()`; a map object answers its map id as text.
+    pub name: String,
+    pub type_name: String,
+    pub point: Option<Vec3>,
+    /// `getLife()`.
+    pub life: Option<f64>,
+    /// `getDesc().life`: the life of the undamaged object. `life / life_max` is how intact a
+    /// building is (whether DCS keeps the two on one scale for every object is not measured).
+    pub life_max: Option<f64>,
+    /// `None` for an object without a coalition (scenery).
+    pub coalition: Option<Coalition>,
+    /// The object's id in DCS (`id_`); for a map object its map id, as the mission editor's
+    /// "map object" triggers name it.
+    pub dcs_id: u64,
+}
+
+/// What a [`SearchObjects`] found.
+#[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
+pub struct Found {
+    /// In the order DCS handed them over.
+    pub objects: Vec<FoundObject>,
+    /// The volume held more objects than the limit; the rest is not listed.
+    pub truncated: bool,
+}
+
+/// `ctx.search_objects(volume)` (API revision 2): `world.searchObjects` over one volume, a
+/// read (nothing changes in DCS or in the world). By default it looks for units, statics and
+/// scenery and reads at most 500 objects; `.categories(..)` and `.limit(..)` (at most 2000)
+/// change that. The volume is a DCS volume type ([`Volume::sphere`], box, segment, pyramid), or
+/// a circle area searched as a sphere on the ground; another area is `Error::Invalid`.
+#[derive(Clone, Debug)]
+pub struct SearchObjects {
+    volume: Volume,
+    categories: Vec<ObjectCategory>,
+    limit: u32,
+}
+
+impl SearchObjects {
+    pub(crate) fn new(volume: Volume) -> Self {
+        Self {
+            volume,
+            categories: Vec::new(),
+            limit: 0,
+        }
+    }
+}
+
+impl Cmd<SearchObjects> {
+    /// What to look for (the default: units, statics and scenery).
+    pub fn categories(mut self, categories: impl IntoIterator<Item = ObjectCategory>) -> Self {
+        self.body.categories = categories.into_iter().collect();
+        self
+    }
+
+    /// The most objects to read, 1 to 2000 (the default 500). With more in the volume the
+    /// result says `truncated`.
+    pub fn limit(mut self, n: u32) -> Self {
+        self.body.limit = n.max(1);
+        self
+    }
+}
+
+impl CommandBody for SearchObjects {
+    type Output = Found;
+    const OP: &'static str = "search_objects";
+    const SINCE_API_REV: u32 = 2;
+    fn to_proto(&self, _: &Session) -> Result<Body> {
+        Ok(Body::Query(v1::Query {
+            kind: Some(v1::query::Kind::SearchObjects(v1::SearchObjects {
+                volume: Some(self.volume.to_proto()),
+                categories: self
+                    .categories
+                    .iter()
+                    .map(|c| c.to_proto() as i32)
+                    .collect(),
+                limit: self.limit,
+            })),
+        }))
+    }
+    fn decode(self, _: &Rc<Session>, r: v1::CommandResult) -> Result<Found> {
+        let found = r.reply.and_then(|x| x.found).unwrap_or_default();
+        Ok(Found {
+            objects: found
+                .objects
+                .into_iter()
+                .map(|o| FoundObject {
+                    category: ObjectCategory::from_proto(o.category),
+                    eid: Eid::from_u64(o.eid),
+                    name: o.name,
+                    type_name: o.type_name,
+                    point: o.point.map(Vec3::from),
+                    life: o.life,
+                    life_max: o.life_max,
+                    coalition: Coalition::from_i32(o.coalition),
+                    dcs_id: o.dcs_id,
+                })
+                .collect(),
+            truncated: found.truncated,
         })
     }
 }

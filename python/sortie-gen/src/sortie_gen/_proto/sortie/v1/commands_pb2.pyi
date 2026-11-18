@@ -36,6 +36,16 @@ class MenuScope(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     MENU_SCOPE_COALITION: _ClassVar[MenuScope]
     MENU_SCOPE_PER_GROUP: _ClassVar[MenuScope]
 
+class ObjectCategory(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    OBJECT_CATEGORY_UNSPECIFIED: _ClassVar[ObjectCategory]
+    OBJECT_CATEGORY_UNIT: _ClassVar[ObjectCategory]
+    OBJECT_CATEGORY_WEAPON: _ClassVar[ObjectCategory]
+    OBJECT_CATEGORY_STATIC: _ClassVar[ObjectCategory]
+    OBJECT_CATEGORY_BASE: _ClassVar[ObjectCategory]
+    OBJECT_CATEGORY_SCENERY: _ClassVar[ObjectCategory]
+    OBJECT_CATEGORY_CARGO: _ClassVar[ObjectCategory]
+
 class ObjectClass(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     OBJECT_CLASS_UNSPECIFIED: _ClassVar[ObjectClass]
@@ -64,6 +74,13 @@ ORBIT_PATTERN_RACE_TRACK: OrbitPattern
 MENU_SCOPE_UNSPECIFIED: MenuScope
 MENU_SCOPE_COALITION: MenuScope
 MENU_SCOPE_PER_GROUP: MenuScope
+OBJECT_CATEGORY_UNSPECIFIED: ObjectCategory
+OBJECT_CATEGORY_UNIT: ObjectCategory
+OBJECT_CATEGORY_WEAPON: ObjectCategory
+OBJECT_CATEGORY_STATIC: ObjectCategory
+OBJECT_CATEGORY_BASE: ObjectCategory
+OBJECT_CATEGORY_SCENERY: ObjectCategory
+OBJECT_CATEGORY_CARGO: ObjectCategory
 OBJECT_CLASS_UNSPECIFIED: ObjectClass
 OBJECT_CLASS_UNIT: ObjectClass
 OBJECT_CLASS_STATIC: ObjectClass
@@ -178,7 +195,7 @@ class CommandResult(_message.Message):
     def __init__(self, id: _Optional[str] = ..., model_time: _Optional[float] = ..., cost_us: _Optional[int] = ..., ok: _Optional[_Union[_common_pb2.LuaValue, _Mapping]] = ..., err: _Optional[_Union[_common_pb2.CommandError, _Mapping]] = ..., eid: _Optional[int] = ..., reply: _Optional[_Union[Reply, _Mapping]] = ..., replayed: _Optional[bool] = ..., world_rev: _Optional[int] = ...) -> None: ...
 
 class Reply(_message.Message):
-    __slots__ = ("entities", "groups", "airbases", "resource", "call", "batch", "junk", "spawns")
+    __slots__ = ("entities", "groups", "airbases", "resource", "call", "batch", "junk", "spawns", "found")
     ENTITIES_FIELD_NUMBER: _ClassVar[int]
     GROUPS_FIELD_NUMBER: _ClassVar[int]
     AIRBASES_FIELD_NUMBER: _ClassVar[int]
@@ -187,6 +204,7 @@ class Reply(_message.Message):
     BATCH_FIELD_NUMBER: _ClassVar[int]
     JUNK_FIELD_NUMBER: _ClassVar[int]
     SPAWNS_FIELD_NUMBER: _ClassVar[int]
+    FOUND_FIELD_NUMBER: _ClassVar[int]
     entities: _containers.RepeatedCompositeFieldContainer[_world_pb2.EntitySnap]
     groups: _containers.RepeatedCompositeFieldContainer[_world_pb2.GroupSnap]
     airbases: _containers.RepeatedCompositeFieldContainer[_world_pb2.AirbaseSnap]
@@ -195,7 +213,8 @@ class Reply(_message.Message):
     batch: DcsBatchReturn
     junk: JunkRemoved
     spawns: _containers.RepeatedCompositeFieldContainer[SpawnResult]
-    def __init__(self, entities: _Optional[_Iterable[_Union[_world_pb2.EntitySnap, _Mapping]]] = ..., groups: _Optional[_Iterable[_Union[_world_pb2.GroupSnap, _Mapping]]] = ..., airbases: _Optional[_Iterable[_Union[_world_pb2.AirbaseSnap, _Mapping]]] = ..., resource: _Optional[_Union[_resources_pb2.ResourceAck, _Mapping]] = ..., call: _Optional[_Union[DcsReturn, _Mapping]] = ..., batch: _Optional[_Union[DcsBatchReturn, _Mapping]] = ..., junk: _Optional[_Union[JunkRemoved, _Mapping]] = ..., spawns: _Optional[_Iterable[_Union[SpawnResult, _Mapping]]] = ...) -> None: ...
+    found: FoundObjects
+    def __init__(self, entities: _Optional[_Iterable[_Union[_world_pb2.EntitySnap, _Mapping]]] = ..., groups: _Optional[_Iterable[_Union[_world_pb2.GroupSnap, _Mapping]]] = ..., airbases: _Optional[_Iterable[_Union[_world_pb2.AirbaseSnap, _Mapping]]] = ..., resource: _Optional[_Union[_resources_pb2.ResourceAck, _Mapping]] = ..., call: _Optional[_Union[DcsReturn, _Mapping]] = ..., batch: _Optional[_Union[DcsBatchReturn, _Mapping]] = ..., junk: _Optional[_Union[JunkRemoved, _Mapping]] = ..., spawns: _Optional[_Iterable[_Union[SpawnResult, _Mapping]]] = ..., found: _Optional[_Union[FoundObjects, _Mapping]] = ...) -> None: ...
 
 class SpawnGroup(_message.Message):
     __slots__ = ("template", "name", "from_airbase", "at")
@@ -494,14 +513,16 @@ class EndSession(_message.Message):
     def __init__(self, outcome: _Optional[_Union[_common_pb2.Outcome, str]] = ..., text: _Optional[str] = ...) -> None: ...
 
 class Query(_message.Message):
-    __slots__ = ("desc_by_type", "land_height", "flag_value")
+    __slots__ = ("desc_by_type", "land_height", "flag_value", "search_objects")
     DESC_BY_TYPE_FIELD_NUMBER: _ClassVar[int]
     LAND_HEIGHT_FIELD_NUMBER: _ClassVar[int]
     FLAG_VALUE_FIELD_NUMBER: _ClassVar[int]
+    SEARCH_OBJECTS_FIELD_NUMBER: _ClassVar[int]
     desc_by_type: DescByType
     land_height: LandHeight
     flag_value: FlagValue
-    def __init__(self, desc_by_type: _Optional[_Union[DescByType, _Mapping]] = ..., land_height: _Optional[_Union[LandHeight, _Mapping]] = ..., flag_value: _Optional[_Union[FlagValue, _Mapping]] = ...) -> None: ...
+    search_objects: SearchObjects
+    def __init__(self, desc_by_type: _Optional[_Union[DescByType, _Mapping]] = ..., land_height: _Optional[_Union[LandHeight, _Mapping]] = ..., flag_value: _Optional[_Union[FlagValue, _Mapping]] = ..., search_objects: _Optional[_Union[SearchObjects, _Mapping]] = ...) -> None: ...
 
 class DescByType(_message.Message):
     __slots__ = ("type_name",)
@@ -520,6 +541,46 @@ class FlagValue(_message.Message):
     IDENT_FIELD_NUMBER: _ClassVar[int]
     ident: str
     def __init__(self, ident: _Optional[str] = ...) -> None: ...
+
+class SearchObjects(_message.Message):
+    __slots__ = ("volume", "categories", "limit")
+    VOLUME_FIELD_NUMBER: _ClassVar[int]
+    CATEGORIES_FIELD_NUMBER: _ClassVar[int]
+    LIMIT_FIELD_NUMBER: _ClassVar[int]
+    volume: _common_pb2.Volume
+    categories: _containers.RepeatedScalarFieldContainer[ObjectCategory]
+    limit: int
+    def __init__(self, volume: _Optional[_Union[_common_pb2.Volume, _Mapping]] = ..., categories: _Optional[_Iterable[_Union[ObjectCategory, str]]] = ..., limit: _Optional[int] = ...) -> None: ...
+
+class FoundObjects(_message.Message):
+    __slots__ = ("objects", "truncated")
+    OBJECTS_FIELD_NUMBER: _ClassVar[int]
+    TRUNCATED_FIELD_NUMBER: _ClassVar[int]
+    objects: _containers.RepeatedCompositeFieldContainer[FoundObject]
+    truncated: bool
+    def __init__(self, objects: _Optional[_Iterable[_Union[FoundObject, _Mapping]]] = ..., truncated: _Optional[bool] = ...) -> None: ...
+
+class FoundObject(_message.Message):
+    __slots__ = ("category", "eid", "name", "type_name", "point", "life", "life_max", "coalition", "dcs_id")
+    CATEGORY_FIELD_NUMBER: _ClassVar[int]
+    EID_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    TYPE_NAME_FIELD_NUMBER: _ClassVar[int]
+    POINT_FIELD_NUMBER: _ClassVar[int]
+    LIFE_FIELD_NUMBER: _ClassVar[int]
+    LIFE_MAX_FIELD_NUMBER: _ClassVar[int]
+    COALITION_FIELD_NUMBER: _ClassVar[int]
+    DCS_ID_FIELD_NUMBER: _ClassVar[int]
+    category: ObjectCategory
+    eid: int
+    name: str
+    type_name: str
+    point: _common_pb2.Vec3
+    life: float
+    life_max: float
+    coalition: _common_pb2.Coalition
+    dcs_id: int
+    def __init__(self, category: _Optional[_Union[ObjectCategory, str]] = ..., eid: _Optional[int] = ..., name: _Optional[str] = ..., type_name: _Optional[str] = ..., point: _Optional[_Union[_common_pb2.Vec3, _Mapping]] = ..., life: _Optional[float] = ..., life_max: _Optional[float] = ..., coalition: _Optional[_Union[_common_pb2.Coalition, str]] = ..., dcs_id: _Optional[int] = ...) -> None: ...
 
 class ServerControl(_message.Message):
     __slots__ = ("set_pause", "load_mission", "send_chat")

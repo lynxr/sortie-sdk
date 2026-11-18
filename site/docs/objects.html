@@ -24,7 +24,7 @@
 <a class="skip" href="#content">Перейти к содержанию</a>
 <header class="topbar">
 <div class="topbar-inner">
-<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.2.1</span></a>
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.3.0</span></a>
 <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
 <nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
 <div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
@@ -197,6 +197,47 @@ ctx.report().set(&quot;junk_removed&quot;, junk.total);
 точно не выразит — <code>Error::Invalid</code>, движок не расширяет объём молча. Повтор безопасен: второй
 раз удалять нечего. Что именно DCS считает мусором, не документировано.</li>
 </ul>
+<h2 id="поиск-объектов">Поиск объектов<a class="anchor" href="#поиск-объектов" aria-label="Ссылка на этот раздел">#</a></h2>
+<p><code>ctx.search_objects(объём)</code> (ревизия API 2: <code>#[sortie::mission(api_rev = 2)]</code>) — что DCS находит
+внутри объёма функцией <code>world.searchObjects</code>: юниты, статики, объекты карты (здания, мосты),
+по желанию оружие, грузы и аэродромы. Это чтение: ни в DCS, ни в мире ничего не меняется.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">#[sortie::mission(api_rev = 2)] // ctx.search_objects — API ревизии 2
+pub async fn search(ctx: Ctx&lt;MyMission&gt;, _start: Start) -&gt; sortie::Result&lt;()&gt; {
+    use sortie::cmd::ObjectCategory as C;
+    let p = zones::TARGET.center();
+    // Шар радиусом 300 м на земле: юниты, статики и объекты карты (по умолчанию).
+    let found = ctx
+        .search_objects(Volume::sphere_on_ground(p, 300.0))
+        .categories([C::Unit, C::Static, C::Scenery])
+        .await?;
+    for o in &amp;found.objects {
+        // Юнит или статик из мира — с его Eid; у объекта карты Eid нет, есть его id в DCS.
+        let intact = match (o.life, o.life_max) {
+            (Some(life), Some(max)) if max &gt; 0.0 =&gt; life / max,
+            _ =&gt; 1.0,
+        };
+        let in_world = o
+            .eid
+            .and_then(|eid| ctx.world().entity(eid).map(|e| e.is_alive()));
+        let _ = (intact, in_world, o.dcs_id, &amp;o.type_name);
+    }
+    // Больше лимита (по умолчанию 500, не больше 2000) — `truncated`, остальное не прочитано.
+    let busy = found.truncated || !found.objects.is_empty();
+</code></pre></div>
+<ul>
+<li>У каждого объекта — то, что DCS ответил в момент поиска: категория, имя, тип, точка, <code>life</code>
+и <code>life_max</code> (жизнь целого объекта, <code>getDesc().life</code>), коалиция и id в DCS. Юнит, статик или
+груз, который знает мир, назван своим <code>eid</code>: остальное о нём — в <code>ctx.world()</code>.</li>
+<li>Объект карты не сущность мира: <code>eid</code> нет, есть <code>dcs_id</code> — его id на карте. Имя объекта карты —
+тоже этот id текстом (по сообщениям; не измерено).</li>
+<li>Объём — шар, бокс, отрезок, пирамида или круг на карте (круглая зона сценария), как у
+<code>ctx.remove_junk</code>; многоугольник и область вокруг объекта — <code>Error::Invalid</code>.</li>
+<li>Читается не больше <code>.limit(n)</code> объектов (по умолчанию 500, не больше 2000); если в объёме
+больше, <code>truncated = true</code>, а остальные не перечислены. Каждый объект — около десятка вызовов
+DCS, так что большой поиск стоит кадра.</li>
+<li>Логика ревизии ниже 2 получает <code>Error::Revision</code>, движок ревизии 1 (0.2.x) —
+<code>Error::EngineTooOld</code>. Нужен новый слой Lua: <code>sortie install</code> и перезапуск DCS.</li>
+</ul>
 <h2 id="пакет-спавнов">Пакет спавнов<a class="anchor" href="#пакет-спавнов" aria-label="Ссылка на этот раздел">#</a></h2>
 <p>Постоянный сервер начинает с восстановления кампании: сотни групп и статиков. <code>ctx.spawn_batch()</code>
 собирает их в одну команду с одним ключом: элементы строятся как обычно (<code>ctx.spawn_group(..)</code>,
@@ -277,7 +318,7 @@ for item in out.items.iter().filter(|i| !i.is_ok()) {
 </div>
 <footer class="footer">
 <div class="footer-inner">
-<p>Sortie SDK 0.2.1. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p>Sortie SDK 0.3.0. Лицензия SDK: MIT OR Apache-2.0.</p>
 <p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
 </div>
 </footer>

@@ -6,7 +6,7 @@
 возвращают результат из игры.
 
 Готовый проект — шаблон из [быстрого старта](quickstart.md). Большой пример —
-[examples/op_north](https://github.com/lynxr/sortie-sdk/tree/v0.2.1/examples/op_north)
+[examples/op_north](https://github.com/lynxr/sortie-sdk/tree/v0.3.0/examples/op_north)
 в репозитории SDK.
 
 ## Крейт логики
@@ -739,6 +739,7 @@ my_mission_logic [--engine <url>] [--build-id <id>] [--logic <name>] [--dev]
 | группы | `ctx.group(..)`, `group.set_option(..)`, `push_task`, `set_task`, `destroy` |
 | спавн | `ctx.spawn_group(templates::X)`, `.named`, `.from_airbase`, `.at` |
 | статики, уничтожение, мусор (ревизия 1) | `ctx.spawn_static(тип, страна)`, `ctx.destroy(obj)`, `ctx.remove_junk(объёмы)` ([Объекты](objects.md)) |
+| поиск объектов в объёме (ревизия 2) | `ctx.search_objects(объём)`, `.categories(..)`, `.limit(n)` ([Объекты](objects.md#поиск-объектов)) |
 | пакет спавнов (ревизия 1) | `ctx.spawn_batch()`, `.group(..)`, `.static_object(..)`, `.add_group(..)`, `.add_static(..)`, `.stop_on_error()` ([Объекты](objects.md#пакет-спавнов)) |
 | сообщения, дым, флаги | `ctx.message(..)`, `ctx.smoke(..)`, `ctx.flag(..).set(..)` / `.get()` |
 | меню | `ctx.menu(coalition)`, `.per_group()`, `.command(menus::X)`, `presses()`, `remove()` |

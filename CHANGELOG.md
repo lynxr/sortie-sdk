@@ -4,6 +4,36 @@
 [SemVer](https://semver.org/lang/ru/). До 1.0 API может меняться между минорными версиями; каждое
 такое изменение описано здесь.
 
+## [0.3.0] — 2026-11-18
+
+Ревизия API 2. Логика ревизий 0 и 1 работает без изменений.
+
+### Добавлено
+
+* Поиск объектов в объёме: `ctx.search_objects(Volume::sphere_on_ground(точка, радиус))` с
+  `.categories([ObjectCategory::Unit, ObjectCategory::Static, ObjectCategory::Scenery])` и
+  `.limit(n)` (страница [Объекты](docs/objects.md#поиск-объектов)) — что DCS находит функцией
+  `world.searchObjects`: юниты, статики, объекты карты (здания, мосты), по желанию оружие, грузы
+  и аэродромы. У каждого объекта — категория, имя, тип, точка, `life`, `life_max` (жизнь целого
+  объекта), коалиция и id в DCS; юнит, статик или груз, который знает мир, назван своим `eid`.
+  Объём — как у `ctx.remove_junk` (шар, бокс, отрезок, пирамида, круг на карте). По умолчанию
+  ищутся юниты, статики и объекты карты, читается не больше 500 объектов (`.limit` до 2000;
+  больше в объёме — `truncated`). Это чтение: в DCS и в мире ничего не меняется. Протокол:
+  `Query.search_objects` (`SearchObjects`, `ObjectCategory`), ответ `Reply.found`
+  (`FoundObjects`, `FoundObject`); возможность `search_objects`. Типы — в `sortie::cmd`
+  (`SearchObjects`, `ObjectCategory`, `Found`, `FoundObject`). В FakeDcs поиск находит юниты,
+  статики, грузы и аэродромы (объектов карты в нём нет).
+
+### Совместимость
+
+* Поиск — операция ревизии API 2: логика объявляет `#[sortie::mission(api_rev = 2)]` (иначе
+  `Error::Revision`), движок 0.2.x отвечает `Error::EngineTooOld`. `Engine.Version`,
+  `Start.api_rev` и `Engine.Capabilities` теперь говорят `api_rev = 2`.
+* Нужны новые `sortied`, мост и слой Lua: `sortie install` и перезапуск DCS. Слой 0.2.x показывает
+  `search_objects` как `NOT_IMPLEMENTED`; остальное работает с ним как раньше.
+* Что `world.searchObjects` отдаёт для объектов карты в DCS 2.9.31 (имя, жизнь, остановка поиска
+  по `false`), в живой игре не проверялось (живая проверка OBJ-T32).
+
 ## [0.2.1] — 2026-11-18
 
 ### Исправлено

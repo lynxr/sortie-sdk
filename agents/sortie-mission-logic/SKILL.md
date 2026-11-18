@@ -46,11 +46,11 @@ edition = "2024"
 rust-version = "1.89"
 
 [dependencies]
-sortie = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.2.1" }
+sortie = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.3.0" }
 serde = { version = "1", features = ["derive"] }   # only for state documents
 
 [build-dependencies]
-sortie-build = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.2.1" }
+sortie-build = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.3.0" }
 
 [lints.clippy]
 await_holding_refcell_ref = "deny"   # catches a world borrow held across .await
@@ -119,7 +119,7 @@ site; the session goes on.
 2. **Write the step replay-safe** (rules below), then `cargo build` and `cargo clippy`.
    Done when both pass and every `spawn_group` and `destroy` in the diff carries `.key(..)`.
 3. **Run it in DCS** with `sortied --dev` and the logic's `--dev` (see the
-   sortie-live-debugging skill). SDK 0.2.1 has no tests without DCS: FakeDcs
+   sortie-live-debugging skill). SDK 0.3.0 has no tests without DCS: FakeDcs
    arrives in SDK 0.2, and `#[sortie::test]` is a compile error until then. Put pure decisions
    (which wave, which target) in plain functions and test them with ordinary `#[test]`.
 
