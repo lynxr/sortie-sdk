@@ -18,7 +18,7 @@
 //!   non-zero area and no self-intersection.
 //! * **Templates are spawnable.** Kind category, coalition and country set, at least one unit
 //!   with a type, and `dcs_group_json` (when present) a JSON object whose `units` (if any) match
-//!   the template's unit count.
+//!   the template's unit count; the reference heading `heading_rad` (when set) finite.
 //! * **Header.** Schema ≥ 1, `schema_sha256` = hash of the symbols, `build_id` a ULID,
 //!   `start_time` RFC 3339 UTC (`2026-11-01T06:30:00Z`), theatre set.
 
@@ -486,6 +486,9 @@ fn templates(c: &mut Checker, m: &pb::Manifest) {
         c.roles(format!("{p}.roles"), &t.roles);
         if t.units.is_empty() {
             c.push(format!("{p}.units"), "a template needs at least one unit");
+        }
+        if t.heading_rad.is_some_and(|h| !h.is_finite()) {
+            c.push(format!("{p}.heading_rad"), "must be finite");
         }
         for (j, u) in t.units.iter().enumerate() {
             let up = format!("{p}.units[{j}]");

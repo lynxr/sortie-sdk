@@ -39,6 +39,7 @@ class EventKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     EVENT_KIND_UNKNOWN: _ClassVar[EventKind]
     EVENT_KIND_RESOURCE_ENDED: _ClassVar[EventKind]
     EVENT_KIND_CAPABILITY_CHANGED: _ClassVar[EventKind]
+    EVENT_KIND_AIRBASE_OWNER_CHANGED: _ClassVar[EventKind]
 
 class MarkAction(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -55,6 +56,13 @@ class GoneReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     GONE_REASON_DESPAWNED: _ClassVar[GoneReason]
     GONE_REASON_MISSING_FROM_SNAPSHOT: _ClassVar[GoneReason]
     GONE_REASON_REPLACED: _ClassVar[GoneReason]
+
+class OwnerChangeCause(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    OWNER_CHANGE_CAUSE_UNSPECIFIED: _ClassVar[OwnerChangeCause]
+    OWNER_CHANGE_CAUSE_CAPTURED: _ClassVar[OwnerChangeCause]
+    OWNER_CHANGE_CAUSE_CONTROL: _ClassVar[OwnerChangeCause]
+    OWNER_CHANGE_CAUSE_DISCOVERED: _ClassVar[OwnerChangeCause]
 
 class DcsEvent(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -148,6 +156,7 @@ EVENT_KIND_GAP: EventKind
 EVENT_KIND_UNKNOWN: EventKind
 EVENT_KIND_RESOURCE_ENDED: EventKind
 EVENT_KIND_CAPABILITY_CHANGED: EventKind
+EVENT_KIND_AIRBASE_OWNER_CHANGED: EventKind
 MARK_ACTION_UNSPECIFIED: MarkAction
 MARK_ACTION_ADDED: MarkAction
 MARK_ACTION_CHANGED: MarkAction
@@ -158,6 +167,10 @@ GONE_REASON_RUNTIME_ID_REUSED: GoneReason
 GONE_REASON_DESPAWNED: GoneReason
 GONE_REASON_MISSING_FROM_SNAPSHOT: GoneReason
 GONE_REASON_REPLACED: GoneReason
+OWNER_CHANGE_CAUSE_UNSPECIFIED: OwnerChangeCause
+OWNER_CHANGE_CAUSE_CAPTURED: OwnerChangeCause
+OWNER_CHANGE_CAUSE_CONTROL: OwnerChangeCause
+OWNER_CHANGE_CAUSE_DISCOVERED: OwnerChangeCause
 DCS_EVENT_UNSPECIFIED: DcsEvent
 DCS_EVENT_SHOT: DcsEvent
 DCS_EVENT_HIT: DcsEvent
@@ -226,7 +239,7 @@ DCS_EVENT_MAC_EXTRA_SCORE: DcsEvent
 DCS_EVENT_MAC_LMS_RESTART: DcsEvent
 
 class Event(_message.Message):
-    __slots__ = ("seq", "model_time", "wall_time", "session", "dcs_event", "dcs_name", "birth", "dead", "unit_lost", "kill", "hit", "shot", "takeoff", "land", "base_captured", "mark", "player_entered_unit", "unit_gone", "menu_pressed", "player_connected", "player_disconnected", "player_changed_slot", "chat_message", "simulation_paused", "simulation_resumed", "resource_ended", "gap", "capability_changed", "unknown")
+    __slots__ = ("seq", "model_time", "wall_time", "session", "dcs_event", "dcs_name", "birth", "dead", "unit_lost", "kill", "hit", "shot", "takeoff", "land", "base_captured", "mark", "player_entered_unit", "unit_gone", "menu_pressed", "player_connected", "player_disconnected", "player_changed_slot", "chat_message", "simulation_paused", "simulation_resumed", "resource_ended", "gap", "capability_changed", "airbase_owner_changed", "unknown")
     SEQ_FIELD_NUMBER: _ClassVar[int]
     MODEL_TIME_FIELD_NUMBER: _ClassVar[int]
     WALL_TIME_FIELD_NUMBER: _ClassVar[int]
@@ -255,6 +268,7 @@ class Event(_message.Message):
     RESOURCE_ENDED_FIELD_NUMBER: _ClassVar[int]
     GAP_FIELD_NUMBER: _ClassVar[int]
     CAPABILITY_CHANGED_FIELD_NUMBER: _ClassVar[int]
+    AIRBASE_OWNER_CHANGED_FIELD_NUMBER: _ClassVar[int]
     UNKNOWN_FIELD_NUMBER: _ClassVar[int]
     seq: int
     model_time: float
@@ -284,8 +298,9 @@ class Event(_message.Message):
     resource_ended: _resources_pb2.ResourceEnded
     gap: Gap
     capability_changed: CapabilityChanged
+    airbase_owner_changed: AirbaseOwnerChanged
     unknown: Unknown
-    def __init__(self, seq: _Optional[int] = ..., model_time: _Optional[float] = ..., wall_time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., session: _Optional[str] = ..., dcs_event: _Optional[_Union[DcsEvent, str]] = ..., dcs_name: _Optional[str] = ..., birth: _Optional[_Union[Birth, _Mapping]] = ..., dead: _Optional[_Union[Dead, _Mapping]] = ..., unit_lost: _Optional[_Union[UnitLost, _Mapping]] = ..., kill: _Optional[_Union[Kill, _Mapping]] = ..., hit: _Optional[_Union[Hit, _Mapping]] = ..., shot: _Optional[_Union[Shot, _Mapping]] = ..., takeoff: _Optional[_Union[Takeoff, _Mapping]] = ..., land: _Optional[_Union[Land, _Mapping]] = ..., base_captured: _Optional[_Union[BaseCaptured, _Mapping]] = ..., mark: _Optional[_Union[Mark, _Mapping]] = ..., player_entered_unit: _Optional[_Union[PlayerEnteredUnit, _Mapping]] = ..., unit_gone: _Optional[_Union[UnitGone, _Mapping]] = ..., menu_pressed: _Optional[_Union[MenuPressed, _Mapping]] = ..., player_connected: _Optional[_Union[PlayerConnected, _Mapping]] = ..., player_disconnected: _Optional[_Union[PlayerDisconnected, _Mapping]] = ..., player_changed_slot: _Optional[_Union[PlayerChangedSlot, _Mapping]] = ..., chat_message: _Optional[_Union[ChatMessage, _Mapping]] = ..., simulation_paused: _Optional[_Union[SimulationPaused, _Mapping]] = ..., simulation_resumed: _Optional[_Union[SimulationResumed, _Mapping]] = ..., resource_ended: _Optional[_Union[_resources_pb2.ResourceEnded, _Mapping]] = ..., gap: _Optional[_Union[Gap, _Mapping]] = ..., capability_changed: _Optional[_Union[CapabilityChanged, _Mapping]] = ..., unknown: _Optional[_Union[Unknown, _Mapping]] = ...) -> None: ...
+    def __init__(self, seq: _Optional[int] = ..., model_time: _Optional[float] = ..., wall_time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., session: _Optional[str] = ..., dcs_event: _Optional[_Union[DcsEvent, str]] = ..., dcs_name: _Optional[str] = ..., birth: _Optional[_Union[Birth, _Mapping]] = ..., dead: _Optional[_Union[Dead, _Mapping]] = ..., unit_lost: _Optional[_Union[UnitLost, _Mapping]] = ..., kill: _Optional[_Union[Kill, _Mapping]] = ..., hit: _Optional[_Union[Hit, _Mapping]] = ..., shot: _Optional[_Union[Shot, _Mapping]] = ..., takeoff: _Optional[_Union[Takeoff, _Mapping]] = ..., land: _Optional[_Union[Land, _Mapping]] = ..., base_captured: _Optional[_Union[BaseCaptured, _Mapping]] = ..., mark: _Optional[_Union[Mark, _Mapping]] = ..., player_entered_unit: _Optional[_Union[PlayerEnteredUnit, _Mapping]] = ..., unit_gone: _Optional[_Union[UnitGone, _Mapping]] = ..., menu_pressed: _Optional[_Union[MenuPressed, _Mapping]] = ..., player_connected: _Optional[_Union[PlayerConnected, _Mapping]] = ..., player_disconnected: _Optional[_Union[PlayerDisconnected, _Mapping]] = ..., player_changed_slot: _Optional[_Union[PlayerChangedSlot, _Mapping]] = ..., chat_message: _Optional[_Union[ChatMessage, _Mapping]] = ..., simulation_paused: _Optional[_Union[SimulationPaused, _Mapping]] = ..., simulation_resumed: _Optional[_Union[SimulationResumed, _Mapping]] = ..., resource_ended: _Optional[_Union[_resources_pb2.ResourceEnded, _Mapping]] = ..., gap: _Optional[_Union[Gap, _Mapping]] = ..., capability_changed: _Optional[_Union[CapabilityChanged, _Mapping]] = ..., airbase_owner_changed: _Optional[_Union[AirbaseOwnerChanged, _Mapping]] = ..., unknown: _Optional[_Union[Unknown, _Mapping]] = ...) -> None: ...
 
 class SubscribeEventsRequest(_message.Message):
     __slots__ = ("kinds", "coalitions", "from_seq", "session", "event_rev", "api_rev")
@@ -380,7 +395,7 @@ class BaseCaptured(_message.Message):
     def __init__(self, initiator: _Optional[_Union[_world_pb2.EntitySnap, _Mapping]] = ..., place: _Optional[_Union[_world_pb2.AirbaseSnap, _Mapping]] = ..., coalition: _Optional[_Union[_common_pb2.Coalition, str]] = ...) -> None: ...
 
 class Mark(_message.Message):
-    __slots__ = ("action", "mark_id", "text", "pos", "coalition", "group_eid", "initiator", "name", "own")
+    __slots__ = ("action", "mark_id", "text", "pos", "coalition", "group_eid", "initiator", "name", "own", "dcs_time")
     ACTION_FIELD_NUMBER: _ClassVar[int]
     MARK_ID_FIELD_NUMBER: _ClassVar[int]
     TEXT_FIELD_NUMBER: _ClassVar[int]
@@ -390,6 +405,7 @@ class Mark(_message.Message):
     INITIATOR_FIELD_NUMBER: _ClassVar[int]
     NAME_FIELD_NUMBER: _ClassVar[int]
     OWN_FIELD_NUMBER: _ClassVar[int]
+    DCS_TIME_FIELD_NUMBER: _ClassVar[int]
     action: MarkAction
     mark_id: int
     text: str
@@ -399,7 +415,8 @@ class Mark(_message.Message):
     initiator: _world_pb2.EntitySnap
     name: str
     own: bool
-    def __init__(self, action: _Optional[_Union[MarkAction, str]] = ..., mark_id: _Optional[int] = ..., text: _Optional[str] = ..., pos: _Optional[_Union[_common_pb2.Vec3, _Mapping]] = ..., coalition: _Optional[_Union[_common_pb2.Coalition, str]] = ..., group_eid: _Optional[int] = ..., initiator: _Optional[_Union[_world_pb2.EntitySnap, _Mapping]] = ..., name: _Optional[str] = ..., own: _Optional[bool] = ...) -> None: ...
+    dcs_time: float
+    def __init__(self, action: _Optional[_Union[MarkAction, str]] = ..., mark_id: _Optional[int] = ..., text: _Optional[str] = ..., pos: _Optional[_Union[_common_pb2.Vec3, _Mapping]] = ..., coalition: _Optional[_Union[_common_pb2.Coalition, str]] = ..., group_eid: _Optional[int] = ..., initiator: _Optional[_Union[_world_pb2.EntitySnap, _Mapping]] = ..., name: _Optional[str] = ..., own: _Optional[bool] = ..., dcs_time: _Optional[float] = ...) -> None: ...
 
 class PlayerEnteredUnit(_message.Message):
     __slots__ = ("unit", "player")
@@ -520,6 +537,18 @@ class CapabilityChanged(_message.Message):
     capability: _common_pb2.Capability
     previous: _common_pb2.CapabilityState
     def __init__(self, capability: _Optional[_Union[_common_pb2.Capability, _Mapping]] = ..., previous: _Optional[_Union[_common_pb2.CapabilityState, str]] = ...) -> None: ...
+
+class AirbaseOwnerChanged(_message.Message):
+    __slots__ = ("airbase", "previous", "owner", "cause")
+    AIRBASE_FIELD_NUMBER: _ClassVar[int]
+    PREVIOUS_FIELD_NUMBER: _ClassVar[int]
+    OWNER_FIELD_NUMBER: _ClassVar[int]
+    CAUSE_FIELD_NUMBER: _ClassVar[int]
+    airbase: _world_pb2.AirbaseSnap
+    previous: _common_pb2.Coalition
+    owner: _common_pb2.Coalition
+    cause: OwnerChangeCause
+    def __init__(self, airbase: _Optional[_Union[_world_pb2.AirbaseSnap, _Mapping]] = ..., previous: _Optional[_Union[_common_pb2.Coalition, str]] = ..., owner: _Optional[_Union[_common_pb2.Coalition, str]] = ..., cause: _Optional[_Union[OwnerChangeCause, str]] = ...) -> None: ...
 
 class Place(_message.Message):
     __slots__ = ("airbase", "entity")

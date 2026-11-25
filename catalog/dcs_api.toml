@@ -14,7 +14,10 @@
 #                  the Lua layer runs it through the class table of the receiver, as
 #                  receiver:method() does. The classes follow the DCS documentation;
 #                  CoalitionObject exists there only (the game declares Unit, StaticObject,
-#                  Airbase and Weapon directly under Object and has no CoalitionObject table)
+#                  Airbase and Weapon directly under Object and has no CoalitionObject table).
+#                  "sortie.<name>" is a function of the Sortie Lua layer itself, not of DCS:
+#                  work done inside DCS in the frame of the call over DCS functions the layer
+#                  calls (only this file lists them; an owner may switch one, not add one)
 #   env            "mission" | "hooks"
 #   receiver       "" for a plain function, else the class of the method's receiver
 #   args           argument types in order, each "<type> <name>"; a type ending in "?" may be nil
@@ -22,11 +25,24 @@
 #                  mizpath side_number side_name player item object:<Class> id:<Class>
 #                  name:<Class> enum:<table path>. vec2 is a map point {x = north, y = east}; vec3
 #                  is {x, y, z} in runtime axes (x north, y up, z east); item is a warehouse item,
-#                  its name or its wsType {a, b, c, d} (four whole numbers)
-#   returns        return types in order (same notation; also list:<type>, handle:<Class>). A
+#                  its name or its wsType {a, b, c, d} (four whole numbers). An enum table is 2
+#                  to 6 Lua names from one of the enum roots (AI Airbase Controller Group Object
+#                  Spot StaticObject Unit Weapon coalition country land radio trigger world),
+#                  at most 96 bytes:
+#                  "enum:AI.Option.Ground.val.ALARM_STATE"; a call gives a key of it
+#                  ("AI.Option.Ground.val.ALARM_STATE.RED") or, since 0.4.0, one of its numbers
+#                  (the Lua layer checks the table holds it)
+#   returns        return types in order (same notation; also list:<type>, handle:<Class>, and
+#                  road_path, the layer's summary of a road path, for sortie.* only). A
 #                  `number` DCS returns as a numeric string comes back as the number
 #   class          "read" | "mutate" | "heavy" | "admin"
-#   guards         checks applied whatever the owner enabled (an owner entry cannot remove one)
+#   guards         checks applied whatever the owner enabled (an owner entry cannot remove one).
+#                  span_300km: the call's two end points lie at most 300 km apart on the map
+#                  (refused before DCS): two required vec2/vec3 arguments, or the two pairs of
+#                  `points`
+#   points         map points held in plain numbers: pairs of argument names, north then east,
+#                  each a required number, e.g. [["from_x", "from_y"], ["to_x", "to_y"]]; part
+#                  of the signature (an owner cannot change it on a built-in entry)
 #   live_check     the live-check id that verifies the entry on a running DCS
 #   since_api_rev  the API revision that introduced the entry
 #   doc            one line for the reference page and the generated wrappers
@@ -82,6 +98,7 @@ live_check = "ENV-LC1"
 since_api_rev = 1
 doc = "Surface type at a map point: LAND, SHALLOW_WATER, WATER, ROAD or RUNWAY."
 wrapper = "surface_type"
+note = "There is no forest or town value: a forest reads LAND. No documented DCS function gives scripts forest or tree data."
 
 [[call]]
 path = "land.isVisible"
@@ -118,7 +135,7 @@ since_api_rev = 1
 doc = "Terrain profile between two points as a list of points on the ground."
 wrapper = "profile"
 guards = ["span_300km"]
-note = "DCS reads x and z of both points and ignores y. The end points may lie at most 300 km apart."
+note = "DCS reads x and z of both points and ignores y."
 
 [[call]]
 path = "land.getClosestPointOnRoads"
@@ -130,6 +147,45 @@ live_check = "ENV-LC1"
 since_api_rev = 1
 doc = "The closest point on a road (road_type \"roads\" or \"railroads\") to map coordinates x (north), y (east)."
 wrapper = "closest_point_on_roads"
+
+# Heavy: DCS searches its road graph inside the frame, and a long path on a big map may stop
+# the server for frames (ENV-LC7); heavy calls run on BULK one at a time, 2 per second per
+# writer, never in a batch, and pay their DCS time from the writer's dcs_time.heavy budget.
+# The two ends are plain numbers: `points` names them, so the span guard measures them as it
+# measures land.profile's (300 km until ENV-LC7 gives a number).
+[[call]]
+path = "land.findPathOnRoads"
+env = "mission"
+args = ["string road_type", "number from_x", "number from_y", "number to_x", "number to_y"]
+points = [["from_x", "from_y"], ["to_x", "to_y"]]
+guards = ["span_300km"]
+returns = ["list:vec2?"]
+class = "heavy"
+live_check = "ENV-LC7"
+since_api_rev = 3
+doc = "A path along roads from map coordinates from_x (north), from_y (east) to to_x, to_y: map points from start to end, or nil."
+wrapper = "path_on_roads"
+note = "road_type \"roads\"; the Hoggit wiki documents \"railroads\" and reports that DCS reads railroads as \"rails\". What comes back for a place no road reaches, and how long a long path takes, is not measured (ENV-LC7)."
+
+# The Sortie layer's own function over land.findPathOnRoads: the summary of the path computed
+# inside DCS in the frame of the call, and at most max_points of its points with both ends, so
+# that a logic judges a long path without receiving every point. Heavy like the function it
+# calls, and under the same span guard. The cap's ceiling keeps the answer far inside the
+# layer's 50 000 table entries a call.
+[[call]]
+path = "sortie.findPathOnRoads"
+env = "mission"
+args = ["string road_type", "vec2 start", "vec2 end", "number? max_points", "string? keep"]
+guards = ["span_300km"]
+returns = ["road_path?"]
+class = "heavy"
+live_check = "ENV-LC7"
+since_api_rev = 3
+family = "land"
+wrapper = "road_path"
+clamp = { max_points = [2, 10000] }
+doc = "The road path from start to end that land.findPathOnRoads finds, summarised by the Sortie Lua layer inside DCS in the same frame: point count, length along the points, first and last point and how far each lies from the end asked, and at most max_points of the points with both ends kept; nil when DCS finds no path."
+note = "keep \"turns\" (the default) keeps the points where the path turns most (fewer when the rest lie on straight legs), \"even\" points spaced evenly along it; without max_points no points come back (the summary alone; thinned, which says points holds fewer points than the path, is then true unless the path is empty). Needs the Lua layer of 0.4.0 (sortie install): an older one answers MISSING. Whether the summary matches the full path on a running DCS is ENV-LC7."
 
 # ----- atmosphere --------------------------------------------------------------------------
 
@@ -805,6 +861,8 @@ live_check = "UC-1"
 since_api_rev = 1
 doc = "Silences (true) or restores (false) the airbase's ATC."
 wrapper = "set_radio_silent_mode"
+superseded_by = "airbase_control"
+note = "Use ctx.airbase_control(..).radio_silent(..): the typed operation sets many bases in one frame and reads each back."
 
 [[call]]
 path = "Airbase.autoCaptureIsOn"
@@ -827,6 +885,8 @@ live_check = "AWC-T1"
 since_api_rev = 1
 doc = "Turns DCS's own capture of the airbase on or off."
 wrapper = "auto_capture"
+superseded_by = "airbase_control"
+note = "Use ctx.airbase_control(..).auto_capture(..): the typed operation sets many bases in one frame and reads each back."
 
 [[call]]
 path = "Airbase.setCoalition"
@@ -838,7 +898,8 @@ live_check = "AWC-T1"
 since_api_rev = 1
 doc = "Gives the airbase to a coalition (turn auto capture off first, or DCS may flip it back)."
 wrapper = "set_coalition"
-note = "The mirror learns the new owner at the next airbase sweep (BaseCaptured.cause OBSERVED), not at once."
+superseded_by = "airbase_control"
+note = "Use ctx.airbase_control(..).owner(..): the typed operation sets many bases in one frame, turns auto capture off first when asked, and the world learns the new owner at once; after a raw call the world learns it only at the next resync snapshot or a state query of the base (ctx.airbase(..).state()); nothing sweeps airbases."
 
 [[call]]
 path = "Airbase.getWarehouse"
@@ -888,6 +949,8 @@ since_api_rev = 1
 doc = "Adds count of an item."
 wrapper = "add_item"
 clamp = { count = [0, 1000000] }
+superseded_by = "warehouse_op"
+note = "Use ctx.warehouse_op().add(..): the typed operation changes many items and warehouses in one frame, all or nothing, reads each count back and refuses an unlimited stock instead of changing nothing."
 
 [[call]]
 path = "Warehouse.removeItem"
@@ -900,6 +963,8 @@ since_api_rev = 1
 doc = "Removes count of an item."
 wrapper = "remove_item"
 clamp = { count = [0, 1000000] }
+superseded_by = "warehouse_op"
+note = "Use ctx.warehouse_op().remove(..) or .transfer(..): the typed operation refuses to remove more than the warehouse holds, changes many items in one frame, all or nothing, and reads each count back."
 
 [[call]]
 path = "Warehouse.setItem"
@@ -912,6 +977,8 @@ since_api_rev = 1
 doc = "Sets the stock of an item."
 wrapper = "set_item"
 clamp = { count = [0, 1000000] }
+superseded_by = "warehouse_op"
+note = "Use ctx.warehouse_op().set(..): the typed operation changes many items and warehouses in one frame, all or nothing, reads each count back and refuses an unlimited stock instead of changing nothing."
 
 [[call]]
 path = "Warehouse.getLiquidAmount"
@@ -937,6 +1004,8 @@ since_api_rev = 1
 doc = "Adds an amount of a liquid."
 wrapper = "add_liquid"
 clamp = { liquid = [0, 3], amount = [0, 100000000] }
+superseded_by = "warehouse_op"
+note = "Use ctx.warehouse_op().add(.., Liquid::..): the typed operation changes many stocks in one frame, all or nothing, and reads each amount back."
 
 [[call]]
 path = "Warehouse.removeLiquid"
@@ -949,6 +1018,8 @@ since_api_rev = 1
 doc = "Removes an amount of a liquid."
 wrapper = "remove_liquid"
 clamp = { liquid = [0, 3], amount = [0, 100000000] }
+superseded_by = "warehouse_op"
+note = "Use ctx.warehouse_op().remove(.., Liquid::..) or .transfer(..): the typed operation refuses to remove more than the warehouse holds, changes many stocks in one frame, all or nothing, and reads each amount back."
 
 [[call]]
 path = "Warehouse.setLiquidAmount"
@@ -961,6 +1032,8 @@ since_api_rev = 1
 doc = "Sets the stock of a liquid."
 wrapper = "set_liquid_amount"
 clamp = { liquid = [0, 3], amount = [0, 100000000] }
+superseded_by = "warehouse_op"
+note = "Use ctx.warehouse_op().set(.., Liquid::..): the typed operation changes many stocks in one frame, all or nothing, and reads each amount back."
 
 [[call]]
 path = "Warehouse.getOwner"
@@ -1706,6 +1779,51 @@ since_api_rev = 1
 doc = "Whether the mission runs in multiplayer."
 family = "server"
 wrapper = "is_multiplayer"
+
+# The multiplayer slot screen. DCS's own slot screen (its GUI scripts in the 2.9.31 install)
+# builds the list of dynamic slots from these three functions of the hooks environment; ED's
+# scripting documentation does not list them, so their signatures are what that screen passes
+# and reads. On a server they say what the server's DCS holds, not what a connected client is
+# shown (AWC-T30; the client's own view is the manual AWC-T32, docs/src/farp-dynamic-slots.md).
+
+# Heavy: DCS builds a table of every FARP and carrier of the mission.
+[[call]]
+path = "DCS.getFarpsAndCarriersMissionData"
+env = "hooks"
+returns = ["table"]
+class = "heavy"
+live_check = "AWC-T30"
+since_api_rev = 3
+doc = "The FARPs and carriers the slot screen lists: {farps = {[unit id] = {name, x, y, coalition, ...}}, carriers = {...}}."
+family = "server"
+wrapper = "farps_and_carriers"
+note = "Whether a FARP added while the mission runs is listed is not measured (AWC-T30); the name suggests the mission's own data."
+
+[[call]]
+path = "DCS.getDynamicSpawnSettings"
+env = "hooks"
+args = ["number airbase_id", "boolean is_airdrome"]
+returns = ["table?"]
+class = "read"
+live_check = "AWC-T30"
+since_api_rev = 3
+doc = "Dynamic-slot settings of an airfield (its id, is_airdrome true) or of a FARP or carrier (its unit id, false): {dynamicSpawnAvailable, allowHotSpawn, ...}."
+family = "server"
+wrapper = "dynamic_spawn_settings"
+note = "The slot screen reads dynamicSpawnAvailable and allowHotSpawn; other fields and the answer for an unknown id are not measured (AWC-T30)."
+
+[[call]]
+path = "DCS.getAircraftAmountInAirportWarehouse"
+env = "hooks"
+args = ["string aircraft_type", "number airbase_id", "boolean is_farp_or_ship"]
+returns = ["number"]
+class = "read"
+live_check = "AWC-T30"
+since_api_rev = 3
+doc = "How many aircraft of a type the slot screen offers at an airfield (its id, false) or a FARP or carrier (its unit id, true)."
+family = "server"
+wrapper = "aircraft_in_warehouse"
+note = "The slot screen shows 1000000 or more without a count (an unlimited stock) and offers a type only above 0 (AWC-T30)."
 
 # Paths whose argument lists are not documented: listed so the capability can say why they
 # cannot be enabled (live check UC-8 records a signature first).

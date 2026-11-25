@@ -65,6 +65,25 @@ pub const DRAW: &str = "draw";
 /// F10 menu trees (`ctx.menus().tree(..)`).
 pub const MENU_TREE: &str = "menu_tree";
 
+// ----- typed operations (API revision 3) ----------------------------------------------------
+
+/// Owner, auto capture and radio silence of many airbases (`ctx.airbase_control(..)`).
+pub const AIRBASE_CONTROL: &str = "airbase_control";
+/// Parking spots of airbases (`ctx.airbase(..).parking()`, `ctx.airbases_parking(..)`).
+pub const AIRBASE_PARKING: &str = "airbase_parking";
+/// Runways of airbases (`ctx.airbase(..).runways()`, `ctx.airbases_runways(..)`).
+pub const AIRBASE_RUNWAYS: &str = "airbase_runways";
+/// Owner, auto capture and radio silence as DCS reads them (`ctx.airbase(..).state()`,
+/// `ctx.airbases_state(..)`).
+pub const AIRBASE_STATE: &str = "airbase_state";
+/// The stock of warehouses (`ctx.warehouse(..).stock()`, `ctx.warehouses_stock(..)`).
+pub const WAREHOUSE_STOCK: &str = "warehouse_stock";
+/// Changes of warehouse stock: set, add, remove, transfer, all or nothing in one frame
+/// (`ctx.warehouse_op()`).
+pub const WAREHOUSE_OP: &str = "warehouse_op";
+/// The names DCS gives the objects it knows, with their wsTypes (`ctx.item_names()`).
+pub const ITEM_NAMES: &str = "item_names";
+
 /// Every typed capability name above, in the engine's order.
 pub const TYPED: &[&str] = &[
     SPAWN_GROUP,
@@ -94,6 +113,13 @@ pub const TYPED: &[&str] = &[
     SEARCH_OBJECTS,
     DRAW,
     MENU_TREE,
+    AIRBASE_CONTROL,
+    AIRBASE_PARKING,
+    AIRBASE_RUNWAYS,
+    AIRBASE_STATE,
+    WAREHOUSE_STOCK,
+    WAREHOUSE_OP,
+    ITEM_NAMES,
 ];
 
 /// The capability table of a session (`Start.capabilities`, then `CapabilityChanged`).

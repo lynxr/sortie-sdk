@@ -1,19 +1,19 @@
 # Подключение SDK
 
 SDK не публикуется на crates.io и PyPI. Cargo и uv берут его прямо из Git-репозитория
-[lynxr/sortie-sdk](https://github.com/lynxr/sortie-sdk) по тегу выпуска `v0.3.0`.
+[lynxr/sortie-sdk](https://github.com/lynxr/sortie-sdk) по тегу выпуска `v0.4.0`.
 В шаблоне миссии это уже настроено; ниже — как подключить SDK к своему проекту.
 
 ## Логика на Rust
 
 ```toml
 [dependencies]
-sortie = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.3.0" }
+sortie = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.4.0" }
 # Только если логика хранит свои структуры через ctx.state (derive Serialize/Deserialize):
 serde = { version = "1", features = ["derive"] }
 
 [build-dependencies]
-sortie-build = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.3.0" }
+sortie-build = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.4.0" }
 ```
 
 * `sortie` — сам SDK: контекст миссии, команды, мир, события, макросы.
@@ -30,14 +30,14 @@ sortie-build = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.3.0" }
 Добавьте `sortie-gen` в свой uv-проект из того же репозитория:
 
 ```powershell
-uv add "sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.3.0#subdirectory=python/sortie-gen"
+uv add "sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.4.0#subdirectory=python/sortie-gen"
 ```
 
-Или из wheel со страницы выпуска [v0.3.0](https://github.com/lynxr/sortie-sdk/releases/tag/v0.3.0),
+Или из wheel со страницы выпуска [v0.4.0](https://github.com/lynxr/sortie-sdk/releases/tag/v0.4.0),
 если Git недоступен:
 
 ```powershell
-uv add .\sortie_gen-0.3.0-py3-none-any.whl
+uv add .\sortie_gen-0.4.0-py3-none-any.whl
 ```
 
 `sortie-gen` требует Python 3.11 или новее и ставит pydcs 1.0.0, grpcio и protobuf. Сценарий
@@ -74,6 +74,6 @@ Git: в Git для Windows уже есть Git Credential Manager.
 
 ## Версии
 
-Версия SDK, генератора и рантайма одна: 0.3.0. Обновляйте их вместе: новый тег в
+Версия SDK, генератора и рантайма одна: 0.4.0. Обновляйте их вместе: новый тег в
 `Cargo.toml` и `pyproject.toml` и новый архив рантайма (см.
 [Эксплуатацию](operations.md#обновление)).

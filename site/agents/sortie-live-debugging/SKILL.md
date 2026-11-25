@@ -22,7 +22,7 @@ The Saved Games folder is `%USERPROFILE%\Saved Games\DCS` (a dedicated server st
 
 ## Setup on a machine with DCS
 
-1. Unzip `sortie-runtime-0.3.0-win64.zip` from the GitHub release of
+1. Unzip `sortie-runtime-0.4.0-win64.zip` from the GitHub release of
    `lynxr/sortie-sdk` and follow its README; check it against `SHA256SUMS`.
 2. `sortie.exe install` from a console **run as administrator**: it copies the Lua layer, the
    hook and the bridge DLL into Saved Games, creates `Sortie\link.secret` and
@@ -47,9 +47,9 @@ The Saved Games folder is `%USERPROFILE%\Saved Games\DCS` (a dedicated server st
 | Source | What it shows |
 | --- | --- |
 | the DCS screen | `Sortie bridge is not installed: run sortie doctor` (the mission found no bridge); `Sortie: <reason>` (the engine refused the mission) |
-| `sortie status` | engine and bridge versions, DCS version, `link hooks/mission: up/down`, the session, model time, `PAUSED`, logic clients, `note` lines with the reason something is degraded |
+| `sortie status` | engine and bridge versions, DCS version, `link hooks/mission: up/down`, the session, model time, `PAUSED`, logic clients, `note` lines with the reason something is degraded; since 0.4.0 the mission link's `events copied (N DCS calls, T ms; at most N us between two pumps)` and `snapshots read N objects` (what the Lua layer's copies cost inside DCS) |
 | `sortie events --kind dead --limit 20`, `scenario.py watch` | the live event stream |
-| `sortie top` | health, links, credits, queues, refreshed every second |
+| `sortie top` | health, links, credits, queues, refreshed every second; `ev<N>us` on the mission link: the longest event copy between two pumps (0.4.0) |
 | `Saved Games\DCS\Logs\dcs.log` | Lua layer lines start with `Sortie:` (mission) or come from the `SORTIE` subsystem (hooks): link up/down, boot errors. `Select-String Sortie dcs.log` |
 | `Saved Games\DCS\Logs\sortie-bridge.log` | the bridge DLL |
 | `Saved Games\DCS\Sortie\Logs\sortied.log.*` | the engine (also on its console), including the `doctor` checks it runs at start |
@@ -96,7 +96,7 @@ The Saved Games folder is `%USERPROFILE%\Saved Games\DCS` (a dedicated server st
   with `.on_pause(Fail)`), `ctx.sleep` and timers stop, and the type check of `register` cannot
   run.
 - **Measurements of DCS itself** (event ids, timer cadence, sampling cost) are not part of SDK
-  0.3.0: `sortie probe` prints "`sortie probe` lands in M0" and exits with code 2;
+  0.4.0: `sortie probe` prints "`sortie probe` lands in M0" and exits with code 2;
   `sortie dev`, `sortie trace` and `sortie record` are not built yet either (M4). Report what
   you measure with the DCS version, FPS and hardware.
 

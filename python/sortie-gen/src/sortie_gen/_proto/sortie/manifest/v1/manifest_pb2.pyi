@@ -114,7 +114,7 @@ class Polygon(_message.Message):
     def __init__(self, points: _Optional[_Iterable[_Union[_common_pb2.MapPoint, _Mapping]]] = ...) -> None: ...
 
 class Template(_message.Message):
-    __slots__ = ("ident", "name", "category", "coalition", "country", "country_id", "roles", "units", "task", "dcs_group_json")
+    __slots__ = ("ident", "name", "category", "coalition", "country", "country_id", "roles", "units", "task", "dcs_group_json", "heading_rad")
     IDENT_FIELD_NUMBER: _ClassVar[int]
     NAME_FIELD_NUMBER: _ClassVar[int]
     CATEGORY_FIELD_NUMBER: _ClassVar[int]
@@ -125,6 +125,7 @@ class Template(_message.Message):
     UNITS_FIELD_NUMBER: _ClassVar[int]
     TASK_FIELD_NUMBER: _ClassVar[int]
     DCS_GROUP_JSON_FIELD_NUMBER: _ClassVar[int]
+    HEADING_RAD_FIELD_NUMBER: _ClassVar[int]
     ident: str
     name: str
     category: _common_pb2.Category
@@ -135,7 +136,8 @@ class Template(_message.Message):
     units: _containers.RepeatedCompositeFieldContainer[Unit]
     task: str
     dcs_group_json: str
-    def __init__(self, ident: _Optional[str] = ..., name: _Optional[str] = ..., category: _Optional[_Union[_common_pb2.Category, str]] = ..., coalition: _Optional[_Union[_common_pb2.Coalition, str]] = ..., country: _Optional[str] = ..., country_id: _Optional[int] = ..., roles: _Optional[_Iterable[str]] = ..., units: _Optional[_Iterable[_Union[Unit, _Mapping]]] = ..., task: _Optional[str] = ..., dcs_group_json: _Optional[str] = ...) -> None: ...
+    heading_rad: float
+    def __init__(self, ident: _Optional[str] = ..., name: _Optional[str] = ..., category: _Optional[_Union[_common_pb2.Category, str]] = ..., coalition: _Optional[_Union[_common_pb2.Coalition, str]] = ..., country: _Optional[str] = ..., country_id: _Optional[int] = ..., roles: _Optional[_Iterable[str]] = ..., units: _Optional[_Iterable[_Union[Unit, _Mapping]]] = ..., task: _Optional[str] = ..., dcs_group_json: _Optional[str] = ..., heading_rad: _Optional[float] = ...) -> None: ...
 
 class Flag(_message.Message):
     __slots__ = ("ident", "name", "initial")

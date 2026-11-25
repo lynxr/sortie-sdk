@@ -15,7 +15,7 @@ from typing import Any, TypeVar
 
 import grpc
 
-from .errors import CommandFailed, EngineError, EngineNotReady, EngineUnavailable, NotYet, ResultNotKept
+from .errors import CommandFailed, EngineError, EngineNotReady, EngineUnavailable, Limit, NotYet, ResultNotKept
 from ._proto.sortie.v1 import commands_pb2, commands_pb2_grpc, common_pb2
 from ._proto.sortie.v1 import engine_pb2, engine_pb2_grpc
 from ._proto.sortie.v1 import events_pb2, events_pb2_grpc
@@ -248,7 +248,8 @@ class EngineClient:
         ``returns`` (the entry's return types, as the generated :mod:`sortie_gen.dcs_api` passes
         them) shapes the result: nothing -> ``None``, one value -> it, more -> a tuple; without
         it the raw ``DcsReturn`` comes back. A refused or failed call raises
-        :class:`~sortie_gen.errors.CommandFailed` (``code``, ``capability``). Reads take no
+        :class:`~sortie_gen.errors.CommandFailed` (``code``, ``capability``, and since engine
+        0.4.0 ``limit`` and ``retry_after`` for a limit). Reads take no
         ``key``; a mutating call repeats its effect unless keyed. A repeat with the same ``key``
         does not reach DCS and returns the stored result, returned objects and handles
         included; only a result above 64 KiB is stored without its values, and its repeat
@@ -280,6 +281,7 @@ class EngineClient:
                 common_pb2.ErrorCode.Name(r.err.code).removeprefix("ERROR_CODE_"),
                 r.err.message,
                 r.err.capability,
+                Limit.from_proto(r.err.limit) if r.err.HasField("limit") else None,
             )
         if r.replayed and not r.reply.HasField("call"):
             raise ResultNotKept(f"DcsCall {path}")

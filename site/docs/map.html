@@ -24,7 +24,7 @@
 <a class="skip" href="#content">Перейти к содержанию</a>
 <header class="topbar">
 <div class="topbar-inner">
-<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.3.0</span></a>
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.4.0</span></a>
 <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
 <nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
 <div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
@@ -41,6 +41,8 @@
 <li><a href="dependency.html">Подключение SDK</a></li>
 <li><a href="sdk.html">Логика на Rust</a><ul>
 <li><a href="objects.html">Объекты: статики, уничтожение, мусор</a></li>
+<li><a href="airbases.html">Аэродромы: владелец, автозахват, радио, стоянки и полосы</a></li>
+<li><a href="warehouses.html">Склады: запас аэродромов и грузов</a></li>
 <li><a href="map.html" aria-current="page">Рисование на карте</a></li>
 <li><a href="menus.html">Деревья меню F10</a></li>
 <li><a href="dcs.html">Вызовы DCS</a></li>
@@ -50,7 +52,10 @@
 </li>
 <li><a href="generator.html">Сценарий на Python</a></li>
 <li><a href="testing.html">Тестирование</a></li>
-<li><a href="operations.html">Эксплуатация</a></li>
+<li><a href="operations.html">Эксплуатация</a><ul>
+<li><a href="web-api.html">Web API</a></li>
+</ul>
+</li>
 <li><a href="troubleshooting.html">Диагностика</a></li>
 <li><a href="faq.html">Вопросы и ограничения</a></li>
 <li><a href="changelog.html">Что нового</a></li>
@@ -185,7 +190,7 @@ ctx.map().clear().await?; // все рисунки этой логики
 </ul>
 </article>
 <nav class="pager" aria-label="Соседние страницы">
-<a class="pager-prev" rel="prev" href="objects.html"><span class="pager-dir">Назад</span><span class="pager-title">Объекты: статики, уничтожение, мусор</span></a>
+<a class="pager-prev" rel="prev" href="warehouses.html"><span class="pager-dir">Назад</span><span class="pager-title">Склады: запас аэродромов и грузов</span></a>
 <a class="pager-next" rel="next" href="menus.html"><span class="pager-dir">Дальше</span><span class="pager-title">Деревья меню F10</span></a>
 </nav>
 <p class="page-source"><a href="map.md">Эта страница в Markdown</a></p>
@@ -193,7 +198,7 @@ ctx.map().clear().await?; // все рисунки этой логики
 </div>
 <footer class="footer">
 <div class="footer-inner">
-<p>Sortie SDK 0.3.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p>Sortie SDK 0.4.0. Лицензия SDK: MIT OR Apache-2.0.</p>
 <p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
 </div>
 </footer>

@@ -1,7 +1,9 @@
 """``sortie-gen adopt my.miz``: inspect a mission made in the editor before building on it.
 
 Lists coalitions, groups, units and trigger zones, flags what would break Sortie's rules
-(duplicate or reserved names), and warns that pydcs may move aircraft parking when it saves.
+(duplicate or reserved names), lists the mission's Lua (the init script, DO SCRIPT, DO SCRIPT FILE,
+LUA PREDICATE) whose logic belongs in the Rust logic, and warns that pydcs may move aircraft
+parking when it saves.
 """
 
 from __future__ import annotations
@@ -43,6 +45,10 @@ class AdoptReport:
     start: str
     groups: list[AdoptedGroup] = field(default_factory=list)
     zones: list[dict[str, Any]] = field(default_factory=list)
+    #: The mission's Lua except a Sortie bootstrap: the init script, every LUA PREDICATE, DO
+    #: SCRIPT and DO SCRIPT FILE of the triggers (``miz.mission_scripts``, ``miz.MissionScript``
+    #: as a dict).
+    scripts: list[dict[str, Any]] = field(default_factory=list)
     has_bootstrap: bool = False
     warnings: list[str] = field(default_factory=list)
 
@@ -116,6 +122,9 @@ def adopt(path: str | Path) -> AdoptReport:
             }
         )
     report.has_bootstrap = mizmod.find_bootstrap(m) is not None
+    report.scripts = [asdict(s) for s in mizmod.mission_scripts(m, skip_bootstrap=True)]
+    if report.scripts:
+        report.warnings.append(mizmod.SCRIPTS_RULE)
     report.groups.sort(key=lambda g: g.group_id)
     if any_parked_client or any(g.category in ("air", "helo") for g in report.groups):
         report.warnings.append(PARKING_WARNING)
@@ -144,6 +153,11 @@ def render(report: AdoptReport) -> str:
             lines.append(
                 f"    {z['name']:<28} north {z['north']:.1f} east {z['east']:.1f} r {z['radius']:.0f} m  -> {z['suggested_ident']}"
             )
+    if report.scripts:
+        lines.append("")
+        lines.append("  scripts that are not Sortie's (move their logic to Rust):")
+        for sc in report.scripts:
+            lines.append(f"    {mizmod.MissionScript(**sc).describe()}")
     for w in report.warnings:
         lines.append("")
         lines.append(f"warning: {w}")

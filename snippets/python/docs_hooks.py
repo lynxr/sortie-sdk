@@ -1,5 +1,6 @@
-# What a scenario adds through pydcs directly (`@sc.pydcs`): statics, weather, briefing and an
-# own DO SCRIPT trigger. Built offline by python/sortie-gen/tests/test_sdk_snippets.py.
+# What a scenario adds through pydcs directly (`@sc.pydcs`): statics, weather, briefing and the
+# DO SCRIPT of a third-party script the mission keeps. Built offline by
+# python/sortie-gen/tests/test_sdk_snippets.py.
 
 import dcs
 from dcs import vehicles
@@ -28,10 +29,16 @@ def extras(m: dcs.Mission) -> None:
 
 
 # snippet:start gen-do-script
+# Сторонний скрипт, который миссия обязана сохранить (не логика миссии: она — в Rust).
+STATS_CONFIG = 'SERVER_STATS = { enabled = true, interval = 60 }'
+
+sc.do_scripts = "allow"  # иначе сборка предупредит о DO SCRIPT (с "deny" — откажет)
+
+
 @sc.pydcs
-def hello(m: dcs.Mission) -> None:
-    trig = TriggerStart(comment="hello")
-    trig.add_action(InlineDoScript('trigger.action.outText("Миссия загружена", 10)'))
+def server_stats(m: dcs.Mission) -> None:
+    trig = TriggerStart(comment="server stats")
+    trig.add_action(InlineDoScript(STATS_CONFIG))
     m.triggerrules.triggers.append(trig)
 # snippet:end gen-do-script
 

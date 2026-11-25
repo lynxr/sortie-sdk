@@ -1,4 +1,4 @@
-# Sortie SDK 0.3.0: the SDK crates and the compiled examples of the docs.
+# Sortie SDK 0.4.0: the SDK crates and the compiled examples of the docs.
 #
 # template/ and examples/ are separate projects. They depend on the SDK through git, the way
 # client projects do; CI builds a copy of each against the crates of this repository.
@@ -17,7 +17,7 @@ members = [
 exclude = ["template", "examples"]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.89"
 license = "MIT OR Apache-2.0"
@@ -26,13 +26,13 @@ publish = false
 
 [workspace.dependencies]
 # SDK crates
-sortie = { path = "crates/sortie", version = "0.3.0" }
-sortie-proto = { path = "crates/sortie-proto", version = "0.3.0", default-features = false }
-sortie-types = { path = "crates/sortie-types", version = "0.3.0" }
-sortie-world = { path = "crates/sortie-world", version = "0.3.0" }
-sortie-manifest = { path = "crates/sortie-manifest", version = "0.3.0" }
-sortie-build = { path = "crates/sortie-build", version = "0.3.0" }
-sortie-macros = { path = "crates/sortie-macros", version = "0.3.0" }
+sortie = { path = "crates/sortie", version = "0.4.0" }
+sortie-proto = { path = "crates/sortie-proto", version = "0.4.0", default-features = false }
+sortie-types = { path = "crates/sortie-types", version = "0.4.0" }
+sortie-world = { path = "crates/sortie-world", version = "0.4.0" }
+sortie-manifest = { path = "crates/sortie-manifest", version = "0.4.0" }
+sortie-build = { path = "crates/sortie-build", version = "0.4.0" }
+sortie-macros = { path = "crates/sortie-macros", version = "0.4.0" }
 
 # Third-party crates
 tokio = { version = "1.54.1" }

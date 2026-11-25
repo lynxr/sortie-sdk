@@ -9,17 +9,19 @@ names (`"Russia"`, `"USA"`); airbases are names of the map's airports (`"Krymsk"
 
 | Declaration | Parameters (defaults) | Result |
 | --- | --- | --- |
-| `Scenario(name, *, schema, theatre, start, time_limit=None, description=None)` | `name`: `[a-z][a-z0-9_]*`; `schema`: int ≥ 1; `theatre`: a pydcs terrain (`caucasus.Caucasus()`); `start`: RFC 3339, without an offset the map's local time; `time_limit`: `"3h"`, `"1h30m"`, `"90m"`, seconds, `None` = no limit | the scenario |
+| `Scenario(name, *, schema, theatre, start, time_limit=None, description=None, do_scripts="warn")` | `name`: `[a-z][a-z0-9_]*`; `schema`: int ≥ 1; `theatre`: a pydcs terrain (`caucasus.Caucasus()`); `start`: RFC 3339, without an offset the map's local time; `time_limit`: `"3h"`, `"1h30m"`, `"90m"`, seconds, `None` = no limit; `do_scripts`: what a build does with Lua a hook added (the init script, a DO SCRIPT, DO SCRIPT FILE or LUA PREDICATE), `"warn"`, `"deny"` (the build fails) or `"allow"` | the scenario |
 | `sc.zone(name, *, ident=None, at=, radius=)` or `points=[p1, p2, p3, p4]`; `hidden=True`, `color=None` | a circle or a quad | `ZoneHandle` (`.center`) |
 | `sc.ground_group(name, *, ident=None, country, at, units=[..], heading=0.0, formation="star", spacing=40.0, skill="Excellent", roles=None, late_activation=False, hidden=False)` | `formation`: `line`, `star`, `rectangle`, `vee`; the first unit stands at `at`; units named `<name>-<k>` | `GroupHandle` |
-| `sc.air_template(name, unit_type, *, ident, country, size=1, task=None, at=None, airbase=None, altitude=None, speed=None, skill="High", roles=None, payload=None)` | kept out of the `.miz`; `task` defaults to the type's main task; placement when the logic gives none: `at`, else `airbase`, else the first declared airbase, else the coalition's bullseye; `altitude` 6000 m (2000 m for helicopters); `speed` in km/h; `payload`: a pydcs loadout name or a list of pylon tuples | `TemplateHandle` |
+| `sc.air_template(name, unit_type, *, ident, country, size=1, task=None, at=None, airbase=None, altitude=None, speed=None, skill="High", roles=None, payload=None)` | kept out of the `.miz`; `task` defaults to the type's main task; placement when the logic gives none: `at`, else `airbase`, else the first declared airbase, else the coalition's bullseye; `altitude` 6000 m (2000 m for helicopters); `speed` in km/h; `payload`: a pydcs loadout name or a list of pylon tuples; the manifest's template carries the leader's heading as its reference heading `heading_rad`, which the logic's `.at_formation(..)` turns the formation from | `TemplateHandle` |
+| `sc.ground_template(name, *, ident, country, units=[..], at=None, heading=0.0, unit_headings=None, formation="line", spacing=40.0, skill="Excellent", roles=None)` | 0.4.0: a ground group kept out of the `.miz` for the logic to spawn (`templates::X`, kind `ground`); drawn as `ground_group` draws one (the first unit at `at`, else at the first declared airbase, else the bullseye) for the facing `heading` (degrees), which the manifest keeps as the reference heading `heading_rad`; `unit_headings`: each unit's heading relative to `heading`, one per unit (`[-15, 15]` for two launchers), all 0 by default; `.at_formation(..)` keeps that spread | `TemplateHandle` |
 | `sc.airbase(name, *, ident, coalition=None, munitions=None)` | `coalition`: `Coalition.Red/Blue/Neutral` or `"red"`; without it the map's default owner stays (except player airfields). `munitions={(4, 4, 7, 106): 20}`: limited munitions with that starting stock, each weapon named by its wsType (four numbers, DCS's `Scripts/Database/wsTypes.lua`), amounts 0..1000000; without it the stock is unlimited (aircraft and fuel always are), and DCS is reported not to count an unlimited stock | `AirbaseHandle` (`.position`) |
 | `sc.player_flight(name, unit_type, *, country, airbase, start=StartType.Cold, size=1, task=None, skill="Client", payload=None, at=None, altitude=3000.0)` | `start`: `StartType.Cold`, `Hot`, `Runway`, `Air` (`Air` needs `at=`); the type must be flyable; goes to `manifest.player_flights`, not to the lock | `FlightHandle` |
 | `sc.flag(ident, *, name=None, initial=0)` | DCS flag name defaults to the ident; a non-zero `initial` is set by a MISSION START trigger | `FlagHandle` |
 | `sc.menu(ident, label, *, path=())` | `path`: sub-menus, e.g. `["Support"]` | `MenuHandle` |
-| `@sc.pydcs` on `def hook(mission)` | runs after the declarations on every build; names are checked for uniqueness afterwards | the function |
+| `@sc.pydcs` on `def hook(mission)` | runs after the declarations on every build; names are checked for uniqueness afterwards, its Lua (init script, trigger scripts, LUA PREDICATE) against `do_scripts`; map side only, never game logic | the function |
 | `sc.latlon(lat, lon)`, `sc.point(north, east)` | positions; `latlon` is rounded to 1 mm | `dcs.mapping.Point` |
 | `sc.time_limit = "2h"` | changes the limit after construction | |
+| `sc.do_scripts = "deny"` | changes the DO SCRIPT policy after construction | |
 | `sc.build(build_id=None)` | in-memory build: `.build_id`, `.manifest`, `.miz`, `.lock`, `.warnings`, `.write(out_dir)` | `Build` |
 | `sc.cli()` | the command line below | exits |
 
@@ -60,8 +62,9 @@ sortie-gen adopt my.miz [--json]
   bootstrap; it shows whether the bridge loaded). The engine uses the running lobby to check
   types.
 - `adopt` reports an editor mission: groups, units, zones, proposed idents, names that break
-  the rules. pydcs may move aircraft to other parking spots when it saves a mission: place
-  player slots with `player_flight`.
+  the rules, and the mission's Lua: its init script, every LUA PREDICATE, DO SCRIPT and DO
+  SCRIPT FILE except a Sortie bootstrap (their logic moves to Rust). pydcs may move aircraft
+  to other parking spots when it saves a mission: place player slots with `player_flight`.
 - `worker` (the campaign loop) is not available yet: it exits with code 2.
 
 ## Errors and warnings
@@ -79,6 +82,7 @@ The CLI prints `error: ...` without a traceback. In code they are `sortie_gen` e
 | `player flights 'A' (blue) and 'B' (red) both start at X` | one airfield, one coalition: move a flight or use an air start |
 | `player flight 'A' (blue) starts at X, which the scenario gives to red` | give the airbase to the flight's coalition or start elsewhere |
 | warning `player group 'A' (blue) starts at X, which belongs to red` | a hook placed a client group: set the airfield owner in the hook |
+| warning `the .miz runs N scripts that Sortie did not put there:` (an error with `do_scripts="deny"`) | move the logic of each listed trigger (and of a `mission init:` line, the init script) to the Rust logic; keep a third-party script with `do_scripts="allow"` |
 | warning `template 'X' (Su-27) spawns without weapons` | `payload=[..]` pylon tuples, or `SORTIE_GEN_DCS_DATA=installed` |
 | `pydcs knows no loadout 'X' for Y` | a loadout name needs `SORTIE_GEN_DCS_DATA=installed`; or list the pylons |
 | `scenario.lock.json is stale (...); run python scenario.py lock` | after `--locked` / `--check`: run `lock`, rebuild the logic |

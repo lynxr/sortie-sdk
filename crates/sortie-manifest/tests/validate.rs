@@ -315,6 +315,21 @@ fn template_rules() {
     let p = paths(&m);
     assert!(p.contains(&"templates[0].units".to_owned()), "{p:?}");
     assert!(p.contains(&"templates[0].category".to_owned()), "{p:?}");
+
+    // The reference heading (0.4.0) is optional; when set, finite.
+    for ok in [None, Some(0.0), Some(-1.5), Some(7.0)] {
+        let mut m = fixture();
+        m.templates[0].heading_rad = ok;
+        assert_eq!(paths(&m), Vec::<String>::new(), "{ok:?}");
+    }
+    for bad in [f64::NAN, f64::INFINITY] {
+        let mut m = fixture();
+        m.templates[0].heading_rad = Some(bad);
+        assert!(
+            messages(&m).contains("templates[0].heading_rad: must be finite"),
+            "{bad}"
+        );
+    }
 }
 
 #[test]

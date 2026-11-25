@@ -8,9 +8,28 @@
 пользоваться вызовами, описано на странице [Вызовы DCS](dcs.md).
 
 Классы: `read` — включено по умолчанию (кроме функций, отмеченных как «проба»: они
-выключены, пока их проверка не прошла на текущей сборке DCS); `heavy` — дорогое чтение,
-по одному за кадр; `mutate` — меняет мир, выключено, пока владелец движка не включит
-его в `engine.toml` (или `sortied --dev`); `admin` — администрирование сервера.
+выключены, пока их проверка не прошла на текущей сборке DCS); `heavy` — дорогое чтение:
+по одному, не чаще 2 в секунду на писателя, со своим бюджетом времени DCS
+(`dcs_time.heavy`, [лимиты](dcs.md#ключи-полосы-лимиты)); `mutate` — меняет мир,
+выключено, пока владелец движка не включит его в `engine.toml` (или `sortied --dev`);
+`admin` — администрирование сервера.
+
+Проверка `span_300km` в описании записи: концы вызова не дальше 300 км друг от друга по
+карте (север и восток), иначе `Error::Invalid`, и в DCS ничего не уходит.
+
+Вызовы DCS — API ревизии 1: логика объявляет `#[sortie::mission(api_rev = 1)]`. Запись,
+у которой в столбце «Класс» стоит «ревизия API N», требует от своей обёртки в
+`ctx.dcs()` `api_rev = N` (иначе `Error::Revision`) и движка этой ревизии (иначе
+`Error::EngineTooOld`). Это проверка SDK, а не движка. Вызов по имени
+(`ctx.dcs().call(..)`, фича `dcs-raw`) и вызов из Python идут с ревизией 1: движок
+ревизии N и новее их выполнит, а более старый не знает такой записи и отвечает
+`Error::Rejected` (в Python — `REJECTED`).
+
+Записи `sortie.*` — функции не DCS, а Lua-слоя Sortie: слой выполняет их внутри DCS в
+том же кадре поверх функций DCS, которые вызывает сам (`sortie.findPathOnRoads` —
+сводка пути по дорогам и не больше заданного числа его точек). Им нужен Lua-слой той
+версии SDK, что их добавила (`sortie install`); более старый слой отвечает `MISSING`
+(`Error::Unavailable`).
 
 ## `ctx.dcs().airbases()`
 
@@ -67,11 +86,13 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | `mission:land.getHeight` | `height` | `point: vec2` | `number` | read | ENV-LC1 | Terrain height (m above sea level) at a map point. |
 | `mission:land.getSurfaceHeightWithSeabed` | `surface_height_with_seabed` | `point: vec2` | `number, number` | read | ENV-LC1 | Surface height and seabed depth (m) at a map point. |
-| `mission:land.getSurfaceType` | `surface_type` | `point: vec2` | `enum:land.SurfaceType` | read | ENV-LC1 | Surface type at a map point: LAND, SHALLOW_WATER, WATER, ROAD or RUNWAY. |
+| `mission:land.getSurfaceType` | `surface_type` | `point: vec2` | `enum:land.SurfaceType` | read | ENV-LC1 | Surface type at a map point: LAND, SHALLOW_WATER, WATER, ROAD or RUNWAY. There is no forest or town value: a forest reads LAND. No documented DCS function gives scripts forest or tree data. |
 | `mission:land.isVisible` | `is_visible` | `origin: vec3, destination: vec3` | `boolean` | read | ENV-LC4 | Whether the terrain leaves a line of sight between two points (objects do not block it). |
 | `mission:land.getIP` | `intersection` | `origin: vec3, direction: vec3, distance: number` | `vec3?` | read | ENV-LC5 | Where a ray from origin along direction first hits the terrain within distance (m), or nil. |
-| `mission:land.profile` | `profile` | `origin: vec3, destination: vec3` | `list:vec3` | read | ENV-LC6 | Terrain profile between two points as a list of points on the ground. DCS reads x and z of both points and ignores y. The end points may lie at most 300 km apart. |
+| `mission:land.profile` | `profile` | `origin: vec3, destination: vec3` | `list:vec3` | read | ENV-LC6 | Terrain profile between two points as a list of points on the ground. Проверка `span_300km`: концы `origin` и `destination` не дальше 300 км друг от друга. DCS reads x and z of both points and ignores y. |
 | `mission:land.getClosestPointOnRoads` | `closest_point_on_roads` | `road_type: string, x: number, y: number` | `number, number` | read | ENV-LC1 | The closest point on a road (road_type "roads" or "railroads") to map coordinates x (north), y (east). |
+| `mission:land.findPathOnRoads` | `path_on_roads` | `road_type: string, from_x: number, from_y: number, to_x: number, to_y: number` | `list:vec2?` | heavy, ревизия API 3 | ENV-LC7 | A path along roads from map coordinates from_x (north), from_y (east) to to_x, to_y: map points from start to end, or nil. Проверка `span_300km`: концы (`from_x`, `from_y`) и (`to_x`, `to_y`) не дальше 300 км друг от друга. road_type "roads"; the Hoggit wiki documents "railroads" and reports that DCS reads railroads as "rails". What comes back for a place no road reaches, and how long a long path takes, is not measured (ENV-LC7). |
+| `mission:sortie.findPathOnRoads` | `road_path` | `road_type: string, start: vec2, end: vec2, max_points: number?, keep: string?` | `road_path?` | heavy, ревизия API 3 | ENV-LC7 | The road path from start to end that land.findPathOnRoads finds, summarised by the Sortie Lua layer inside DCS in the same frame: point count, length along the points, first and last point and how far each lies from the end asked, and at most max_points of the points with both ends kept; nil when DCS finds no path. Проверка `span_300km`: концы `start` и `end` не дальше 300 км друг от друга. keep "turns" (the default) keeps the points where the path turns most (fewer when the rest lie on straight legs), "even" points spaced evenly along it; without max_points no points come back (the summary alone; thinned, which says points holds fewer points than the path, is then true unless the path is empty). Needs the Lua layer of 0.4.0 (sortie install): an older one answers MISSING. Whether the summary matches the full path on a running DCS is ENV-LC7. |
 
 ## `ctx.dcs().markup()`
 
@@ -117,6 +138,9 @@
 | `hooks:DCS.getRealTime` | `real_time` | — | `number` | read | ENV-LC17 | Real time in seconds since DCS started. |
 | `hooks:DCS.getPause` | `is_paused` | — | `boolean` | read | PLY-LC21 | Whether the simulation is paused. |
 | `hooks:DCS.isMultiplayer` | `is_multiplayer` | — | `boolean` | read | PLY-LC21 | Whether the mission runs in multiplayer. |
+| `hooks:DCS.getFarpsAndCarriersMissionData` | `farps_and_carriers` | — | `table` | heavy, ревизия API 3 | AWC-T30 | The FARPs and carriers the slot screen lists: {farps = {[unit id] = {name, x, y, coalition, ...}}, carriers = {...}}. Whether a FARP added while the mission runs is listed is not measured (AWC-T30); the name suggests the mission's own data. |
+| `hooks:DCS.getDynamicSpawnSettings` | `dynamic_spawn_settings` | `airbase_id: number, is_airdrome: boolean` | `table?` | read, ревизия API 3 | AWC-T30 | Dynamic-slot settings of an airfield (its id, is_airdrome true) or of a FARP or carrier (its unit id, false): {dynamicSpawnAvailable, allowHotSpawn, ...}. The slot screen reads dynamicSpawnAvailable and allowHotSpawn; other fields and the answer for an unknown id are not measured (AWC-T30). |
+| `hooks:DCS.getAircraftAmountInAirportWarehouse` | `aircraft_in_warehouse` | `aircraft_type: string, airbase_id: number, is_farp_or_ship: boolean` | `number` | read, ревизия API 3 | AWC-T30 | How many aircraft of a type the slot screen offers at an airfield (its id, false) or a FARP or carrier (its unit id, true). The slot screen shows 1000000 or more without a count (an unlimited stock) and offers a type only above 0 (AWC-T30). |
 
 ## `ctx.dcs().sounds()`
 
@@ -255,10 +279,10 @@
 | `mission:Airbase.getRunways` | `runways` | — | `table` | read | UC-1 | Runways: a list of {Name, course, length, width, position}. |
 | `mission:Airbase.getParking` | `parking` | `available: boolean?` | `table` | heavy | AWC-T17 | Parking spots: a list of {Term_Index, Term_Type, vTerminalPos, TO_AC, fDistToRW}; available = free spots only. |
 | `mission:Airbase.getRadioSilentMode` | `radio_silent_mode` | — | `boolean` | read | UC-1 | Whether the airbase's ATC is silent. |
-| `mission:Airbase.setRadioSilentMode` | `set_radio_silent_mode` | `silent: boolean` | — | mutate | UC-1 | Silences (true) or restores (false) the airbase's ATC. |
+| `mission:Airbase.setRadioSilentMode` | `set_radio_silent_mode` | `silent: boolean` | — | mutate, заменено `airbase_control` | UC-1 | Silences (true) or restores (false) the airbase's ATC. Use ctx.airbase_control(..).radio_silent(..): the typed operation sets many bases in one frame and reads each back. |
 | `mission:Airbase.autoCaptureIsOn` | `auto_capture_is_on` | — | `boolean` | read | AWC-T1 | Whether DCS captures the airbase by itself when ground units take it. |
-| `mission:Airbase.autoCapture` | `auto_capture` | `on: boolean` | — | mutate | AWC-T1 | Turns DCS's own capture of the airbase on or off. |
-| `mission:Airbase.setCoalition` | `set_coalition` | `coalition: side_number` | — | mutate | AWC-T1 | Gives the airbase to a coalition (turn auto capture off first, or DCS may flip it back). The mirror learns the new owner at the next airbase sweep (BaseCaptured.cause OBSERVED), not at once. |
+| `mission:Airbase.autoCapture` | `auto_capture` | `on: boolean` | — | mutate, заменено `airbase_control` | AWC-T1 | Turns DCS's own capture of the airbase on or off. Use ctx.airbase_control(..).auto_capture(..): the typed operation sets many bases in one frame and reads each back. |
+| `mission:Airbase.setCoalition` | `set_coalition` | `coalition: side_number` | — | mutate, заменено `airbase_control` | AWC-T1 | Gives the airbase to a coalition (turn auto capture off first, or DCS may flip it back). Use ctx.airbase_control(..).owner(..): the typed operation sets many bases in one frame, turns auto capture off first when asked, and the world learns the new owner at once; after a raw call the world learns it only at the next resync snapshot or a state query of the base (ctx.airbase(..).state()); nothing sweeps airbases. |
 | `mission:Airbase.getWarehouse` | `warehouse` | — | `object:Warehouse` | read | AWC-T14 | The airbase's warehouse (comes back as a warehouse selector). |
 | `mission:CoalitionObject.getCoalition` | `coalition` | — | `side_number` | read | UC-1 | The coalition the object belongs to. |
 | `mission:CoalitionObject.getCountry` | `country` | — | `enum:country.id` | read | UC-4 | The country key of the object, e.g. "USA". |
@@ -296,17 +320,23 @@
 
 ## `ctx.dcs().warehouse(…)`: методы Warehouse
 
+Имена предметов и их wsType, которые знает запущенная DCS, читает типизированный
+запрос `ctx.item_names()` (ревизия API 3); записи `Warehouse.getResourceMap` в
+каталоге нет. `.knows(имя)`, `.ws_type_of(имя)`, `.names_of(ws)` и `.items([..])`
+проверяют предметы кампании до наполнения склада; карту DCS движок читает один раз за
+процесс DCS ([Склады](warehouses.md#имена-предметов)).
+
 | Функция DCS | Обёртка | Аргументы | Результат | Класс | Проверка | Описание |
 | --- | --- | --- | --- | --- | --- | --- |
 | `mission:Warehouse.getInventory` | `inventory` | `item: string?` | `table` | heavy | AWC-T6 | Stock: {aircraft = {[type] = n}, weapon = {[name] = n}, liquids = {[0..3] = amount}}; an unlimited class is an empty table. |
 | `mission:Warehouse.getItemCount` | `item_count` | `item: item` | `number` | read | AWC-T6 | Stock of one item, named by its name (aircraft type or weapon name) or its wsType {a, b, c, d}. |
-| `mission:Warehouse.addItem` | `add_item` | `item: item, count: number` | — | mutate | AWC-T6 | Adds count of an item. |
-| `mission:Warehouse.removeItem` | `remove_item` | `item: item, count: number` | — | mutate | AWC-T6 | Removes count of an item. |
-| `mission:Warehouse.setItem` | `set_item` | `item: item, count: number` | — | mutate | AWC-T6 | Sets the stock of an item. |
+| `mission:Warehouse.addItem` | `add_item` | `item: item, count: number` | — | mutate, заменено `warehouse_op` | AWC-T6 | Adds count of an item. Use ctx.warehouse_op().add(..): the typed operation changes many items and warehouses in one frame, all or nothing, reads each count back and refuses an unlimited stock instead of changing nothing. |
+| `mission:Warehouse.removeItem` | `remove_item` | `item: item, count: number` | — | mutate, заменено `warehouse_op` | AWC-T6 | Removes count of an item. Use ctx.warehouse_op().remove(..) or .transfer(..): the typed operation refuses to remove more than the warehouse holds, changes many items in one frame, all or nothing, and reads each count back. |
+| `mission:Warehouse.setItem` | `set_item` | `item: item, count: number` | — | mutate, заменено `warehouse_op` | AWC-T6 | Sets the stock of an item. Use ctx.warehouse_op().set(..): the typed operation changes many items and warehouses in one frame, all or nothing, reads each count back and refuses an unlimited stock instead of changing nothing. |
 | `mission:Warehouse.getLiquidAmount` | `liquid_amount` | `liquid: number` | `number` | read | AWC-T9 | Stock of a liquid (0 jet fuel, 1 aviation gasoline, 2 MW50, 3 diesel); the unit is not documented (kg assumed). |
-| `mission:Warehouse.addLiquid` | `add_liquid` | `liquid: number, amount: number` | — | mutate | AWC-T9 | Adds an amount of a liquid. |
-| `mission:Warehouse.removeLiquid` | `remove_liquid` | `liquid: number, amount: number` | — | mutate | AWC-T9 | Removes an amount of a liquid. |
-| `mission:Warehouse.setLiquidAmount` | `set_liquid_amount` | `liquid: number, amount: number` | — | mutate | AWC-T9 | Sets the stock of a liquid. |
+| `mission:Warehouse.addLiquid` | `add_liquid` | `liquid: number, amount: number` | — | mutate, заменено `warehouse_op` | AWC-T9 | Adds an amount of a liquid. Use ctx.warehouse_op().add(.., Liquid::..): the typed operation changes many stocks in one frame, all or nothing, and reads each amount back. |
+| `mission:Warehouse.removeLiquid` | `remove_liquid` | `liquid: number, amount: number` | — | mutate, заменено `warehouse_op` | AWC-T9 | Removes an amount of a liquid. Use ctx.warehouse_op().remove(.., Liquid::..) or .transfer(..): the typed operation refuses to remove more than the warehouse holds, changes many stocks in one frame, all or nothing, and reads each amount back. |
+| `mission:Warehouse.setLiquidAmount` | `set_liquid_amount` | `liquid: number, amount: number` | — | mutate, заменено `warehouse_op` | AWC-T9 | Sets the stock of a liquid. Use ctx.warehouse_op().set(.., Liquid::..): the typed operation changes many stocks in one frame, all or nothing, and reads each amount back. |
 | `mission:Warehouse.getOwner` | `owner` | — | `object:Airbase?` | read | AWC-T14 | The airbase that owns the warehouse. |
 
 ## `ctx.dcs().spot(…)`: методы Spot

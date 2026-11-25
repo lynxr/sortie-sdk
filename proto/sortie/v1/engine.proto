@@ -53,11 +53,31 @@ message LinkHealth {
   // Seconds since the last heartbeat from the bridge.
   double heartbeat_age_s = 5;
   // From the bridge's last heartbeat (0 before the first one): the frame rate it measured and
-  // the 99th percentile of the work Sortie did per pump (commands, events, samples) since the
-  // heartbeat before it, in microseconds; compare with the bridge's pump budget (mission:
-  // 1000 us by default).
+  // the 99th percentile of the work Sortie did per pump (commands, events, samples, snapshot
+  // chunks) since the heartbeat before it, in microseconds; compare with the bridge's pump
+  // budget (mission: 1500 us by default).
   float fps = 6;
   uint32 pump_p99_us = 7;
+  // 0.4.0. Events of this link whose time was more than 5 s ahead of the model time the
+  // mission's pump last reported (`clock::MAX_EVENT_LEAD_S`): their time moved no clock (a
+  // DCS time that is not model time, e.g. a Lua layer before 0.4.0 passing the time of day of
+  // a mark event, or time acceleration). Since the link connected; 0 for the hooks link.
+  uint64 event_times_ignored = 8;
+  // 0.4.0. What the mission Lua layer's event handler did since the link connected (0 for the
+  // hooks link and for a bridge before 0.4.0): DCS events it handled, the DCS calls they made
+  // and their wall time in microseconds. DCS runs the handler inside its event dispatch,
+  // outside the pump budget, so this is Sortie's cost in DCS that pump_p99_us does not hold.
+  uint64 event_copies = 9;
+  uint64 event_copy_calls = 10;
+  uint64 event_copy_us = 11;
+  // 0.4.0. From the bridge's last heartbeat: the most event handling time between two pumps
+  // since the heartbeat before it, microseconds.
+  uint32 event_copy_max_us = 12;
+  // 0.4.0. The world snapshots' reads since the link connected (the first one at the mission's
+  // attach, a resync after a gap): objects read, DCS calls, wall time in microseconds.
+  uint64 snapshot_objects = 13;
+  uint64 snapshot_calls = 14;
+  uint64 snapshot_us = 15;
 }
 
 message HealthResponse {

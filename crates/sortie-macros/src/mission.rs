@@ -130,6 +130,17 @@ fn parse_args(attr: TokenStream, errors: &mut Errors) -> Option<Declared> {
                 out.event_rev, out.api_rev
             ),
         ));
+    } else if out.event_rev == 2 && out.api_rev < 3 {
+        // Event revision 2 (AirbaseOwnerChanged) belongs to API revision 3 (the engine's
+        // `revision::api_rev_of_event_rev`; it serves such a declaration event revision 1).
+        errors.push(syn::Error::new_spanned(
+            &attr,
+            format!(
+                "event_rev 2 needs api_rev 3 (AirbaseOwnerChanged is part of API revision 3): \
+                 declare #[sortie::mission(api_rev = 3, event_rev = 2)], not api_rev = {}",
+                out.api_rev
+            ),
+        ));
     }
     Some(out)
 }
@@ -728,6 +739,14 @@ mod tests {
         }
         assert!(errors_of(quote!(api_rev = 1), item()).is_empty());
         assert!(errors_of(quote!(api_rev = 2, event_rev = 1,), item()).is_empty());
+        // Review R3: event revision 2 (AirbaseOwnerChanged) belongs to API revision 3.
+        let errs = errors_of(quote!(api_rev = 2, event_rev = 2), item());
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("event_rev 2 needs api_rev 3")),
+            "{errs:?}"
+        );
+        assert!(errors_of(quote!(api_rev = 3, event_rev = 2), item()).is_empty());
         assert!(errors_of(quote!(api_rev = 1, requires = [caps::DRAW, "x"]), item()).is_empty());
     }
 

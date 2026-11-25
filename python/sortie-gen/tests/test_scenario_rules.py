@@ -172,6 +172,52 @@ def test_a_small_scenario_builds(sc):
     assert [(f.ident, f.initial) for f in m.flags] == [("ARMOR_DEAD", 1)]
 
 
+def test_a_ground_template_keeps_its_reference_and_each_units_heading(sc):
+    """0.4.0 (review R6): a ground template is written to the manifest, out of the .miz, as a
+    GROUND_UNIT template whose reference heading is the declared ``heading`` and whose units
+    face it plus their ``unit_headings``: two launchers drawn about 90 deg at 75 and 105, abreast
+    40 m apart (pydcs's line: the second unit at heading + 90 from the first, here south)."""
+    import json
+    import math
+
+    from sortie_gen._proto.sortie.v1 import common_pb2
+
+    sc.ground_template("Pair", ident="PAIR", country="Russia", at=sc.latlon(42.2, 42.6),
+                       units=[SA] * 2, heading=90, unit_headings=[-15, 15], spacing=40)
+    b = sc.build()
+    assert len(b.manifest.groups) == 0  # templates stay out of the .miz
+    (t,) = b.manifest.templates
+    assert (t.ident, t.name, t.category) == ("PAIR", "Pair", common_pb2.CATEGORY_GROUND_UNIT)
+    assert t.HasField("heading_rad") and math.isclose(t.heading_rad, math.radians(90))
+    assert [round(math.degrees(u.heading_rad), 9) for u in t.units] == [75.0, 105.0]
+    assert [u.name for u in t.units] == ["Pair-1", "Pair-2"]
+    first, second = (u.position for u in t.units)
+    assert math.isclose(second.north - first.north, -40.0, abs_tol=1e-6)
+    assert math.isclose(second.east - first.east, 0.0, abs_tol=1e-6)
+    group = json.loads(t.dcs_group_json)
+    assert "groupId" not in group
+    assert [u["type"] for u in group["units"]] == [SA.id, SA.id]
+    assert [round(math.degrees(u["heading"]), 9) for u in group["units"]] == [75.0, 105.0]
+    assert b.lock["symbols"]["templates"] == [{"ident": "PAIR", "kind": "ground", "roles": []}]
+    assert [u.type_name for u in b.type_uses] == [SA.id]
+
+
+def test_a_ground_template_is_checked(sc):
+    with pytest.raises(ScenarioError, match="unit_headings has 1 entries for 2 units"):
+        sc.ground_template("A", ident="A", country="Russia", units=[SA] * 2, unit_headings=[5])
+    with pytest.raises(ScenarioError, match="not a pydcs vehicle type"):
+        sc.ground_template("B", ident="B", country="Russia", units=[planes.Su_27])
+    with pytest.raises(ScenarioError, match="needs at least one unit"):
+        sc.ground_template("C", ident="C", country="Russia", units=[])
+    with pytest.raises(ScenarioError, match="heading must be a finite"):
+        sc.ground_template("D", ident="D", country="Russia", units=[SA], heading=float("nan"))
+    with pytest.raises(ScenarioError, match="needs an ident|ident"):
+        sc.ground_template("E", ident=None, country="Russia", units=[SA])
+    sc.ground_group("Taken", country="Russia", at=sc.point(0, 0), units=[SA])
+    with pytest.raises(NameConflict):
+        sc.ground_template("Taken", ident="TAKEN", country="Russia", units=[SA])
+
+
 def test_offline_build_id_follows_the_mission_content():
     def make(density: int) -> str:
         s = scenario()

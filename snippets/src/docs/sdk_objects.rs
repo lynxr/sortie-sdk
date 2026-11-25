@@ -4,6 +4,7 @@ use sortie::Error;
 use sortie::cmd::{Heliport, OnConflict, SpawnedStatic};
 use sortie::prelude::*;
 use sortie::sel::{Obj, Volume};
+use sortie::types::{Ground, TemplateRef};
 
 use super::my_mission::{MyMission, airbases, templates, zones};
 
@@ -129,6 +130,34 @@ pub async fn batch(ctx: Ctx<MyMission>, saved: &[(String, MapPoint)]) -> sortie:
     let _ = (cap, farp);
     Ok(())
 }
+
+// snippet:start sdk-objects-formation
+// Наземный шаблон вашего манифеста: зенитная батарея, нарисованная под опорный курс шаблона
+// (с шаблоном в scenario.lock.json это `templates::SAM_SITE`).
+const SAM_SITE: TemplateRef<MyMission, Ground> = TemplateRef::new("SAM_SITE");
+
+#[sortie::mission(api_rev = 3)] // .at_formation — API ревизии 3
+pub async fn sam_site(ctx: Ctx<MyMission>, _start: Start) -> sortie::Result<()> {
+    let site = zones::TARGET.center();
+    let facing = 140.0_f64.to_radians(); // курс в радианах, по часовой от севера
+    // Строй поворачивается целиком вокруг первой машины на (140° − опорный курс шаблона):
+    // пусковые под −15° и +15° от опорного курса смотрят на 125° и 155°.
+    let battery = ctx
+        .spawn_group(SAM_SITE)
+        .at_formation(site.alt(m(0)), facing)
+        .key("battery-north")
+        .await?;
+    // .at(..) — как в 0.1.0–0.3.0: все машины смотрят на 140°, строй только переносится.
+    let decoy = ctx
+        .spawn_group(SAM_SITE)
+        .at(site.toward(0.0, m(2_000)).alt(m(0)), facing)
+        .key("decoy-north")
+        .await?;
+    ctx.report().set("battery", battery.name());
+    ctx.report().set("decoy", decoy.name());
+    ctx.end_session(Outcome::Draw).await
+}
+// snippet:end sdk-objects-formation
 
 // snippet:start sdk-objects-search
 #[sortie::mission(api_rev = 2)] // ctx.search_objects — API ревизии 2

@@ -835,6 +835,52 @@ fn airbases_have_deltas_and_change_owner() {
     assert_eq!(replica.snapshot(), w.snapshot());
 }
 
+/// The owner event of wave 2 (event revision 2): a replica takes the new owner from it before
+/// user code sees it, and learns an airbase it did not know from its snap. The revision never
+/// moves on a replica.
+#[test]
+fn an_owner_change_gives_the_replica_the_new_owner() {
+    let mut w = World::new("s");
+    let base = w.rev();
+    let ab = w.upsert_airbase(v1::AirbaseSnap {
+        name: "Kutaisi".into(),
+        coalition: Coalition::Blue.as_i32(),
+        airbase_id: 25,
+        ..Default::default()
+    });
+    let mut replica = World::replica("s");
+    replica.apply_delta(&w.delta_since(base)).unwrap();
+    let rev = replica.rev();
+    let changed = |snap: v1::AirbaseSnap, owner: Coalition| v1::Event {
+        kind: Some(v1::event::Kind::AirbaseOwnerChanged(
+            v1::AirbaseOwnerChanged {
+                airbase: Some(snap),
+                previous: v1::Coalition::Blue as i32,
+                owner: owner.as_i32(),
+                cause: v1::OwnerChangeCause::Control as i32,
+            },
+        )),
+        ..Default::default()
+    };
+    // The snap is the base after the change; the owner field is what counts.
+    let snap = w.airbase(ab).unwrap().to_snap();
+    replica.apply_event(&changed(snap, Coalition::Red));
+    assert_eq!(replica.airbase(ab).unwrap().coalition, Some(Coalition::Red));
+    assert_eq!(replica.rev(), rev, "a replica's revision does not move");
+    // An airbase the replica did not hold comes with its snap.
+    let farp = v1::AirbaseSnap {
+        eid: sortie_proto::eid::pack(900, 1),
+        name: "FARP North".into(),
+        coalition: Coalition::Red.as_i32(),
+        ..Default::default()
+    };
+    replica.apply_event(&changed(farp, Coalition::Red));
+    assert_eq!(
+        replica.airbase_by_name("FARP North").map(|a| a.coalition),
+        Some(Some(Coalition::Red))
+    );
+}
+
 #[test]
 fn pruning_tombstones_and_history() {
     let mut w = World::new("s");

@@ -1,6 +1,6 @@
 [project]
 name = "sortie-gen"
-version = "0.3.0"
+version = "0.4.0"
 description = "Sortie mission generator: pydcs scenarios, manifests, scenario locks and the engine client"
 readme = "README.md"
 license = "MIT OR Apache-2.0"

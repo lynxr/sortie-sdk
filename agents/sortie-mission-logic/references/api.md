@@ -53,10 +53,10 @@ Options on every command:
 | `ctx.message(to).text(..).secs(u32).clear_view()` | `()` | `to`: `Coalition`, `&Group<K>`, `AnyGroup` (a menu press), `sortie::MessageTarget::All`; 10 s by default |
 | `ctx.smoke(at, SmokeColor::Red)` | `()` | `at`: a `MapPoint` (on the ground) or a `Vec3` |
 | `ctx.flag(flags::X).set(v)` / `.get()` | `()` / `i32` | `v`: `bool` or `i32` |
-| `ctx.spawn_group(t)` | `Group<K>` | `t`: `templates::X` or `templates::X.named("Name")`; then `.from_airbase(airbases::Y, StartType::{Runway, Hot, Cold, Air})` or `.at(Vec3, heading_rad)`; without either, the template's own placement. Default name `<template name>#<session4>-<n>`, units `<group>-<k>`; `.named` fails with `sortie::name_conflict` if a live group has the name. The engine paces spawns (currently 2 groups or 24 units a second), so a big wave takes time. |
+| `ctx.spawn_group(t)` | `Group<K>` | `t`: `templates::X` or `templates::X.named("Name")`; then `.from_airbase(airbases::Y, StartType::{Runway, Hot, Cold, Air})`, `.at(Vec3, heading_rad)` (unit 1 at the point, the other units moved with their template offsets, not turned, and **every unit facing `heading_rad`**) or `.at_formation(Vec3, heading_rad)` (API revision 3: the formation turned as one body about unit 1 by `heading_rad` minus the template's reference heading, `Template.heading_rad` else unit 1's, each unit facing its template heading plus that turn, so the differences between the units stay); both give the group one route point at the point (the template's route is not carried over); without either, the template's own placement. Switching a keyed `.at` to `.at_formation` is another command: give it a new key (the same key is `Error::Invalid`). Default name `<template name>#<session4>-<n>`, units `<group>-<k>`; `.named` fails with `sortie::name_conflict` if a live group has the name. The engine paces spawns (currently 2 groups or 24 units a second), so a big wave takes time. |
 | `group.set_option(o)` | `()` | `o`: `Alarm::{Auto, Green, Red}` or `Roe::{WeaponFree, OpenFireWeaponFree, OpenFire, ReturnFire, WeaponHold}` |
 | `group.destroy()` | `()` | despawn; no DEAD event follows (a `UnitGone` does) |
-| `group.push_task(task)` / `group.set_task(task)` | `()` | `Group<Air>` and `Group<Helo>` only; push on the task stack or replace it |
+| `group.push_task(task)` / `group.set_task(task)` | `()` | every group; push on the task stack or replace it. `Task::cap` / `Task::orbit` / `Task::rtb` are for `Group<Air>` and `Group<Helo>`, `Task::ground_route` for `Group<Ground>` (a task of the wrong kind does not compile, except RTB, which the engine refuses: `sortie::invalid`); `Task::raw` for any group, and the only task of a naval group |
 | `ctx.menu(c).command(menus::X)` | `MenuCommand<S>` | see Menus |
 | `ctx.end_session(outcome).text(..)` | `()` | ends the session (the turn); succeeds even if the session ends first |
 
@@ -67,7 +67,75 @@ Tasks (`Task` is in the prelude):
 | `Task::cap(zones::X).altitude(Length).speed(Speed)` | 6000 m, 420 kt |
 | `Task::orbit(MapPoint).altitude(..).speed(..).race_track(MapPoint)` | 6000 m, 350 kt, a circle without `race_track` |
 | `Task::rtb(airbases::X)` | |
-| `Task::raw(sortie::proto::LuaValue)` | a DCS task table; the engine refuses Lua code in it (`Script`, `ScriptFile`, a `condition` string, a `file` string: `sortie::rejected`, capability `dev_eval`) and NaN or infinities (`sortie::invalid`) |
+| `Task::ground_route([RoutePoint::on_road(p), RoutePoint::new(p, GroundFormation::Vee).speed(..)]).speed(Speed)` | API revision 3, `Group<Ground>` only; 20 km/h; 1 to 256 points |
+| `Task::raw(sortie::proto::LuaValue)` | a DCS task table, for any group; the engine refuses Lua code in it (`Script`, `ScriptFile`, a `condition` string, a `file` string: `sortie::rejected`, capability `dev_eval`) and NaN or infinities (`sortie::invalid`) |
+
+### A ground group's route
+
+A ground group drives a typed route, `Task::ground_route` (API revision 3: the mission declares
+`#[sortie::mission(api_rev = 3)]`; `RoutePoint` and `GroundFormation` are in the prelude):
+
+<!-- snippet: skills-logic-ground-route -->
+```rust
+let armor = ctx.group(groups::RED_ARMOR)?; // Group<Ground>
+let objective = zones::OBJECTIVE.center();
+let route = Task::ground_route([
+    // along the roads to a point 3 km south of the objective
+    RoutePoint::on_road(objective.offset(-3_000.0, 0.0)),
+    // the last leg straight across the fields, in a vee, at 15 km/h
+    RoutePoint::new(objective, GroundFormation::Vee).speed(kmh(15)),
+])
+.speed(kmh(40)); // for the points that set no speed (default 20 km/h)
+armor.set_task(route).key("armor-to-objective").await?;
+```
+
+- The engine builds DCS's `Mission` task in the shape the Mission Editor writes for vehicles,
+  with a first point where the group's first live unit stands in the frame DCS takes the task
+  (the formation and speed of the first route point). Do not add a start point yourself.
+- A point's formation and speed are those of the leg that ends at it (the editor's model: a
+  leg keeps to the roads when both its ends are "On Road", and is timed by the speed of the
+  point it ends at).
+- Formations: `RoutePoint::on_road` (along the roads), `off_road` (straight, in column),
+  `on_railroads` (trains), `RoutePoint::new(p, GroundFormation::{Rank, Cone, Vee, Diamond,
+  EchelonLeft, EchelonRight})` (straight, in that formation).
+- Speed: the point's, else the route's, else 20 km/h.
+- Points are `MapPoint`s: `zones::X.center()`, a unit's `pos.map_point()`, a point of
+  `ctx.dcs().land().path_on_roads(..)` ("DCS calls", "A road path") or of its summary
+  `ctx.dcs().land().road_path(..)` ("The summary of a road path"). 1 to 256 points; a longer
+  route is `sortie::invalid`. Between two "On Road" points the Mission Editor lays the road
+  path itself (that DCS drives it so is `AI-L4`), so a route needs only the places where it
+  turns or stops: of a road path, its end (`path.last()`) or a few points where it turns. Never
+  map every point of a road path into the route: a long path can have more points than the
+  limit, and each would be a leg of its own. The whole path is for measuring the way.
+- `Group<Ground>` only: for an aircraft, a helicopter or a ship it does not compile (through
+  `Task::from(route)` the engine refuses it, `sortie::invalid`). A logic below revision 3 gets
+  `sortie::revision`, an older engine `sortie::engine_too_old`; nothing is sent.
+- How DCS drives it (which road, reaching the nearest road, a point in water or off the map) is
+  not measured live yet: live check `AI-L4` of the wide probe.
+
+What the typed route lacks (a stop, tasks at waypoints, a `Custom` formation, a ship's route)
+goes in a raw DCS task table, `Task::raw(..)`, which any group takes:
+
+<!-- snippet: skills-logic-ground-raw -->
+```rust
+use sortie::proto::LuaTable;
+use sortie::proto::LuaValue;
+
+// DCS's "Hold" task stops the group where it stands; the SDK has no typed stop.
+let stop = LuaTable::new()
+    .with("id", "Hold")
+    .with("params", LuaTable::new());
+let armor = ctx.group(groups::RED_ARMOR)?;
+armor.push_task(Task::raw(LuaValue::table(stop))).await?;
+```
+
+- A waypoint of a raw `Mission` task is `{type = "Turning Point", action = "On Road" | "Off
+  Road", x, y, speed}`: `x` north and `y` east in map metres (`MapPoint.north` / `.east`;
+  `Vec3.x` / `.z`), `speed` in m/s; start it where the group stands, as the editor does. How
+  DCS drives a raw route is live check `AI-L3`.
+- The engine checks a raw table for safety only; a malformed task can fail in DCS
+  (`sortie::lua_error`) or be ignored by DCS without an error.
+- SDK 0.3.0 and older had `push_task` / `set_task` on aircraft groups only, and no typed route.
 
 Units and geometry: `m`, `km`, `ft`, `nm` → `Length`; `kts`, `mps`, `kmh` → `Speed`; `secs`,
 `mins`, `hours` → `Duration`. `MapPoint { north, east }` (metres, map axes): `.alt(Length)` →
@@ -163,7 +231,10 @@ eprintln!("session ended: {:?} ({:?})", end.outcome, end.reason); // the logic's
   `Replaced`, `Disconnected`, `Unspecified`. When the session ends, pending commands fail with
   `sortie::session_ended` (not a logic error) and every task of the session is aborted.
 - `ctx.model_time()`, `ctx.paused()`, `ctx.is_session_ended()`, `ctx.session_id()`,
-  `ctx.turn()` (the build id of the running mission).
+  `ctx.turn()` (the build id of the running mission). Model time is seconds since the mission
+  started (`timer.getTime`), standing still while paused, never the time of day (a mission that
+  starts at 09:00 reads about 60 a minute in, not 32 460); ticks, `sleep`, `timer` and every
+  event's `model_time` use it. The time of day: `ctx.dcs().timer().abs_time()`.
 
 World queries (`ctx.world()` or the `wait_until` argument, a `&World`):
 
@@ -208,7 +279,15 @@ ctx.spawn(async move |ctx| {
   player name: multiplayer clients do not get a reliable DCS event), `UnitGone` (left the world
   without DEAD: despawned, missing from a sample), `MenuPressed`, `PlayerConnected`,
   `PlayerDisconnected`, `PlayerChangedSlot`, `ChatMessage`, `SimulationPaused`,
-  `SimulationResumed`, `Gap` (events were lost; the replica was resynced), `Unknown`.
+  `SimulationResumed`, `Gap` (events were lost; the replica was resynced), `Unknown`; of event
+  revision 1 `ResourceEnded`, `CapabilityChanged`; of event revision 2 `AirbaseOwnerChanged`
+  ("Airbases" below). A kind above the logic's event revision never arrives
+  (`#[sortie::mission(event_rev = N)]`, capped by the engine's: `ctx.event_rev()`); `.of::<E>()`
+  logs a warning then.
+- A `Mark` (F10 map mark) carries model time like every event since 0.4.0; DCS's own `time`
+  of it (the time of day, per the Hoggit wiki; live check EVT-L18) is `Mark.dcs_time` (API
+  revision 3). With a Lua layer older than 0.4.0 (no `sortie install`) `model_time` of a mark
+  is still the time of day and `dcs_time` is empty; the engine's clock is not affected.
 - Each event is applied to the replica before your code sees it: in a `Dead` handler the unit
   already counts as dead.
 - A stream sees events from the moment it was created. A stream that falls more than 1024
@@ -427,6 +506,123 @@ and the generator reads them.
 `ctx.report().set(key, value)` writes a key of the session's results (`scenario.py results`);
 it does not wait, and a failure shows up as a logic error.
 
+## Documents for the web API
+
+A logic publishes named JSON documents; the engine stores them and serves them read-only over
+its HTTP API (`GET /api/v1/docs/<logic>/<name>`, a list at `/api/v1/docs`, a change stream at
+`.../events`) for a site's live map or campaign page. API revision 3:
+`#[sortie::mission(api_rev = 3)]`.
+
+<!-- snippet: skills-logic-publish -->
+```rust
+#[derive(Serialize)]
+struct Front {
+    sam_alive: usize,
+    objective: [f64; 2], // lat, lon: the web API itself serves DCS metres only
+}
+// ctx.publish needs #[sortie::mission(api_rev = 3)]; ctx.dcs() is API revision 1.
+let center = zones::OBJECTIVE.center().alt(m(0.0));
+let (lat, lon, _alt) = ctx.dcs().coord().lo_to_ll(center).await?;
+let sam_alive = ctx.world().group(&groups::SAM_NORTH).alive_count();
+let front = Front {
+    sam_alive,
+    objective: [lat, lon],
+};
+let p = ctx.publish("front", &front).await?; // served at GET /api/v1/docs/<logic>/front
+let _ = p.changed; // false: the engine had this JSON already (same `p.rev`)
+let _removed = ctx.unpublish("old-front").await?; // false when there was none
+```
+
+- `ctx.publish(name, &value)` (`value: impl Serialize`, written with serde_json when called) ->
+  `sortie::publish::Published { rev, updated_unix_ms, changed }`, once the engine stored it.
+  The same JSON again changes nothing (`changed == false`, same `rev`): publishing on a timer
+  is cheap. `ctx.unpublish(name)` -> `bool`, whether a document was removed.
+- A document belongs to the logic (its `Attach.logic` name, the binary's name), not to the
+  session: it outlives the session, the logic process and the engine (the state database).
+  Publish when the data changes; there is nothing to restore at start.
+- Rules, else `Error::Invalid` and nothing is stored: a name is 1 to 64 bytes of `a-z`, `0-9`,
+  `_`, `-`; a document is at most 256 KiB of JSON; a logic has at most 64 documents; the
+  logic's own name is 1 to 64 bytes of `A-Z`, `a-z`, `0-9`, `.`, `_`, `-`.
+- `rev` grows with every publish of any document of the engine and is never reused while the
+  engine keeps its state database; an engine with its state in memory counts from 1 again
+  after a restart. The HTTP `ETag` (and the stream's event id) is `<epoch>-<rev>`, where the
+  epoch names the database: one ETag is one content, also across restarts.
+- The web API serves points in DCS metres only: publish latitude and longitude yourself
+  (`ctx.dcs().coord().lo_to_ll(point)`).
+- A logic below revision 3 gets `Error::Revision`, an older engine `Error::EngineTooOld`;
+  nothing is sent.
+- HTTP callers never reach the logic or DCS; a site cannot change a document.
+
+## Actions for the web API
+
+A logic declares named actions; a site or a tool with an `operator` (or `admin`) token calls one
+with `POST /api/v1/actions/<logic>/<name>` and a JSON body; the engine hands the request to the
+logic, and the logic's answer is the HTTP response. The logic decides what happens in the game
+(validate the body like any outside input). API revision 3: `#[sortie::mission(api_rev = 3)]`.
+
+<!-- snippet: skills-logic-action -->
+```rust
+#[derive(Deserialize)]
+struct Smoke {
+    color: String, // "red" | "green"
+}
+#[derive(Serialize)]
+struct Smoked {
+    smoked: bool,
+}
+// ctx.api() needs #[sortie::mission(api_rev = 3)]. A site calls
+// POST /api/v1/actions/<logic>/smoke_objective {"color": "red"} with an operator token.
+let mut smoke = ctx.api().action("smoke_objective")?; // declared now, withdrawn on drop
+ctx.spawn(async move |ctx| {
+    while let Some(req) = smoke.next().await {
+        let color = match req.json::<Smoke>() {
+            Ok(s) if s.color == "red" => SmokeColor::Red,
+            Ok(s) if s.color == "green" => SmokeColor::Green,
+            Ok(_) => {
+                req.fail(422, "color is red or green")?; // 4xx only
+                continue;
+            }
+            Err(e) => {
+                req.fail(400, e)?;
+                continue;
+            }
+        };
+        ctx.smoke(zones::OBJECTIVE.center(), color).await?;
+        req.reply(&Smoked { smoked: true })?; // HTTP 200 {"smoked":true}; once per request
+    }
+    Ok(())
+});
+```
+
+- `ctx.api().action(name)` -> `sortie::Result<sortie::api::ActionRequests>`: declares the
+  action at once; `next().await` -> `Option<ActionRequest>`, `None` when the session ended.
+  Dropping the stream or the end of the session withdraws the action; the mission function
+  declares it again in the next session and after a restart of the logic process (until then
+  callers get 503 `unavailable`).
+- `ActionRequest`: `json::<T>()` (`Error::Invalid` whose text says what did not fit),
+  `body()` (the JSON bytes; an empty body is `null`), `token()` (`Option<&str>`, the caller's
+  token name), `role()` (`"operator"` or `"admin"`), `name()`.
+- Answer once: `reply(&value)` -> 200 with that JSON (at most 1 MiB); `fail(status, message)`
+  with a status 400..=499 -> `{"error": {"code": "refused", "message": ..}}`. Both consume the
+  request and return `sortie::Result<()>` (`Error::Invalid` for a value that is not JSON, too
+  large, or a status outside 4xx: the caller then gets 500). A request dropped unanswered
+  (end of the loop, `?`, the session's end) is answered 500 `unanswered` by the SDK.
+- The engine waits 10 s (`sortie::api::ACTION_TIMEOUT`), then answers 504 itself. Answer
+  first and do long work afterwards (`ctx.spawn`), reporting progress in a published document.
+  A 504 does not say whether the action ran: let the caller send an order id and key the
+  commands with it (`.key(..)`), so a retried call does not run twice.
+- Read the stream promptly: a request that waited 10 s in the queue is never handed to the
+  logic (its caller got 504); the SDK answers it `unanswered` when the next one arrives or on
+  `next()`.
+- Rules, else `Error::Invalid` and nothing is declared: a name is 1 to 64 bytes of `a-z`,
+  `0-9`, `_`, `-`; at most 64 actions; one stream per action at a time; the logic's own name is
+  1 to 64 bytes of `A-Z`, `a-z`, `0-9`, `.`, `_`, `-`. Below revision 3 `Error::Revision`, an
+  older engine `Error::EngineTooOld`.
+- The engine also refuses before the logic sees anything: another role (403), a body that is
+  not JSON (400) or above `[http] max_body_bytes` (413), more than `[http] actions_per_s` calls
+  of one token (429; counted per token, not per token name). `GET /api/v1/actions` lists what
+  attached logics declare.
+
 ## DCS calls
 
 `ctx.dcs()` reaches the DCS functions of the DCS API catalog (`catalog/dcs_api.toml` in the
@@ -445,9 +641,9 @@ pub async fn run(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
     let fuel = dcs.unit(&sam[0]).fuel().await?;
     // Mutators: off until the engine owner enables them; always keyed.
     match dcs
-        .airbase(airbases::MAYKOP)
-        .set_coalition(Coalition::Blue)
-        .key("maykop-blue")
+        .sounds()
+        .out_sound("l10n/DEFAULT/alarm.ogg")
+        .key("alarm-1")
         .await
     {
         Ok(()) | Err(Error::Rejected(_)) => {} // Rejected: switched off in engine.toml
@@ -487,7 +683,8 @@ pub async fn run(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
   is still an `f64` where the catalog says `number` (`static_object(o).id()`).
 - Point arguments follow the catalog entry: `vec2` is a `MapPoint` (`land().height(p)`), `vec3`
   a `Vec3` in DCS axes, x north, y up, z east (`land().profile(a, b)`: DCS reads x and z).
-- A warehouse item (`item_count`, `add_item`, `remove_item`, `set_item`) is its name
+- A warehouse item (`item_count`; the deprecated `add_item`, `remove_item`, `set_item`: change
+  stock with `ctx.warehouse_op()`, "Warehouses") is its name
   (`"weapons.missiles.AIM_9"`) or its wsType, four whole numbers: `[4, 4, 7, 22]` or
   `(4, 4, 7, 22)` (`sortie::dcs::WarehouseItem`); MOOSE's `ENUMS.Storage` uses both forms.
   `inventory(Some(..))` takes a name only. FakeDcs keeps a wsType's stock apart from its name's.
@@ -503,7 +700,23 @@ pub async fn run(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
   `Error::ResultNotKept`.
 - The engine checks every call against the catalog: wrong arguments are `Error::Invalid` with
   the entry's signature, an argument out of the entry's range (explosion power above 5000) too.
-  A sound file is a path inside the `.miz` (relative, no `..`).
+  A sound file is a path inside the `.miz` (relative, no `..`). Guard `span_300km`: the two ends
+  of `land().profile(..)`, `land().path_on_roads(..)` and `land().road_path(..)` lie at most
+  300 km apart on the map, else `Error::Invalid` and nothing reaches DCS.
+- Limits per writer (the logic's token name, else its name), refused at submit with
+  `Error::Rejected` "rate limit: ..." and nothing sent. Counts: read 200/s, mutate 50/s, heavy
+  2/s, admin 1/s (a batch takes all its calls; a 256-read batch leaves under 0.3 s of debt).
+  DCS time (`cost_us`, the time a command took inside DCS's frame), charged when the result
+  comes back, a late result after `Error::Timeout` too: reads and every batch, a batch with a
+  mutate included, pay from `dcs_time.read` (20 ms a second, 20 ms at most; a read or batch
+  that cost more refuses the writer's single reads for at most 1 s, its next batch until the
+  whole debt is paid back); heavy calls pay from their own
+  `dcs_time.heavy` (20 ms a second, 200 ms at most, the whole debt kept: after a heavy call of
+  C ms the next heavy call waits about (C - 200) / 20 s, 102 s after a 2241 ms road path, and
+  reads such as `timer().time()` pass at once). One heavy call of a writer at a time: the next
+  one sent while the previous is not back is `Error::Rejected` (`DcsTime`, `dcs_time.heavy`, no
+  `retry_after()`); send heavy calls one after the other, not in `join!`. The debt belongs to
+  the writer: restarting the logic does not clear it. A single mutate call pays no DCS time.
 - A big table comes back whole or as `Value::Cut(n)` (its key count) with `truncated` on the
   `Return`: deeper than `.max_depth(n)` (6 by default), after 50 000 table entries of one call,
   or when the answer of the whole command, every call of a batch together, would pass 150 000
@@ -512,11 +725,136 @@ pub async fn run(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
 - An object, id or name argument must be of the class the entry declares, also when it is a
   `Handle` or the result of an earlier call of a batch: a spot is no `object:Object`, a
   unit's id no group id. The wrong class is `Error::Invalid`, and DCS is not called with it.
-- The world replica does not learn what a mutator changed until the next sweep (airbase owner,
-  destroyed objects). Prefer the typed operation where one exists: such wrappers are
+- The world replica does not learn what a mutator changed until the next sweep (airbase owner:
+  the next resync snapshot, then an `AirbaseOwnerChanged{Discovered}`; destroyed objects). Prefer the typed operation where one exists: such wrappers are
   `#[deprecated]` and name it (`ctx.smoke(..)` for `effects().smoke(..)`).
 - The untyped call by path is behind the cargo feature `dcs-raw`:
   `ctx.dcs().call("land.getHeight").arg(sortie::dcs::arg::vec2(p))`, and `ctx.dcs().batch()`.
+- An engine owner's entry (`engine.toml` `[[calls.call]]`) is called by path. Its `enum:<table>`
+  type names the whole path of a published DCS table: 2 to 6 Lua names from an enum root (`AI`,
+  `Airbase`, `Controller`, `Group`, `Object`, `Spot`, `StaticObject`, `Unit`, `Weapon`,
+  `coalition`, `country`, `land`, `radio`, `trigger`, `world`), so
+  `enum:AI.Option.Ground.val.ALARM_STATE` loads (0.3.0 refused 5 names); a data root (`env`,
+  `net`, `DCS`, `timer`) or 7 names stops `sortied` at start. Pass a key,
+  `arg::enum_key("AI.Option.Ground.val.ALARM_STATE", "RED")` (the layer reads the running DCS's
+  number), or (0.4.0) one of the table's numbers, `arg::number(2.0)`, which the layer checks is a
+  value of the table (`Error::Invalid` otherwise; a layer before 0.4.0 refuses numbers there).
+  Alarm states and ROE have the typed `group.set_option(..)`, which needs no owner entry.
+
+### A road path
+
+`ctx.dcs().land().path_on_roads(..)` asks DCS for a path along roads between two map points
+(`land.findPathOnRoads`). It is API revision 3: `#[sortie::mission(api_rev = 3)]`, else
+`Error::Revision`; an engine of an older revision is `Error::EngineTooOld`.
+
+<!-- snippet: skills-api-road-path -->
+```rust
+#[sortie::mission(api_rev = 3)] // the road path is API revision 3
+pub async fn convoy_distance(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
+    let armor = ctx.group(groups::RED_ARMOR)?;
+    let objective = zones::OBJECTIVE.center();
+    let Some(here) = ctx.world().group(&armor).center() else {
+        return ctx.end_session(Outcome::Draw).await;
+    };
+    // Road type, then x (north) and y (east) of the start and of the end.
+    let points = ctx
+        .dcs()
+        .land()
+        .path_on_roads(
+            "roads",
+            here.north,
+            here.east,
+            objective.north,
+            objective.east,
+        )
+        .await?; // Option<Vec<MapPoint>>, start to end; None: DCS answered nil
+    // The length along the points; None (null in the report) when DCS found no path.
+    let km: Option<f64> =
+        points.map(|p| p.windows(2).map(|w| w[0].distance(w[1])).sum::<f64>() / 1000.0);
+    ctx.report().set("road_km_to_objective", km);
+    ctx.end_session(Outcome::Draw).await
+}
+```
+
+- Arguments as DCS takes them: the road type, then x (north) and y (east) of the start and of
+  the end, in map metres (`MapPoint.north` / `.east`).
+- Road type `"roads"`. For railroads the Hoggit wiki documents `"railroads"` and reports that
+  DCS reads `"rails"`; which one works is not measured yet.
+- The answer is `Option<Vec<MapPoint>>`, start to end. `None` is DCS's nil (the Mission
+  Editor reads nil as "no path found"). What DCS returns for a point no road reaches (nil, an
+  empty list, a path to the nearest road), the spacing of the points and how long a long path
+  takes are not measured yet: live check `ENV-LC7` of the wide probe.
+- Class `heavy`: DCS searches inside its frame, so a long path on a big map stops the server
+  for its whole run (it cannot be made asynchronous). Heavy calls run one at a time on BULK, at
+  most 2 per second per writer, never in a batch, take no key, and pay their DCS time from the
+  writer's `dcs_time.heavy`: after a long one only the next heavy call waits. Three calls of
+  one function slower than 1 s in 10 minutes and the bridge refuses it until DCS restarts
+  (`Error::Quarantined`, "Slow, not a crash"). Ask once per route, not every tick.
+- The ends lie at most 300 km apart (`span_300km`), else `Error::Invalid` before DCS.
+- A convoy drives with a DCS `Mission` task ("A ground group's route"); DCS keeps `"On Road"`
+  waypoints on the roads itself. Ask for the path when the logic needs the points: the
+  distance, a stop on the way, whether a road connects two places at all.
+- A long path is thousands of points. For its length and its ends, ask for the summary
+  instead ("The summary of a road path").
+
+### The summary of a road path
+
+`ctx.dcs().land().road_path(road_type, start, end, max_points, keep)` asks DCS for the same
+path, but the Sortie Lua layer summarises it inside DCS in the same frame and only the summary
+travels: `Option<sortie::dcs::RoadPath>`. It is the layer's own function, catalog entry
+`sortie.findPathOnRoads`: API revision 3, class `heavy` like the full path.
+
+<!-- snippet: skills-api-road-summary -->
+```rust
+#[sortie::mission(api_rev = 3)] // the road path summary is API revision 3
+pub async fn convoy_route(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
+    let armor = ctx.group(groups::RED_ARMOR)?;
+    let objective = zones::OBJECTIVE.center();
+    let Some(here) = ctx.world().group(&armor).center() else {
+        return ctx.end_session(Outcome::Draw).await;
+    };
+    // Counted and measured inside DCS; at most 6 points travel: both ends, the sharpest turns.
+    let summary = ctx
+        .dcs()
+        .land()
+        .road_path("roads", here, objective, Some(6.0), None)
+        .await?; // Option<RoadPath>; None: DCS found no path
+    let Some(path) = summary else {
+        ctx.report().set("road_km_to_objective", "no road");
+        return ctx.end_session(Outcome::Draw).await;
+    };
+    ctx.report()
+        .set("road_km_to_objective", path.length_m / 1000.0);
+    ctx.report().set("road_points_in_dcs", path.count);
+    // The route: the kept turns after the start, along the roads, if the road ends near.
+    if path.points.len() > 1 && path.end_gap_m.is_some_and(|gap| gap < 500.0) {
+        let legs = path.points[1..].iter().map(|&p| RoutePoint::on_road(p));
+        armor
+            .set_task(Task::ground_route(legs))
+            .key("red-armor-road")
+            .await?;
+    }
+    ctx.end_session(Outcome::Draw).await
+}
+```
+
+- `count` (points of the DCS path), `length_m` (along them), `first` / `last` and
+  `start_gap_m` / `end_gap_m` (metres from the first point to the start asked, from the last to
+  the end asked: a road may stop short) are of the whole path.
+- `points`: at most `max_points` of its points (2..=10 000, else `sortie::invalid` before
+  DCS), both ends kept, start to end. `keep`: `None` or `Some("turns")` keeps the points where
+  the path turns most (fewer when the rest lie on straight legs), `Some("even")` points spaced
+  evenly along it; another word is `sortie::invalid`. `max_points: None` gives no points (the
+  summary alone).
+- `thinned`: `points` holds fewer points than the path (always so without `max_points`, except
+  for an empty path: `count == 0` is never thinned).
+- `None` is DCS's nil (no path); an empty DCS list is `count == 0` with no ends.
+- The ends are two `MapPoint`s (the full path takes four numbers).
+- A route from it: the kept points after the first as `RoutePoint::on_road(..)`, which DCS
+  joins along the roads itself ("A ground group's route"); 256 route points at most.
+- Needs the Lua layer of 0.4.0 (`sortie install`): an older layer has no `sortie.*` functions
+  and answers MISSING (`Error::Unavailable`). That the summary matches the full path on a
+  running DCS is live check `ENV-LC7`.
 
 ## Objects
 
@@ -578,6 +916,14 @@ pub async fn run(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
   both `.category(..)` and `.shape(..)` (unit categories need no shape); with one missing it is
   `Error::Invalid` naming the missing field. Heliport
   types need `.heliport(..)`; `.cargo(mass, liftable)` needs a cargo type.
+- A FARP made at runtime: dynamic slots, a hot start and unlimited stock have no typed option.
+  DCS documents no function or key for them; `.raw(..)` with MOOSE's `dynamicSpawn` /
+  `allowHotStart` is an unmeasured candidate (live checks AWC-T29, AWC-T32), never a promise to
+  a client. Forum reports say such a FARP starts with an empty warehouse: stock it with a keyed
+  `ctx.warehouse_op().set(..)` (jet fuel as `Liquid::JetFuel`, helicopters by type name), and
+  keep the key stable so a restarted logic does not set the stock back. What the server's slot
+  screen holds: `ctx.dcs().server().farps_and_carriers()`, `.dynamic_spawn_settings(id, false)`,
+  `.aircraft_in_warehouse(type, id, true)` (API revision 3; not what a client is shown).
 - `ctx.destroy(obj)` takes an `Eid`, a world entity or `Obj::{unit, static_object, weapon,
   snap}` (a weapon in flight or an ejected pilot by its event Eid). A unit a player occupies is
   `Error::Rejected` unless `.allow_player()` (also on `group.destroy()` with API revision 1).
@@ -597,6 +943,18 @@ pub async fn run(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
   life_max, coalition, dcs_id }` is what DCS answered then; `eid` is set for a unit, static or
   cargo the world holds (read the rest from `ctx.world()`); scenery has only `dcs_id` (its map
   id). A read: it changes nothing. Types in `sortie::cmd`.
+- What DCS gives a script about the ground, for choosing a spawn site: no forest or tree data
+  and no collision volume of rocks or map objects, in any documented function (a dedicated
+  server too); Sortie has no "is this site clear" query. `land().surface_type(p)` knows only
+  `LAND`, `SHALLOW_WATER`, `WATER`, `ROAD`, `RUNWAY` (a forest is `LAND`); `land.isVisible` and
+  `land.getIP` see the terrain only; `ctx.search_objects` lists no trees (ED forum reports, not
+  measured: OBJ-T32), so an empty result means no known object, not open ground. The
+  undocumented `Disposition` table misses forests on Syria (VEAF, 2026) and is not used. Pick
+  sites from what can be checked: slope and roughness from a grid of `land().height(..)` reads
+  around each vehicle, `ctx.search_objects` radius checks, and zones of checked sites (and
+  forbidden zones around forests) drawn in the scenario, tested in Rust with no DCS call, the
+  choice kept in `ctx.state(..)` across a logic restart (sdk/docs/objects.md, "Что DCS знает о
+  местности").
 
 Many spawns at once (a campaign restore) are one `ctx.spawn_batch()` command with one key:
 
@@ -643,6 +1001,413 @@ for item in out.items.iter().filter(|i| !i.is_ok()) {
 - Capability `caps::SPAWN_BATCH`. An engine owner who switched off `spawn_static` or
   `spawn_group` also refuses a batch that holds such an item (`Error::Rejected`, and
   `Error::capability()` names the item's operation).
+
+## Airbases
+
+The owner, DCS's auto capture and the ATC's radio silence of 1 to 32 airbases in one command
+(`cmd::MAX_AIRBASES`; a longer list goes in several commands, each its own frame): a typed
+operation of API revision 3 (`#[sortie::mission(api_rev = 3)]`).
+
+<!-- snippet: skills-api-airbases -->
+```rust
+#[sortie::mission(api_rev = 3)] // ctx.airbase_control is API revision 3
+pub async fn run(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
+    // The front moved: both bases to blue, DCS's own capture off, in one frame.
+    let out = ctx
+        .airbase_control([airbases::MAYKOP, airbases::KRYMSK])
+        .owner(Coalition::Blue)
+        .auto_capture(false) // applied before the owner: DCS does not take the base back
+        .key("front-turn-3")
+        .await?;
+    // The world has the new owner as soon as the command returned (nothing to wait for).
+    let blue = ctx
+        .world()
+        .airbase_by_name("Krymsk")
+        .is_some_and(|a| a.coalition == Some(Coalition::Blue));
+    for base in &out.bases {
+        if let Some(e) = base.error() {
+            // This base only (Error::Gone: DCS has no such base now; Error::Lua: a setter
+            // raised); the others ran.
+            ctx.report().set(&base.name, e.code());
+        }
+    }
+    // Refused before DCS: a base the world does not hold, one listed twice, nothing to set.
+    match ctx
+        .airbase_control([AirbaseSel::name("Nowhere")])
+        .radio_silent(true)
+        .await
+    {
+        Err(Error::Invalid(_)) => {}
+        other => {
+            other?;
+        }
+    }
+    ctx.report().set("blue", blue);
+    ctx.end_session(Outcome::Draw).await
+}
+```
+
+- `ctx.airbase_control(bases)` takes anything `Into<AirbaseSel>`: `airbases::X`,
+  `AirbaseSel::name("Kutaisi")`, the Eid of the airbase or of the FARP static or ship that
+  carries it. Set at least one of `.owner(Coalition)`, `.auto_capture(bool)`,
+  `.radio_silent(bool)`; the rest is left as it is. DCS applies the whole list in one frame,
+  per base: read, auto capture, owner, radio, read again (auto capture first, so DCS does not
+  hand the base back to the ground units near it). That is about 11 DCS calls a base inside
+  one frame, hence at most 32 bases; what a base costs is not measured yet (AWC-T20).
+- Result `AirbasesControlled { bases }`: one `AirbaseControlled { eid, name, before, after }`
+  per base in the order given; `before` / `after` are `AirbaseState { owner, auto_capture,
+  radio_silent }` as DCS read them (`None` where DCS did not answer). `base.error()` is that
+  base's own error (`Error::Gone`: DCS has no such base now; `Error::Lua`: a setter raised,
+  `after` says what DCS reads now); the other bases still ran and the command is OK.
+  `out.ok_count()`.
+- The new owner DCS read back is in `ctx.world()` when the command returns: nothing to wait
+  for. A capture DCS raised before the command (still on its way when the result came) does
+  not undo it: the engine orders the two by DCS's order of events. Keyed like any mutator (a repeat with the key returns the stored answer and does not
+  reach DCS); no key is required in dev mode, but a hot reload runs it again without one.
+- Refused before anything reaches DCS (`Error::Invalid` naming it): a base the world does not
+  hold (an unknown name, a scenario airbase the mission lacks), one listed twice (also under
+  two selectors), an empty or too long list, nothing to set. A base whose host was destroyed:
+  `Error::Gone`. A logic of a lower revision: `Error::Revision`; an engine of API revision 2
+  or less: `Error::EngineTooOld`.
+- Capability `caps::AIRBASE_CONTROL` (on by default; an engine owner may switch it off:
+  `Error::Rejected`). The raw wrappers `ctx.dcs().airbase(..).set_coalition(..)`,
+  `.auto_capture(..)`, `.set_radio_silent_mode(..)` are `#[deprecated]` in favour of it (after
+  them the world learns the owner only at the next resync snapshot or a state query of the
+  base: nothing sweeps airbases); the reads are not.
+- FakeDcs: `dcs.airbase_coalition(name)`, `dcs.airbase_auto_capture(name)`,
+  `dcs.airbase_radio_silent(name)`.
+
+### The owner event
+
+`v1::AirbaseOwnerChanged` (event revision 2: `#[sortie::mission(api_rev = 3, event_rev = 2)]`;
+`api_rev = 2, event_rev = 2` does not compile): exactly one per change of an airbase's owner in
+the engine's world, whatever told the engine. It covers the captures DCS reports and the
+changes the engine makes or reads; an owner changed elsewhere without an event (another
+script's `setCoalition`) reaches the world only at the next resync snapshot or a state query,
+so a logic that must see those polls `ctx.airbases_state(..)` (below).
+
+<!-- snippet: skills-api-airbase-owners -->
+```rust
+#[sortie::mission(api_rev = 3, event_rev = 2)] // AirbaseOwnerChanged is event revision 2
+pub async fn owners(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
+    // One event per change of an airbase's owner, whatever told the engine.
+    let mut owner_events = ctx.events().of::<v1::AirbaseOwnerChanged>();
+    // Only DCS's own captures of Maykop (ground units took it).
+    let mut maykop = ctx
+        .events()
+        .of::<v1::AirbaseOwnerChanged>()
+        .airbase(airbases::MAYKOP)
+        .cause(v1::OwnerChangeCause::Captured);
+    while let Some(e) = owner_events.next().await {
+        let name = e
+            .airbase
+            .as_ref()
+            .map(|a| a.name.clone())
+            .unwrap_or_default();
+        // The world has the new owner already; previous() is Unspecified when none was known.
+        let cause = match e.cause() {
+            v1::OwnerChangeCause::Captured => "captured", // S_EVENT_BASE_CAPTURED
+            v1::OwnerChangeCause::Control => "control",   // an AirbaseControl
+            _ => "discovered",                            // a read of DCS found it
+        };
+        ctx.report().set(
+            &name,
+            format!("{:?} -> {:?} {cause}", e.previous(), e.owner()),
+        );
+        if e.owner() == v1::Coalition::Red {
+            break;
+        }
+    }
+    let _ = maykop.next().await;
+    ctx.end_session(Outcome::Draw).await
+}
+```
+
+- Fields: `airbase` (the snap after the change), `previous()` (`Unspecified`: the engine knew no
+  owner), `owner()`, `cause()`: `Captured` (DCS raised `S_EVENT_BASE_CAPTURED`; right after its
+  `BaseCaptured`, which every revision still gets), `Control` (an `airbase_control`; before the
+  command's result), `Discovered` (a read of DCS found another owner: the resync snapshot after
+  a link drop or lost events, a FARP spawn that kept the FARP).
+- One event per change: a report of what the world holds already (DCS's capture of the owner an
+  `airbase_control` just set, a repeated capture, a snapshot that confirms an event) is no
+  second event; there and back is two. A capture DCS raised before an `airbase_control` or a
+  state query read the base, which reaches the engine after their result, changes nothing (its
+  `BaseCaptured` still comes; `ctx.world()` takes its owner until the next world update gives
+  the engine's back). The session's first snapshot publishes nothing.
+- Not seen at once: an owner DCS changed without an event (another script, the deprecated raw
+  `set_coalition`) arrives only with the next resync snapshot or a state query of the base
+  (below); one changed and changed back
+  between two reads is never seen. Whether DCS raises `S_EVENT_BASE_CAPTURED` for
+  `setCoalition` is not measured (AWC-T21).
+- Filters: `.airbase(sel)`, `.cause(c)`, `.coalition(c)` (the new owner). The web API streams it
+  as `airbase_owner_changed`.
+- FakeDcs: `dcs.capture_airbase(name, coalition)` (DCS's capture, with its event),
+  `dcs.set_airbase_coalition_silently(name, coalition)` (no event), `dcs.lose_events(1)`
+  (the engine takes a resync snapshot: `Discovered`), `dcs.hold_events()` /
+  `dcs.release_events()` (DCS's events wait in the bridge while command results go out).
+
+### Parking, runways and the control state
+
+Typed queries of API revision 3 (reads: nothing changes in DCS, no key): one base with
+`ctx.airbase(sel)` and `.parking()`, `.runways()`, `.state()`; many with
+`ctx.airbases_parking(..)`, `ctx.airbases_runways(..)`, `ctx.airbases_state(..)`.
+
+<!-- snippet: skills-api-airbase-queries -->
+```rust
+#[sortie::mission(api_rev = 3)] // the airbase queries are API revision 3
+pub async fn layout(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
+    // The free spots of one base: only what DCS lists as free.
+    let free = ctx
+        .airbase(airbases::MAYKOP)
+        .parking()
+        .available_only()
+        .await?;
+    let helo = free
+        .iter()
+        .filter(|s| s.terminal == Some(TerminalType::HelicopterOnly))
+        .count();
+    // Its runways: course in radians as DCS gives it; heading_deg() reads the documentation's
+    // way (-course, in degrees).
+    let runways = ctx.airbase(airbases::MAYKOP).runways().await?;
+    let heading = runways.first().and_then(|r| r.heading_deg());
+    // Many bases in one query (DCS reads 32 bases a frame); each base its own result.
+    let read = ctx
+        .airbases_state([airbases::MAYKOP, airbases::KRYMSK])
+        .await?;
+    for base in &read.bases {
+        match (base.value, base.error()) {
+            (Some(s), _) => ctx.report().set(&base.name, format!("{:?}", s.owner)),
+            (None, Some(e)) => ctx.report().set(&base.name, e.code()), // e.g. sortie::gone
+            (None, None) => {}
+        }
+    }
+    ctx.report().set("helo_spots", helo);
+    ctx.report().set("heading", heading);
+    ctx.end_session(Outcome::Draw).await
+}
+```
+
+- `.parking()` → `Vec<ParkingSpot { term_index, terminal, point, taken, taken_by,
+  taken_by_name, dist_to_runway, to_ac, term_index_0 }>` in DCS's order. `terminal` is
+  `Option<TerminalType>`: `Runway` (16), `HelicopterOnly` (40), `Shelter` (68),
+  `OpenOrShelter` (72), `SmallShelter` (100), `OpenAir` (104), `Unknown("unknown(<n>)")` for a
+  number the SDK has no name for. `taken`: the spot is not among the free ones DCS lists
+  (`getParking(true)`). `taken_by`: the world's Eid of an object DCS named on the spot (`TO_AC`,
+  documented as a boolean, is in `to_ac`). `.available_only()`: the free spots only
+  (`s.is_free()`).
+- `.runways()` → `Vec<Runway { name, course, length, width, center }>`; `course` is radians as
+  DCS gives it (the documentation: the negative of the true heading); `heading_deg()` converts
+  that way (not measured). A FARP or a ship has none.
+- `.state()` → `AirbaseState { owner, auto_capture, radio_silent }`. An owner DCS reads that the
+  world held otherwise goes into `ctx.world()` at once and is one
+  `AirbaseOwnerChanged{Discovered}` (unless DCS reported a capture after the read: the world
+  keeps that newer owner): polling the state is how a logic finds an owner another script
+  changed without an event.
+- One base: its error is the query's (`Error::Gone`: DCS or the world has no such base, a stale
+  Eid; `Error::Lua`: a DCS read raised). Many bases (parking 1..=16, runways and state
+  1..=256, each once) → `AirbasesRead { bases: Vec<AirbaseRead { eid, name, value }> }`,
+  `value` `None` with `base.error()` set for a base that failed (also `Error::Rejected`: its
+  parking did not fit the answer; ask for it alone), `read.ok_count()`. The query fails as a
+  whole (`Error::Invalid`) only for an empty or too long list, a base listed twice, an unknown
+  scenario symbol or an Eid that is no airbase. A name the world does not know is still sent.
+- The three are read in parts so a long list does not stall DCS: the state and the runways 32
+  bases per frame, parking about 300 spots per frame, at most 8000 spots per answer.
+- Capabilities `caps::AIRBASE_PARKING`, `caps::AIRBASE_RUNWAYS`, `caps::AIRBASE_STATE` (on by
+  default, each with its own DCS function). A lower declared revision: `Error::Revision`; an
+  engine of API revision 2 or less: `Error::EngineTooOld`.
+- FakeDcs: every manifest airfield has four spots (1 open air, 2 open or shelter, 3 shelter, 4
+  helicopters only) and runway "9" (heading 90), a FARP four helicopter spots and no runway;
+  `dcs.take_parking_spot(base, n, Some("Unit"))` / `dcs.free_parking_spot(base, n)`.
+
+## Warehouses
+
+The stock of warehouses, a typed query of API revision 3 (a read: nothing changes in DCS, no
+key): one with `ctx.warehouse(sel).stock()`, many with `ctx.warehouses_stock([..])`. A warehouse
+is an airbase's (`airbases::X`, `WarehouseSel::airbase(..)`), a cargo static's
+(`WarehouseSel::cargo(..)`) or DCS's by name (`WarehouseSel::named(..)`). Changing the stock is
+the command `ctx.warehouse_op()` (below); the raw `add_item`, `remove_item`, `set_item` and the
+liquid setters are deprecated.
+
+<!-- snippet: skills-api-warehouses -->
+```rust
+#[sortie::mission(api_rev = 3)] // the stock query is API revision 3
+pub async fn resupply_check(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
+    // One warehouse whole: each class is Unlimited (DCS lists it empty) or Limited(name -> n).
+    let stock = ctx.warehouse(airbases::MAYKOP).stock().await?;
+    let limited = matches!(stock.weapons, Some(StockClass::Limited(_)));
+    // Many warehouses, only one item and the fuel: getItemCount / getLiquidAmount, cheaper.
+    let read = ctx
+        .warehouses_stock([
+            WarehouseSel::airbase(airbases::MAYKOP),
+            WarehouseSel::airbase(airbases::KRYMSK),
+        ])
+        .items(["weapons.bombs.Mk_82"])
+        .liquids()
+        .await?;
+    for w in &read.warehouses {
+        let line = match (&w.value, w.error()) {
+            (Some(s), _) => match s.count("weapons.bombs.Mk_82") {
+                Some(Amount::Counted(n)) => format!("{n} Mk-82"),
+                Some(Amount::Unlimited) => "unlimited".to_owned(), // a count above 2^29
+                None => "no count".to_owned(),
+            },
+            (None, Some(e)) => e.code().to_owned(), // e.g. sortie::gone
+            (None, None) => String::new(),
+        };
+        ctx.report().set(&w.name, line);
+    }
+    ctx.report().set("maykop_limited", limited);
+    ctx.end_session(Outcome::Draw).await
+}
+```
+
+- Without `.items(..)` and `.liquids()` the whole inventory is read (`Warehouse.getInventory`,
+  one warehouse a frame, a big one copied 400 entries a frame): `WarehouseStock { aircraft, weapons, liquids }`, each class
+  `StockClass::Unlimited` (DCS lists it as an empty table, which it is reported to do for an
+  unlimited class; whether an empty limited class reads the same is not known) or
+  `StockClass::Limited(BTreeMap<name as DCS gives it, count>)`; `class.get(name)` →
+  `Option<Amount>`. `liquids` is `Liquids::Unlimited` or `Liquids::Amounts(BTreeMap<Liquid,
+  Amount>)` (`JetFuel`, `AviationGasoline`, `Mw50`, `Diesel`, `Unknown(..)`; kilograms assumed,
+  DCS documents no unit).
+- `.items([..])` (names or wsTypes `[a, b, c, d]`, the `WarehouseItem` of the raw wrappers,
+  1..=64, each once) counts only those (`getItemCount`); `.liquids()` reads the four liquids
+  (`getLiquidAmount`); either replaces the whole inventory (cheaper: 64 DCS calls a frame, some
+  4 to find each warehouse and 1 a read).
+  `stock.count(item)` → `Option<Amount>`: `Amount::Counted(n)`, or `Amount::Unlimited` for a
+  count above 2^29 (what DCS is reported to answer for an unlimited stock; not measured). This
+  read alone cannot tell an unlimited class that DCS answers with a small number: read the
+  whole inventory for the class.
+- One warehouse: its error is the query's (`Error::Gone`: no such warehouse in DCS, its base or
+  static dead in the world, a stale Eid; `Error::Lua`: a read raised). Many (1..=64, each once
+  by its DCS name, whatever the selector) → `WarehousesRead { warehouses: Vec<WarehouseRead {
+  warehouse, name, eid, value }> }`, `w.error()` per warehouse (also `Error::Rejected`: its
+  inventory did not fit the answer of at most 20 000 entries), `read.ok_count()`. The query
+  fails as a whole (`Error::Invalid`) for an empty or too long list, a warehouse or item listed
+  twice, an empty item name, an unknown symbol, a cargo Eid that is no static.
+- Capability `caps::WAREHOUSE_STOCK` (on by default). A lower declared revision:
+  `Error::Revision`; an engine of API revision 2 or less: `Error::EngineTooOld`.
+- FakeDcs: a warehouse the test did not set is unlimited in every class (an airfield without
+  `munitions`); `dcs.set_warehouse_stock(name, FakeStock::unlimited().weapons([(item, n)]))`,
+  `dcs.warehouse_stock(name)`, `dcs.warehouse_count(name, item)`; the raw `Warehouse.*` calls
+  read and change the same stock (an unlimited class takes no change).
+
+Changing stock: `ctx.warehouse_op()` (API revision 3), `.set(w, what, n)`, `.add(..)`,
+`.remove(..)`, `.transfer(from, to, what, n)`, 1..=16 changes in one DCS frame, all or nothing.
+
+<!-- snippet: skills-api-warehouse-op -->
+```rust
+#[sortie::mission(api_rev = 3)] // WarehouseOp is API revision 3
+pub async fn convoy_arrived(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
+    // One command, one DCS frame, all or nothing: move six bombs, add fuel, set a count.
+    let out = ctx
+        .warehouse_op()
+        .transfer(
+            airbases::KRYMSK,
+            airbases::MAYKOP,
+            "weapons.bombs.Mk_82",
+            6.0,
+        )
+        .add(airbases::MAYKOP, Liquid::JetFuel, 5_000.0)
+        .set(airbases::KRYMSK, [4, 4, 7, 22], 10.0) // an item by wsType
+        .key("convoy-1-arrived") // every warehouse_op needs a key in dev, sets too
+        .await?;
+    if !out.applied {
+        // Nothing changed: each change says why (NotEnough, Unlimited, Gone, ...).
+        for c in out.failed() {
+            ctx.report()
+                .set(&c.warehouse.name, format!("{:?}: {}", c.outcome, c.message));
+        }
+    }
+    ctx.end_session(Outcome::Draw).await
+}
+```
+
+- `what` is a `StockItem`: an item (name, wsType `[a, b, c, d]`, `WarehouseItem`; whole counts up
+  to 1 000 000) or a liquid (`Liquid::JetFuel`, ...; up to 100 000 000, kilograms assumed). `set`
+  takes 0 too, the others more than 0. A warehouse may appear in many changes; a transfer is one
+  step (removed there and added here in the same frame, or not at all).
+- All or nothing: every count is read and every change checked first, in order, against what
+  the changes before it leave (the warehouse exists in DCS, the stock is not unlimited, enough
+  to remove or transfer); one failure and nothing changes. While they run, each step's count is
+  read before it and after it: a change DCS raises on, whose count does not move as asked, or
+  whose count an earlier change already moved, undoes the ones before it.
+- `out: StockChanges { applied, undo_failed, changes }`; per change `StockChanged { what,
+  outcome, message, warehouse: StockSide { name, eid, before, after, unlimited }, to:
+  Option<StockSide> }`; `out.failed()` gives the changes that kept it from applying.
+  `StockOutcome`: `Done`, `NotApplied` (another change failed), `Undone`, `UndoFailed` (the stock
+  stays as `after` says), `Unlimited` (a count above 2^29: refused, never "done"), `NotEnough`
+  (more than the warehouse holds: refused, never clamped), `Gone`, `DcsError`, `Unchanged` (DCS
+  took the change and the count did not move), `Aliased` (an earlier change of the command moved
+  this count under another form of the item: its name and its wsType are one stock).
+- A key: every `warehouse_op` needs `.key(..)` in dev (and with `sortied --require-keys`;
+  `Error::Invalid` otherwise), a list of sets too: a reload runs it again, and unkeyed an add,
+  remove or transfer moves stock twice and a set puts a count back over what was used since. A
+  keyed repeat returns the stored answer and leaves the stock alone, a refusal too: retry with a
+  new key.
+- The command fails as a whole (`Error::Invalid`, nothing sent) for no change or more than 16,
+  a warehouse the world does not hold alive, a transfer to its own warehouse, an amount out of
+  range or a fractional item count, `Liquid::Unknown`; `Error::Gone` for a dead base or a stale
+  Eid. Do not name one item by its name and by its wsType in one command (checked as two
+  counts: the later change is `Aliased` and the command is undone).
+- Frame cost: all in one frame, about 4 DCS calls a set, add or remove, 8 a transfer, 4 a
+  warehouse: 16 changes of one item at one warehouse some 0.5 ms, 16 transfers between 32
+  warehouses some 2.6 ms (estimates); keep commands between many warehouses short.
+- Capability `caps::WAREHOUSE_OP` (on by default); lane REALTIME. FakeDcs runs it on the same
+  stock, as the layer checks it (an unlimited class: `Unlimited`; two forms of one item:
+  `Aliased` and an undo; its setters never fail, so no `DcsError` there).
+
+The names of items: `ctx.item_names()` (API revision 3; a read that takes no key: with
+`.key(..)` it is `Error::Invalid`) asks the running DCS
+(`Warehouse.getResourceMap()`, DCS 2.8.8 and later) what it calls each object it knows and the
+wsType of each. It is how a logic checks DCS's item ids before it stocks a warehouse (a FARP's
+weapons by name, its helicopters by type): look the campaign's list up with `.items([..])` and
+send only `names` to `ctx.warehouse_op()`. The DCS API catalog has no `Warehouse.getResourceMap`
+entry; do not ask an owner to add one. Do not hard-code DCS strings or wsTypes from elsewhere: the last level of many
+wsTypes is assigned when DCS loads its database, so it differs between builds and module sets.
+
+<!-- snippet: skills-api-item-names -->
+```rust
+#[sortie::mission(api_rev = 3)] // the names query is API revision 3
+pub async fn name_the_stock(ctx: Ctx<Frontline>, _start: Start) -> sortie::Result<()> {
+    // What this DCS calls each item and its wsType: read once per DCS process, then from memory.
+    let names = ctx.item_names().await?;
+    // The campaign's own list, checked against DCS before any stock query uses it.
+    for item in ["weapons.bombs.Mk_82", "weapons.missiles.AIM_120C"] {
+        let ws = names.ws_type_of(item); // None: DCS has no such name (or it is no item type)
+        ctx.report().set(item, format!("{ws:?}"));
+    }
+    // A wsType from a mission's munitions, back to the name the warehouses use.
+    let back = ctx
+        .item_names()
+        .items([WarehouseItem::from([4, 4, 7, 22])])
+        .await?;
+    let first = back.names.first().map(|n| n.name.clone());
+    ctx.report().set(
+        "4.4.7.22",
+        format!("{first:?} unknown {}", back.unknown.len()),
+    );
+    ctx.end_session(Outcome::Draw).await
+}
+```
+
+- `ItemNames { names: Vec<ItemName { name, ws_type: Option<[u32; 4]> }>, unknown, total, skipped,
+  dcs_version, cached, source }`, `names` sorted by name, each once; weapons are named as the
+  warehouses name them (`weapons.missiles.AIM_120C`), aircraft and other units by type.
+  `ws_type` is `None` where DCS gives `{0, 0, 0, 0}` (shells, statics, turrets: no item type).
+  `get(name)`, `ws_type_of(name)`, `names_of(ws)` (usually one name), `knows(item)`;
+  `ItemName::item()` gives the `WarehouseItem` the stock query and `warehouse_op` take.
+- `.items([..])` (names or wsTypes, 1..=64, each once) answers only the matching entries (a wsType
+  every name that has it) and lists the rest in `unknown`. Without it the answer is the whole
+  map (thousands of names): read it once at mission start and keep it.
+- The engine reads DCS's map once per DCS process and version (the copy takes some pumps, 400
+  entries a pump; no other heavy call runs meanwhile) and answers every later query from memory
+  (`cached = true`), a mission restarted in the same DCS too; nothing is written to disk or the
+  engine's store. Capability `caps::ITEM_NAMES` (on by default;
+  `MISSING_IN_DCS`, and `Error::Unavailable`, on a DCS without the function). The generator's
+  `sc.airbase(munitions = ..)` still takes wsTypes: names need a running DCS.
+- FakeDcs: `dcs.set_item_names([(name, [a, b, c, d]), ..])` is the map (empty until set; a
+  mission reload keeps it); a wsType the map gives one name is that name's stock in the fake's
+  warehouses.
 
 ## Map drawings
 

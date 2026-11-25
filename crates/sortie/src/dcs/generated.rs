@@ -8,7 +8,7 @@
 use sortie_proto::v1;
 use sortie_types::{Coalition, MapPoint, Vec3};
 
-use super::{Call, Dcs, DcsObject, Handle, Value, WarehouseItem, arg};
+use super::{Call, Dcs, DcsObject, Handle, RoadPath, Value, WarehouseItem, arg};
 use crate::cmd::Cmd;
 #[allow(unused_imports)]
 use crate::sel::{AirbaseSel, ControllerSel, GroupSel, Obj, PlayerSel, UnitSel, WarehouseSel};
@@ -50,7 +50,7 @@ impl Dcs {
         EnvCalls(self.clone())
     }
 
-    /// The `land` family: 7 wrappers of `land`.
+    /// The `land` family: 9 wrappers of `land`, `sortie`.
     #[must_use]
     pub fn land(&self) -> LandCalls {
         LandCalls(self.clone())
@@ -68,7 +68,7 @@ impl Dcs {
         NetCalls(self.clone())
     }
 
-    /// The `server` family: 5 wrappers of `DCS`.
+    /// The `server` family: 8 wrappers of `DCS`.
     #[must_use]
     pub fn server(&self) -> ServerCalls {
         ServerCalls(self.clone())
@@ -516,6 +516,8 @@ impl LandCalls {
     /// Surface type at a map point: LAND, SHALLOW_WATER, WATER, ROAD or RUNWAY.
     ///
     /// `mission:land.getSurfaceType(point: vec2) -> [enum:land.SurfaceType]`; class read, live check ENV-LC1.
+    ///
+    /// There is no forest or town value: a forest reads LAND. No documented DCS function gives scripts forest or tree data.
     #[track_caller]
     pub fn surface_type(&self, point: MapPoint) -> Cmd<Call<String>> {
         self.0.typed(
@@ -567,8 +569,9 @@ impl LandCalls {
     /// Terrain profile between two points as a list of points on the ground.
     ///
     /// `mission:land.profile(origin: vec3, destination: vec3) -> [list:vec3]`; class read, live check ENV-LC6.
+    /// Guard `span_300km`: the end points `origin` and `destination` lie at most 300 km apart on the map; farther is `Error::Invalid` and nothing reaches DCS.
     ///
-    /// DCS reads x and z of both points and ignores y. The end points may lie at most 300 km apart.
+    /// DCS reads x and z of both points and ignores y.
     #[track_caller]
     pub fn profile(&self, origin: Vec3, destination: Vec3) -> Cmd<Call<Vec<Vec3>>> {
         self.0.typed(
@@ -596,6 +599,68 @@ impl LandCalls {
             None,
             vec![arg::string(road_type), arg::number(x), arg::number(y)],
             1,
+        )
+    }
+
+    /// A path along roads from map coordinates from_x (north), from_y (east) to to_x, to_y: map points from start to end, or nil.
+    ///
+    /// `mission:land.findPathOnRoads(road_type: string, from_x: number, from_y: number, to_x: number, to_y: number) -> [list:vec2?]`; class heavy, live check ENV-LC7.
+    /// API revision 3: the logic declares `#[sortie::mission(api_rev = 3)]`.
+    /// Guard `span_300km`: the end points (`from_x`, `from_y`) and (`to_x`, `to_y`) lie at most 300 km apart on the map; farther is `Error::Invalid` and nothing reaches DCS.
+    ///
+    /// road_type "roads"; the Hoggit wiki documents "railroads" and reports that DCS reads railroads as "rails". What comes back for a place no road reaches, and how long a long path takes, is not measured (ENV-LC7).
+    #[track_caller]
+    pub fn path_on_roads(
+        &self,
+        road_type: impl Into<String>,
+        from_x: f64,
+        from_y: f64,
+        to_x: f64,
+        to_y: f64,
+    ) -> Cmd<Call<Option<Vec<MapPoint>>>> {
+        self.0.typed(
+            "land.findPathOnRoads",
+            v1::Env::Mission,
+            None,
+            vec![
+                arg::string(road_type),
+                arg::number(from_x),
+                arg::number(from_y),
+                arg::number(to_x),
+                arg::number(to_y),
+            ],
+            3,
+        )
+    }
+
+    /// The road path from start to end that land.findPathOnRoads finds, summarised by the Sortie Lua layer inside DCS in the same frame: point count, length along the points, first and last point and how far each lies from the end asked, and at most max_points of the points with both ends kept; nil when DCS finds no path.
+    ///
+    /// `mission:sortie.findPathOnRoads(road_type: string, start: vec2, end: vec2, max_points: number?, keep: string?) -> [road_path?]`; class heavy, live check ENV-LC7.
+    /// API revision 3: the logic declares `#[sortie::mission(api_rev = 3)]`.
+    /// Guard `span_300km`: the end points `start` and `end` lie at most 300 km apart on the map; farther is `Error::Invalid` and nothing reaches DCS.
+    ///
+    /// keep "turns" (the default) keeps the points where the path turns most (fewer when the rest lie on straight legs), "even" points spaced evenly along it; without max_points no points come back (the summary alone; thinned, which says points holds fewer points than the path, is then true unless the path is empty). Needs the Lua layer of 0.4.0 (sortie install): an older one answers MISSING. Whether the summary matches the full path on a running DCS is ENV-LC7.
+    #[track_caller]
+    pub fn road_path(
+        &self,
+        road_type: impl Into<String>,
+        start: MapPoint,
+        end: MapPoint,
+        max_points: Option<f64>,
+        keep: Option<&str>,
+    ) -> Cmd<Call<Option<RoadPath>>> {
+        self.0.typed(
+            "sortie.findPathOnRoads",
+            v1::Env::Mission,
+            None,
+            vec![
+                arg::string(road_type),
+                arg::vec2(start),
+                arg::vec2(end),
+                max_points.map_or_else(arg::nil, arg::number),
+                keep.map_or_else(arg::nil, arg::string),
+            ],
+            3,
         )
     }
 }
@@ -1241,6 +1306,70 @@ impl ServerCalls {
     pub fn is_multiplayer(&self) -> Cmd<Call<bool>> {
         self.0
             .typed("DCS.isMultiplayer", v1::Env::Hooks, None, vec![], 1)
+    }
+
+    /// The FARPs and carriers the slot screen lists: {farps = {[unit id] = {name, x, y, coalition, ...}}, carriers = {...}}.
+    ///
+    /// `hooks:DCS.getFarpsAndCarriersMissionData() -> [table]`; class heavy, live check AWC-T30.
+    /// API revision 3: the logic declares `#[sortie::mission(api_rev = 3)]`.
+    ///
+    /// Whether a FARP added while the mission runs is listed is not measured (AWC-T30); the name suggests the mission's own data.
+    #[track_caller]
+    pub fn farps_and_carriers(&self) -> Cmd<Call<Value>> {
+        self.0.typed(
+            "DCS.getFarpsAndCarriersMissionData",
+            v1::Env::Hooks,
+            None,
+            vec![],
+            3,
+        )
+    }
+
+    /// Dynamic-slot settings of an airfield (its id, is_airdrome true) or of a FARP or carrier (its unit id, false): {dynamicSpawnAvailable, allowHotSpawn, ...}.
+    ///
+    /// `hooks:DCS.getDynamicSpawnSettings(airbase_id: number, is_airdrome: boolean) -> [table?]`; class read, live check AWC-T30.
+    /// API revision 3: the logic declares `#[sortie::mission(api_rev = 3)]`.
+    ///
+    /// The slot screen reads dynamicSpawnAvailable and allowHotSpawn; other fields and the answer for an unknown id are not measured (AWC-T30).
+    #[track_caller]
+    pub fn dynamic_spawn_settings(
+        &self,
+        airbase_id: f64,
+        is_airdrome: bool,
+    ) -> Cmd<Call<Option<Value>>> {
+        self.0.typed(
+            "DCS.getDynamicSpawnSettings",
+            v1::Env::Hooks,
+            None,
+            vec![arg::number(airbase_id), arg::boolean(is_airdrome)],
+            3,
+        )
+    }
+
+    /// How many aircraft of a type the slot screen offers at an airfield (its id, false) or a FARP or carrier (its unit id, true).
+    ///
+    /// `hooks:DCS.getAircraftAmountInAirportWarehouse(aircraft_type: string, airbase_id: number, is_farp_or_ship: boolean) -> [number]`; class read, live check AWC-T30.
+    /// API revision 3: the logic declares `#[sortie::mission(api_rev = 3)]`.
+    ///
+    /// The slot screen shows 1000000 or more without a count (an unlimited stock) and offers a type only above 0 (AWC-T30).
+    #[track_caller]
+    pub fn aircraft_in_warehouse(
+        &self,
+        aircraft_type: impl Into<String>,
+        airbase_id: f64,
+        is_farp_or_ship: bool,
+    ) -> Cmd<Call<f64>> {
+        self.0.typed(
+            "DCS.getAircraftAmountInAirportWarehouse",
+            v1::Env::Hooks,
+            None,
+            vec![
+                arg::string(aircraft_type),
+                arg::number(airbase_id),
+                arg::boolean(is_farp_or_ship),
+            ],
+            3,
+        )
     }
 }
 
@@ -2539,6 +2668,9 @@ impl AirbaseCalls {
     ///
     /// `mission:Airbase.setRadioSilentMode(self: Airbase, silent: boolean) -> []`; class mutate, live check UC-1.
     /// Off until the engine owner enables it (`engine.toml [calls]`, or `sortied --dev`).
+    ///
+    /// Use ctx.airbase_control(..).radio_silent(..): the typed operation sets many bases in one frame and reads each back.
+    #[deprecated(note = "use the typed operation `airbase_control` instead")]
     #[track_caller]
     pub fn set_radio_silent_mode(&self, silent: bool) -> Cmd<Call<()>> {
         self.0.typed(
@@ -2568,6 +2700,9 @@ impl AirbaseCalls {
     ///
     /// `mission:Airbase.autoCapture(self: Airbase, on: boolean) -> []`; class mutate, live check AWC-T1.
     /// Off until the engine owner enables it (`engine.toml [calls]`, or `sortied --dev`).
+    ///
+    /// Use ctx.airbase_control(..).auto_capture(..): the typed operation sets many bases in one frame and reads each back.
+    #[deprecated(note = "use the typed operation `airbase_control` instead")]
     #[track_caller]
     pub fn auto_capture(&self, on: bool) -> Cmd<Call<()>> {
         self.0.typed(
@@ -2584,7 +2719,8 @@ impl AirbaseCalls {
     /// `mission:Airbase.setCoalition(self: Airbase, coalition: side_number) -> []`; class mutate, live check AWC-T1.
     /// Off until the engine owner enables it (`engine.toml [calls]`, or `sortied --dev`).
     ///
-    /// The mirror learns the new owner at the next airbase sweep (BaseCaptured.cause OBSERVED), not at once.
+    /// Use ctx.airbase_control(..).owner(..): the typed operation sets many bases in one frame, turns auto capture off first when asked, and the world learns the new owner at once; after a raw call the world learns it only at the next resync snapshot or a state query of the base (ctx.airbase(..).state()); nothing sweeps airbases.
+    #[deprecated(note = "use the typed operation `airbase_control` instead")]
     #[track_caller]
     pub fn set_coalition(&self, coalition: Coalition) -> Cmd<Call<()>> {
         self.0.typed(
@@ -2995,6 +3131,9 @@ impl WarehouseCalls {
     ///
     /// `mission:Warehouse.addItem(self: Warehouse, item: item, count: number) -> []`; class mutate, live check AWC-T6.
     /// Off until the engine owner enables it (`engine.toml [calls]`, or `sortied --dev`).
+    ///
+    /// Use ctx.warehouse_op().add(..): the typed operation changes many items and warehouses in one frame, all or nothing, reads each count back and refuses an unlimited stock instead of changing nothing.
+    #[deprecated(note = "use the typed operation `warehouse_op` instead")]
     #[track_caller]
     pub fn add_item(&self, item: impl Into<WarehouseItem>, count: f64) -> Cmd<Call<()>> {
         self.0.typed(
@@ -3010,6 +3149,9 @@ impl WarehouseCalls {
     ///
     /// `mission:Warehouse.removeItem(self: Warehouse, item: item, count: number) -> []`; class mutate, live check AWC-T6.
     /// Off until the engine owner enables it (`engine.toml [calls]`, or `sortied --dev`).
+    ///
+    /// Use ctx.warehouse_op().remove(..) or .transfer(..): the typed operation refuses to remove more than the warehouse holds, changes many items in one frame, all or nothing, and reads each count back.
+    #[deprecated(note = "use the typed operation `warehouse_op` instead")]
     #[track_caller]
     pub fn remove_item(&self, item: impl Into<WarehouseItem>, count: f64) -> Cmd<Call<()>> {
         self.0.typed(
@@ -3025,6 +3167,9 @@ impl WarehouseCalls {
     ///
     /// `mission:Warehouse.setItem(self: Warehouse, item: item, count: number) -> []`; class mutate, live check AWC-T6.
     /// Off until the engine owner enables it (`engine.toml [calls]`, or `sortied --dev`).
+    ///
+    /// Use ctx.warehouse_op().set(..): the typed operation changes many items and warehouses in one frame, all or nothing, reads each count back and refuses an unlimited stock instead of changing nothing.
+    #[deprecated(note = "use the typed operation `warehouse_op` instead")]
     #[track_caller]
     pub fn set_item(&self, item: impl Into<WarehouseItem>, count: f64) -> Cmd<Call<()>> {
         self.0.typed(
@@ -3054,6 +3199,9 @@ impl WarehouseCalls {
     ///
     /// `mission:Warehouse.addLiquid(self: Warehouse, liquid: number, amount: number) -> []`; class mutate, live check AWC-T9.
     /// Off until the engine owner enables it (`engine.toml [calls]`, or `sortied --dev`).
+    ///
+    /// Use ctx.warehouse_op().add(.., Liquid::..): the typed operation changes many stocks in one frame, all or nothing, and reads each amount back.
+    #[deprecated(note = "use the typed operation `warehouse_op` instead")]
     #[track_caller]
     pub fn add_liquid(&self, liquid: f64, amount: f64) -> Cmd<Call<()>> {
         self.0.typed(
@@ -3069,6 +3217,9 @@ impl WarehouseCalls {
     ///
     /// `mission:Warehouse.removeLiquid(self: Warehouse, liquid: number, amount: number) -> []`; class mutate, live check AWC-T9.
     /// Off until the engine owner enables it (`engine.toml [calls]`, or `sortied --dev`).
+    ///
+    /// Use ctx.warehouse_op().remove(.., Liquid::..) or .transfer(..): the typed operation refuses to remove more than the warehouse holds, changes many stocks in one frame, all or nothing, and reads each amount back.
+    #[deprecated(note = "use the typed operation `warehouse_op` instead")]
     #[track_caller]
     pub fn remove_liquid(&self, liquid: f64, amount: f64) -> Cmd<Call<()>> {
         self.0.typed(
@@ -3084,6 +3235,9 @@ impl WarehouseCalls {
     ///
     /// `mission:Warehouse.setLiquidAmount(self: Warehouse, liquid: number, amount: number) -> []`; class mutate, live check AWC-T9.
     /// Off until the engine owner enables it (`engine.toml [calls]`, or `sortied --dev`).
+    ///
+    /// Use ctx.warehouse_op().set(.., Liquid::..): the typed operation changes many stocks in one frame, all or nothing, and reads each amount back.
+    #[deprecated(note = "use the typed operation `warehouse_op` instead")]
     #[track_caller]
     pub fn set_liquid_amount(&self, liquid: f64, amount: f64) -> Cmd<Call<()>> {
         self.0.typed(

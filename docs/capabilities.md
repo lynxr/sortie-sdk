@@ -15,6 +15,11 @@
 | `caps::SPAWN_STATIC`, `caps::DRAW`, `caps::MENU_TREE`, `caps::REMOVE_JUNK`, `caps::DESTROY`, ... | типизированные операции (`caps::MENU` — меню F10 из 0.1.0, `caps::MENU_TREE` — [деревья меню](menus.md)) |
 | `caps::SPAWN_BATCH` | [пакет спавнов](objects.md#пакет-спавнов): группы и статики одной командой; владелец, выключивший `spawn_static` или `spawn_group`, отказывает и пакету с таким элементом |
 | `caps::DESTROY_WEAPON` | `destroy` оружия в полёте и катапультировавшегося пилота по Eid |
+| `caps::AIRBASE_CONTROL` | [владелец, автозахват и радиомолчание аэродромов](airbases.md) одной командой (ревизия 3); включена по умолчанию, как `spawn_static` |
+| `caps::AIRBASE_PARKING`, `caps::AIRBASE_RUNWAYS`, `caps::AIRBASE_STATE` | [запросы аэродромов](airbases.md#стоянки-полосы-и-состояние-запросы): стоянки, полосы, состояние (ревизия 3); включены по умолчанию, у каждой своя функция DCS |
+| `caps::WAREHOUSE_STOCK` | [запас складов](warehouses.md) одним запросом (ревизия 3); включена по умолчанию |
+| `caps::WAREHOUSE_OP` | [изменение запаса складов](warehouses.md#изменить-запас) одной командой, всё или ничего (ревизия 3); включена по умолчанию, как `airbase_control` |
+| `caps::ITEM_NAMES` | [имена предметов и их wsType](warehouses.md#имена-предметов), как их даёт запущенная DCS (ревизия 3); включена по умолчанию; в DCS до 2.8.8 (нет `Warehouse.getResourceMap`) — `MISSING_IN_DCS` |
 | `caps::DESTROY_SCENERY` | `destroy` объекта карты: не сделано (`NOT_IMPLEMENTED`) |
 | `caps::QUERY_LAND_HEIGHT`, `caps::SERVER_SEND_CHAT`, ... | виды запросов и управления сервером |
 | `caps::DCS_CALL`, `caps::DCS_BATCH` | универсальный вызов DCS целиком ([Вызовы DCS](dcs.md)) |
@@ -105,7 +110,8 @@ match ctx.dcs().land().height(MapPoint::new(0.0, 0.0)).await {
   нет; движок считает его слоем 0.1.0, и все операции волны 1 (`spawn_static`, `draw`,
   `menu_tree`, `remove_junk`, `dcs_call`, `dcs_batch`, все `call:*`) — `NOT_IMPLEMENTED` с
   подсказкой «run `sortie install`»; слой 0.2.x так же показывает `search_objects` (ревизия
-  2). Логика с `requires = [...]` получает отказ при подключении, а не ошибку на первой
+  2), слой 0.3.x — `airbase_control`, `airbase_parking`, `airbase_runways`, `airbase_state`,
+  `warehouse_stock`, `warehouse_op` и `item_names` (ревизия 3). Логика с `requires = [...]` получает отказ при подключении, а не ошибку на первой
   команде.
 * **Владелец движка.** `engine.toml`: `[calls]` включает и выключает функции каталога,
   `[operations] disable = ["remove_junk"]` выключает типизированные операции (они `DISABLED`,
@@ -162,7 +168,9 @@ match ctx.dcs().land().height(MapPoint::new(0.0, 0.0)).await {
 таймер моста считает время от записи в журнал до возврата, вместе с упаковкой ответа и
 чужими обработчиками событий внутри вызова), мост и движок отказывают в этой функции лишь до
 конца этого процесса DCS: возможность `QUARANTINED`, заметка говорит `Slow, not a crash`, в
-хранилище ничего не записывается. После перезапуска DCS функция снова доступна сама, снимать
+хранилище ничего не записывается. Отказ в такой функции (`Error::Quarantined`) с движком 0.4.0
+несёт `e.limit()` вида `SlowCalls` (бюджет `bridge.slow_calls`, ожидания нет): это лимит, а
+не карантин после падения ([отказ по лимиту](dcs.md#отказ-по-лимиту)). После перезапуска DCS функция снова доступна сама, снимать
 ничего не нужно. Поэтому тяжёлое чтение (`coalition.getGroups`, `world.getAirbases`), для
 которого испытания нет, не останется на карантине из-за одной медленной минуты на
 загруженном сервере. Сколько на самом деле занимают самые медленные чтения, ещё не измерено

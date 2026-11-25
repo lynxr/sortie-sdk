@@ -17,8 +17,8 @@
 //! body), so name-derived tooling such as insta snapshots sees `t`, not a generated name:
 //! `assert_yaml_snapshot!` in `tests/sam.rs::t` writes `snapshots/sam__t.snap`.
 //!
-//! FakeDcs is not part of Sortie SDK 0.1: without the feature `fake-dcs` the attribute expands
-//! to [`unavailable`], a compile error that says so.
+//! FakeDcs is not part of the public Sortie SDK (it carries the engine): without the feature
+//! `fake-dcs` the attribute expands to [`unavailable`], a compile error that says so.
 
 use std::path::{Path, PathBuf};
 
@@ -35,8 +35,8 @@ const SHAPE: &str = "async fn my_test(dcs: FakeDcs<M>)";
 
 /// The compile error of `#[sortie::test]` without the feature `fake-dcs` (the SDK).
 pub(crate) const UNAVAILABLE: &str = "#[sortie::test] runs the logic against FakeDcs, which is \
-    not part of Sortie SDK 0.1; tests without DCS arrive in SDK 0.2. Test against a live DCS \
-    with `sortied --dev` for now.";
+    not part of the public Sortie SDK yet: it carries the engine. Test the mission against \
+    a live DCS with `sortied --dev`, and its plain functions with `#[test]`.";
 
 /// Manifest file extensions the loaders understand.
 const EXTENSIONS: [&str; 2] = ["pb", "json"];
@@ -301,8 +301,13 @@ mod tests {
         })
         .to_string();
         assert_eq!(out.matches("compile_error").count(), 1, "{out}");
-        assert!(out.contains("not part of Sortie SDK 0.1"), "{out}");
-        assert!(out.contains("tests without DCS arrive in SDK 0.2"), "{out}");
+        assert!(
+            out.contains("not part of the public Sortie SDK yet"),
+            "{out}"
+        );
+        assert!(out.contains("it carries the engine"), "{out}");
+        // No version: the SDK that ships FakeDcs is not planned yet.
+        assert!(!out.contains("SDK 0."), "{out}");
         assert!(out.contains("fn sam_goes_red () { }"), "{out}");
         assert!(!out.contains("FakeDcs <"), "{out}");
         // Not a function: still the one error.

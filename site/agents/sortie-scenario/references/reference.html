@@ -24,7 +24,7 @@
 <a class="skip" href="#content">Перейти к содержанию</a>
 <header class="topbar">
 <div class="topbar-inner">
-<a class="brand" href="../../../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.3.0</span></a>
+<a class="brand" href="../../../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.4.0</span></a>
 <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
 <nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="../../../docs/quickstart.html">Быстрый старт</a><a href="../../../docs/index.html">Документация</a><a href="../../../agents.html" aria-current="true">Для агентов</a><a href="../../../downloads.html">Загрузки</a><a href="../../../changelog.html">Изменения</a></nav>
 <div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
@@ -71,17 +71,19 @@ names (<code>"Russia"</code>, <code>"USA"</code>); airbases are names of the map
 <h2 id="declarations">Declarations<a class="anchor" href="#declarations" aria-label="Ссылка на этот раздел">#</a></h2>
 <div class="table-wrap" tabindex="0">
 <table><thead><tr><th>Declaration</th><th>Parameters (defaults)</th><th>Result</th></tr></thead><tbody>
-<tr><td><code>Scenario(name, *, schema, theatre, start, time_limit=None, description=None)</code></td><td><code>name</code>: <code>[a-z][a-z0-9_]*</code>; <code>schema</code>: int ≥ 1; <code>theatre</code>: a pydcs terrain (<code>caucasus.Caucasus()</code>); <code>start</code>: RFC 3339, without an offset the map's local time; <code>time_limit</code>: <code>"3h"</code>, <code>"1h30m"</code>, <code>"90m"</code>, seconds, <code>None</code> = no limit</td><td>the scenario</td></tr>
+<tr><td><code>Scenario(name, *, schema, theatre, start, time_limit=None, description=None, do_scripts="warn")</code></td><td><code>name</code>: <code>[a-z][a-z0-9_]*</code>; <code>schema</code>: int ≥ 1; <code>theatre</code>: a pydcs terrain (<code>caucasus.Caucasus()</code>); <code>start</code>: RFC 3339, without an offset the map's local time; <code>time_limit</code>: <code>"3h"</code>, <code>"1h30m"</code>, <code>"90m"</code>, seconds, <code>None</code> = no limit; <code>do_scripts</code>: what a build does with Lua a hook added (the init script, a DO SCRIPT, DO SCRIPT FILE or LUA PREDICATE), <code>"warn"</code>, <code>"deny"</code> (the build fails) or <code>"allow"</code></td><td>the scenario</td></tr>
 <tr><td><code>sc.zone(name, *, ident=None, at=, radius=)</code> or <code>points=[p1, p2, p3, p4]</code>; <code>hidden=True</code>, <code>color=None</code></td><td>a circle or a quad</td><td><code>ZoneHandle</code> (<code>.center</code>)</td></tr>
 <tr><td><code>sc.ground_group(name, *, ident=None, country, at, units=[..], heading=0.0, formation="star", spacing=40.0, skill="Excellent", roles=None, late_activation=False, hidden=False)</code></td><td><code>formation</code>: <code>line</code>, <code>star</code>, <code>rectangle</code>, <code>vee</code>; the first unit stands at <code>at</code>; units named <code>&lt;name&gt;-&lt;k&gt;</code></td><td><code>GroupHandle</code></td></tr>
-<tr><td><code>sc.air_template(name, unit_type, *, ident, country, size=1, task=None, at=None, airbase=None, altitude=None, speed=None, skill="High", roles=None, payload=None)</code></td><td>kept out of the <code>.miz</code>; <code>task</code> defaults to the type's main task; placement when the logic gives none: <code>at</code>, else <code>airbase</code>, else the first declared airbase, else the coalition's bullseye; <code>altitude</code> 6000 m (2000 m for helicopters); <code>speed</code> in km/h; <code>payload</code>: a pydcs loadout name or a list of pylon tuples</td><td><code>TemplateHandle</code></td></tr>
+<tr><td><code>sc.air_template(name, unit_type, *, ident, country, size=1, task=None, at=None, airbase=None, altitude=None, speed=None, skill="High", roles=None, payload=None)</code></td><td>kept out of the <code>.miz</code>; <code>task</code> defaults to the type's main task; placement when the logic gives none: <code>at</code>, else <code>airbase</code>, else the first declared airbase, else the coalition's bullseye; <code>altitude</code> 6000 m (2000 m for helicopters); <code>speed</code> in km/h; <code>payload</code>: a pydcs loadout name or a list of pylon tuples; the manifest's template carries the leader's heading as its reference heading <code>heading_rad</code>, which the logic's <code>.at_formation(..)</code> turns the formation from</td><td><code>TemplateHandle</code></td></tr>
+<tr><td><code>sc.ground_template(name, *, ident, country, units=[..], at=None, heading=0.0, unit_headings=None, formation="line", spacing=40.0, skill="Excellent", roles=None)</code></td><td>0.4.0: a ground group kept out of the <code>.miz</code> for the logic to spawn (<code>templates::X</code>, kind <code>ground</code>); drawn as <code>ground_group</code> draws one (the first unit at <code>at</code>, else at the first declared airbase, else the bullseye) for the facing <code>heading</code> (degrees), which the manifest keeps as the reference heading <code>heading_rad</code>; <code>unit_headings</code>: each unit's heading relative to <code>heading</code>, one per unit (<code>[-15, 15]</code> for two launchers), all 0 by default; <code>.at_formation(..)</code> keeps that spread</td><td><code>TemplateHandle</code></td></tr>
 <tr><td><code>sc.airbase(name, *, ident, coalition=None, munitions=None)</code></td><td><code>coalition</code>: <code>Coalition.Red/Blue/Neutral</code> or <code>"red"</code>; without it the map's default owner stays (except player airfields). <code>munitions={(4, 4, 7, 106): 20}</code>: limited munitions with that starting stock, each weapon named by its wsType (four numbers, DCS's <code>Scripts/Database/wsTypes.lua</code>), amounts 0..1000000; without it the stock is unlimited (aircraft and fuel always are), and DCS is reported not to count an unlimited stock</td><td><code>AirbaseHandle</code> (<code>.position</code>)</td></tr>
 <tr><td><code>sc.player_flight(name, unit_type, *, country, airbase, start=StartType.Cold, size=1, task=None, skill="Client", payload=None, at=None, altitude=3000.0)</code></td><td><code>start</code>: <code>StartType.Cold</code>, <code>Hot</code>, <code>Runway</code>, <code>Air</code> (<code>Air</code> needs <code>at=</code>); the type must be flyable; goes to <code>manifest.player_flights</code>, not to the lock</td><td><code>FlightHandle</code></td></tr>
 <tr><td><code>sc.flag(ident, *, name=None, initial=0)</code></td><td>DCS flag name defaults to the ident; a non-zero <code>initial</code> is set by a MISSION START trigger</td><td><code>FlagHandle</code></td></tr>
 <tr><td><code>sc.menu(ident, label, *, path=())</code></td><td><code>path</code>: sub-menus, e.g. <code>["Support"]</code></td><td><code>MenuHandle</code></td></tr>
-<tr><td><code>@sc.pydcs</code> on <code>def hook(mission)</code></td><td>runs after the declarations on every build; names are checked for uniqueness afterwards</td><td>the function</td></tr>
+<tr><td><code>@sc.pydcs</code> on <code>def hook(mission)</code></td><td>runs after the declarations on every build; names are checked for uniqueness afterwards, its Lua (init script, trigger scripts, LUA PREDICATE) against <code>do_scripts</code>; map side only, never game logic</td><td>the function</td></tr>
 <tr><td><code>sc.latlon(lat, lon)</code>, <code>sc.point(north, east)</code></td><td>positions; <code>latlon</code> is rounded to 1 mm</td><td><code>dcs.mapping.Point</code></td></tr>
 <tr><td><code>sc.time_limit = "2h"</code></td><td>changes the limit after construction</td><td></td></tr>
+<tr><td><code>sc.do_scripts = "deny"</code></td><td>changes the DO SCRIPT policy after construction</td><td></td></tr>
 <tr><td><code>sc.build(build_id=None)</code></td><td>in-memory build: <code>.build_id</code>, <code>.manifest</code>, <code>.miz</code>, <code>.lock</code>, <code>.warnings</code>, <code>.write(out_dir)</code></td><td><code>Build</code></td></tr>
 <tr><td><code>sc.cli()</code></td><td>the command line below</td><td>exits</td></tr>
 </tbody></table>
@@ -118,8 +120,9 @@ sortie-gen adopt my.miz [--json]
 bootstrap; it shows whether the bridge loaded). The engine uses the running lobby to check
 types.</li>
 <li><code>adopt</code> reports an editor mission: groups, units, zones, proposed idents, names that break
-the rules. pydcs may move aircraft to other parking spots when it saves a mission: place
-player slots with <code>player_flight</code>.</li>
+the rules, and the mission's Lua: its init script, every LUA PREDICATE, DO SCRIPT and DO
+SCRIPT FILE except a Sortie bootstrap (their logic moves to Rust). pydcs may move aircraft
+to other parking spots when it saves a mission: place player slots with <code>player_flight</code>.</li>
 <li><code>worker</code> (the campaign loop) is not available yet: it exits with code 2.</li>
 </ul>
 <h2 id="errors-and-warnings">Errors and warnings<a class="anchor" href="#errors-and-warnings" aria-label="Ссылка на этот раздел">#</a></h2>
@@ -135,6 +138,7 @@ player slots with <code>player_flight</code>.</li>
 <tr><td><code>player flights 'A' (blue) and 'B' (red) both start at X</code></td><td>one airfield, one coalition: move a flight or use an air start</td></tr>
 <tr><td><code>player flight 'A' (blue) starts at X, which the scenario gives to red</code></td><td>give the airbase to the flight's coalition or start elsewhere</td></tr>
 <tr><td>warning <code>player group 'A' (blue) starts at X, which belongs to red</code></td><td>a hook placed a client group: set the airfield owner in the hook</td></tr>
+<tr><td>warning <code>the .miz runs N scripts that Sortie did not put there:</code> (an error with <code>do_scripts="deny"</code>)</td><td>move the logic of each listed trigger (and of a <code>mission init:</code> line, the init script) to the Rust logic; keep a third-party script with <code>do_scripts="allow"</code></td></tr>
 <tr><td>warning <code>template 'X' (Su-27) spawns without weapons</code></td><td><code>payload=[..]</code> pylon tuples, or <code>SORTIE_GEN_DCS_DATA=installed</code></td></tr>
 <tr><td><code>pydcs knows no loadout 'X' for Y</code></td><td>a loadout name needs <code>SORTIE_GEN_DCS_DATA=installed</code>; or list the pylons</td></tr>
 <tr><td><code>scenario.lock.json is stale (...); run python scenario.py lock</code></td><td>after <code>--locked</code> / <code>--check</code>: run <code>lock</code>, rebuild the logic</td></tr>
@@ -151,7 +155,7 @@ player slots with <code>player_flight</code>.</li>
 </div>
 <footer class="footer">
 <div class="footer-inner">
-<p>Sortie SDK 0.3.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p>Sortie SDK 0.4.0. Лицензия SDK: MIT OR Apache-2.0.</p>
 <p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
 </div>
 </footer>

@@ -12,6 +12,7 @@
   <url><loc>https://lynxr.github.io/sortie-sdk/agents/sortie-scenario/SKILL.html</loc></url>
   <url><loc>https://lynxr.github.io/sortie-sdk/agents/sortie-scenario/references/reference.html</loc></url>
   <url><loc>https://lynxr.github.io/sortie-sdk/changelog.html</loc></url>
+  <url><loc>https://lynxr.github.io/sortie-sdk/docs/airbases.html</loc></url>
   <url><loc>https://lynxr.github.io/sortie-sdk/docs/capabilities.html</loc></url>
   <url><loc>https://lynxr.github.io/sortie-sdk/docs/changelog.html</loc></url>
   <url><loc>https://lynxr.github.io/sortie-sdk/docs/dcs-catalog.html</loc></url>
@@ -29,6 +30,8 @@
   <url><loc>https://lynxr.github.io/sortie-sdk/docs/sdk.html</loc></url>
   <url><loc>https://lynxr.github.io/sortie-sdk/docs/testing.html</loc></url>
   <url><loc>https://lynxr.github.io/sortie-sdk/docs/troubleshooting.html</loc></url>
+  <url><loc>https://lynxr.github.io/sortie-sdk/docs/warehouses.html</loc></url>
+  <url><loc>https://lynxr.github.io/sortie-sdk/docs/web-api.html</loc></url>
   <url><loc>https://lynxr.github.io/sortie-sdk/downloads.html</loc></url>
   <url><loc>https://lynxr.github.io/sortie-sdk/</loc></url>
 </urlset>

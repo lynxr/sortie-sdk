@@ -18,10 +18,22 @@ An `ident=` makes a symbol: `groups::SAM_NORTH`, `zones::FRONT`, `templates::RED
 `airbases::MAYKOP`, `flags::SAM_DOWN`, `menus::SITREP` in Rust. Without an ident a zone is
 only in the `.miz`, and a group is in the `.miz` and the manifest but has no Rust symbol.
 
+**The `.miz` holds the map side only.** Groups, units, statics, zones, weather, briefing, the
+warehouses' starting stock and Sortie's own bootstrap. Every piece of game logic (what happens
+when, spawns, tasks, scoring, menus, marks, stock changes) lives in the Rust logic (the
+sortie-mission-logic skill), never in a DO SCRIPT of the `.miz`. When the SDK lacks something:
+a typed command or query (a ground group's route is `Task::ground_route(..)`), a catalog call
+(`ctx.dcs()`), a raw DCS task table with `Task::raw(..)` (any group), then ask the Sortie
+team. The
+build lists all Lua a hook added: the mission's init script, every DO SCRIPT, DO SCRIPT FILE
+and LUA PREDICATE (`Scenario(do_scripts=..)`: `warn` by default, `deny` fails the build,
+`allow` is silent; the mission template sets `deny`). Lua in a group's waypoint tasks is not
+checked.
+
 ## Setup
 
 ```powershell
-uv add "sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.3.0#subdirectory=python/sortie-gen"
+uv add "sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.4.0#subdirectory=python/sortie-gen"
 ```
 
 Or install the `sortie_gen` wheel from the GitHub release. Python 3.11+.
@@ -47,6 +59,12 @@ sc = Scenario(
 ```
 
 Zones: a circle (`at` + `radius`, metres) or a quad (`points=[4 points]`).
+
+Zones are also where spawn sites are chosen: DCS gives scripts no forest or tree data and no
+collision volume of rocks or map objects, so the logic cannot ask whether a site is clear.
+Declare the sites you checked yourself (in the Mission Editor or in the game) and forbidden
+zones around forests as zones with idents, and let the logic pick among them
+(sdk/docs/objects.md, "Что DCS знает о местности").
 
 ```python
 obj = sc.zone("Objective", ident="OBJECTIVE", at=sc.latlon(44.62, 40.10), radius=500)
@@ -121,24 +139,20 @@ sc.menu("SMOKE_OBJECTIVE", "Smoke the objective", path=["Support"])
 sc.menu("SITREP", "Situation report")
 ```
 
-Everything Sortie does not wrap (statics, air groups placed in the `.miz`, weather, briefing,
-your own triggers) goes in a `@sc.pydcs` hook. It runs on every build after the declarations.
-Groups it adds are in the manifest without an ident; reach them by DCS name.
+Everything Sortie does not wrap on the map side (statics, air groups placed in the `.miz`,
+weather, briefing) goes in a `@sc.pydcs` hook. It runs on every build after the declarations.
+Groups it adds are in the manifest without an ident; reach them by DCS name. Game logic does
+not go in a hook: it is Rust.
 
 ```python
-from dcs.triggers import TriggerStart
-
-from sortie_gen.miz import InlineDoScript
-
-
 @sc.pydcs
 def extras(m):
-    # What Sortie does not wrap: statics, weather, briefing, your own triggers.
+    # What Sortie does not wrap: statics, weather, briefing. Never game logic: messages,
+    # spawns, tasks and scoring belong in the Rust logic, not in a DO SCRIPT here.
     hq = sc.latlon(44.61, 40.08)
     m.static_group(m.country("Russia"), "Red HQ", statics.Fortification._Command_Center, hq)
-    t = TriggerStart(comment="welcome")
-    t.add_action(InlineDoScript('trigger.action.outText("Frontline is live", 15)'))
-    m.triggerrules.triggers.append(t)
+    m.weather.clouds_density = 4
+    m.set_description_bluetask_text("Take down SAM North, then hold the front.")
 ```
 
 ```python
@@ -208,17 +222,26 @@ Single player: `launch` needs a server, so `register`, then open
 
 ## The Mission Editor and DO SCRIPT
 
+- A DO SCRIPT is only for a third-party script the mission must keep (Sortie does not check
+  it), never for the mission's logic. After the hooks, `build` and `register` list all Lua
+  that is not Sortie's: the mission's init script and init script file (`mission init: ...`),
+  then every LUA PREDICATE condition, DO SCRIPT and DO SCRIPT FILE of the triggers (by
+  trigger number, comment and type; any pydcs class with that predicate): a warning by
+  default, a failed build with `Scenario(do_scripts="deny")`, silence with `"allow"` (also
+  `sc.do_scripts = "allow"`). Sortie's own bootstrap and flags trigger are never listed. Lua
+  in a group's waypoint tasks (`WrappedAction` `Script`) is not looked for.
 - A built `.miz` can be opened, re-saved and flown from the Mission Editor: the bootstrap is
   stored the way the editor writes DO SCRIPT (code inline in the action), so the mission still
   attaches.
 - Change groups, units and zones in `scenario.py`, not in the editor: the manifest describes
   the build, and an edited `.miz` no longer matches it.
-- A DO SCRIPT added in a `@sc.pydcs` hook uses `sortie_gen.miz.InlineDoScript`, not pydcs's
-  `DoScript` (the editor would run its dictionary key as Lua).
+- A third-party DO SCRIPT added in a `@sc.pydcs` hook uses `sortie_gen.miz.InlineDoScript`,
+  not pydcs's `DoScript` (the editor would run its dictionary key as Lua).
 - Do not load and save a built `.miz` with pydcs: it rewrites every DO SCRIPT into the
   dictionary form.
 - `uv run sortie-gen adopt my.miz [--json]` lists the coalitions, groups, units and zones of an
-  editor mission with proposed idents: the start for porting it to `scenario.py`.
+  editor mission with proposed idents, and its DO SCRIPTs, whose logic moves to Rust: the
+  start for porting it to `scenario.py` and the logic.
 
 ## More
 

@@ -73,6 +73,39 @@ pub async fn commands(ctx: Ctx<Frontline>) -> sortie::Result<()> {
     Ok(())
 }
 
+/// A ground group's route: the typed `Task::ground_route` (API revision 3).
+pub async fn ground_route(ctx: Ctx<Frontline>) -> sortie::Result<()> {
+    // snippet:start skills-logic-ground-route
+    let armor = ctx.group(groups::RED_ARMOR)?; // Group<Ground>
+    let objective = zones::OBJECTIVE.center();
+    let route = Task::ground_route([
+        // along the roads to a point 3 km south of the objective
+        RoutePoint::on_road(objective.offset(-3_000.0, 0.0)),
+        // the last leg straight across the fields, in a vee, at 15 km/h
+        RoutePoint::new(objective, GroundFormation::Vee).speed(kmh(15)),
+    ])
+    .speed(kmh(40)); // for the points that set no speed (default 20 km/h)
+    armor.set_task(route).key("armor-to-objective").await?;
+    // snippet:end skills-logic-ground-route
+    Ok(())
+}
+
+/// What the typed route lacks goes in a raw DCS task table: here DCS's `Hold`.
+pub async fn ground_hold(ctx: Ctx<Frontline>) -> sortie::Result<()> {
+    // snippet:start skills-logic-ground-raw
+    use sortie::proto::LuaTable;
+    use sortie::proto::LuaValue;
+
+    // DCS's "Hold" task stops the group where it stands; the SDK has no typed stop.
+    let stop = LuaTable::new()
+        .with("id", "Hold")
+        .with("params", LuaTable::new());
+    let armor = ctx.group(groups::RED_ARMOR)?;
+    armor.push_task(Task::raw(LuaValue::table(stop))).await?;
+    // snippet:end skills-logic-ground-raw
+    Ok(())
+}
+
 /// Keys that stay stable when the function runs again: derived from the step, not from time.
 pub async fn keyed_waves(ctx: Ctx<Frontline>) -> sortie::Result<()> {
     // snippet:start skills-logic-keys-loop
@@ -260,6 +293,66 @@ pub async fn state(ctx: Ctx<Frontline>) -> sortie::Result<()> {
     let killed = campaign.get().sams_killed; // a local copy; do not hold `get()` across .await
     ctx.report().set("sams_killed", killed); // MissionResults.report_json, read by `results`
     // snippet:end skills-logic-state
+    Ok(())
+}
+
+/// Documents for the web API (API revision 3).
+pub async fn publish(ctx: Ctx<Frontline>) -> sortie::Result<()> {
+    // snippet:start skills-logic-publish
+    #[derive(Serialize)]
+    struct Front {
+        sam_alive: usize,
+        objective: [f64; 2], // lat, lon: the web API itself serves DCS metres only
+    }
+    // ctx.publish needs #[sortie::mission(api_rev = 3)]; ctx.dcs() is API revision 1.
+    let center = zones::OBJECTIVE.center().alt(m(0.0));
+    let (lat, lon, _alt) = ctx.dcs().coord().lo_to_ll(center).await?;
+    let sam_alive = ctx.world().group(&groups::SAM_NORTH).alive_count();
+    let front = Front {
+        sam_alive,
+        objective: [lat, lon],
+    };
+    let p = ctx.publish("front", &front).await?; // served at GET /api/v1/docs/<logic>/front
+    let _ = p.changed; // false: the engine had this JSON already (same `p.rev`)
+    let _removed = ctx.unpublish("old-front").await?; // false when there was none
+    // snippet:end skills-logic-publish
+    Ok(())
+}
+
+/// Actions of the web API (API revision 3).
+pub async fn actions(ctx: Ctx<Frontline>) -> sortie::Result<()> {
+    // snippet:start skills-logic-action
+    #[derive(Deserialize)]
+    struct Smoke {
+        color: String, // "red" | "green"
+    }
+    #[derive(Serialize)]
+    struct Smoked {
+        smoked: bool,
+    }
+    // ctx.api() needs #[sortie::mission(api_rev = 3)]. A site calls
+    // POST /api/v1/actions/<logic>/smoke_objective {"color": "red"} with an operator token.
+    let mut smoke = ctx.api().action("smoke_objective")?; // declared now, withdrawn on drop
+    ctx.spawn(async move |ctx| {
+        while let Some(req) = smoke.next().await {
+            let color = match req.json::<Smoke>() {
+                Ok(s) if s.color == "red" => SmokeColor::Red,
+                Ok(s) if s.color == "green" => SmokeColor::Green,
+                Ok(_) => {
+                    req.fail(422, "color is red or green")?; // 4xx only
+                    continue;
+                }
+                Err(e) => {
+                    req.fail(400, e)?;
+                    continue;
+                }
+            };
+            ctx.smoke(zones::OBJECTIVE.center(), color).await?;
+            req.reply(&Smoked { smoked: true })?; // HTTP 200 {"smoked":true}; once per request
+        }
+        Ok(())
+    });
+    // snippet:end skills-logic-action
     Ok(())
 }
 

@@ -10,7 +10,7 @@ publish.workspace = true
 
 [features]
 # `#[sortie::test]` (forwarded to sortie-macros). Enabled by FakeDcs (`sortie-fake`), which is
-# not part of SDK 0.1; without it `#[sortie::test]` is a compile error that says so.
+# not part of the public SDK; without it `#[sortie::test]` is a compile error that says so.
 fake-dcs = ["sortie-macros/fake-dcs"]
 # The untyped universal call by string path (`ctx.dcs().call("land.getHeight")`) and
 # `ctx.dcs().batch()`. The typed wrappers of the catalog need no feature.

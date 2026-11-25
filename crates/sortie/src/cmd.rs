@@ -26,6 +26,21 @@ pub use objects::{
 };
 mod batch;
 pub use batch::{BatchItem, BatchOutput, BatchSlot, MAX_BATCH_ITEMS, SpawnBatch, SpawnedBatch};
+mod airbases;
+pub use airbases::{
+    AirbaseControl, AirbaseControlled, AirbaseHandle, AirbasePart, AirbaseRead, AirbaseState,
+    AirbasesControlled, AirbasesRead, ControlState, MAX_AIRBASES, MAX_PARKING_BASES,
+    MAX_READ_BASES, Parking, ParkingSpot, ReadAirbase, ReadAirbases, Runway, Runways, TerminalType,
+};
+mod warehouses;
+pub use warehouses::{
+    Amount, ItemCount, Liquid, Liquids, MAX_STOCK_CHANGES, MAX_STOCK_ITEMS, MAX_STOCK_WAREHOUSES,
+    ReadStock, ReadStocks, StockChanged, StockChanges, StockClass, StockItem, StockOutcome,
+    StockSide, WarehouseHandle, WarehouseItem, WarehouseOp, WarehouseRead, WarehouseStock,
+    WarehousesRead,
+};
+mod item_names;
+pub use item_names::{ItemName, ItemNames, MAX_NAME_LOOKUPS, ReadItemNames};
 
 /// A command body: how to build the proto body and decode the result.
 pub trait CommandBody: Sized + 'static {
@@ -33,7 +48,8 @@ pub trait CommandBody: Sized + 'static {
     /// SDK operation name used in errors, e.g. `"spawn_group"`.
     const OP: &'static str;
     /// Dev mode (`sortie dev`, FakeDcs) refuses this command without `.key()`: hot reload
-    /// re-runs the mission, and only a key stops it from spawning or destroying twice.
+    /// re-runs the mission, and only a key stops it from spawning, destroying or changing stock
+    /// twice.
     const KEY_REQUIRED_IN_DEV: bool = false;
     /// The API revision that introduced this command (0 = 0.1.0).
     const SINCE_API_REV: u32 = 0;
@@ -165,6 +181,7 @@ impl<B: CommandBody> Cmd<B> {
             lua_traceback: None,
             origin: Some(self.origin_string()),
             capability: String::new(),
+            limit: None,
         }
     }
 
@@ -495,7 +512,8 @@ impl CommandBody for GetFlag {
     }
 }
 
-/// `ctx.spawn_group(template)`; place it with `.from_airbase()` or `.at()`.
+/// `ctx.spawn_group(template)`; place it with `.from_airbase()`, `.at()` (one heading for every
+/// unit) or `.at_formation()` (the formation turned as one body, API revision 3).
 #[derive(Clone, Debug)]
 pub struct SpawnGroup<K> {
     template: &'static str,
@@ -512,6 +530,23 @@ impl<K> SpawnGroup<K> {
             placement: None,
             _k: PhantomData,
         }
+    }
+
+    fn place_at(&mut self, position: Vec3, heading_rad: f64, mode: v1::SpawnHeadingMode) {
+        self.placement = Some(v1::spawn_group::Placement::At(v1::SpawnAt {
+            position: Some(position.into()),
+            heading_rad,
+            heading_mode: mode as i32,
+        }));
+    }
+
+    /// Placed with [`Cmd::at_formation`]: the formation turns as one body.
+    fn in_formation(&self) -> bool {
+        matches!(
+            &self.placement,
+            Some(v1::spawn_group::Placement::At(a))
+                if a.heading_mode == v1::SpawnHeadingMode::Formation as i32
+        )
     }
 }
 
@@ -530,12 +565,34 @@ impl<K: Kind> Cmd<SpawnGroup<K>> {
         self
     }
 
-    /// Spawn at `position` (the template's own route is shifted there).
+    /// Spawn with the template's first unit at `position` and **every unit facing the same
+    /// heading**, `heading_rad` (radians, clockwise from north). The other units keep their
+    /// offsets from the first unit as the template has them: moved to `position`, not turned.
+    /// The template's route is not carried over: the group gets one route point at `position`
+    /// (an aircraft flies on at `position.y`). To turn the whole formation and keep each unit's
+    /// heading offset, use [`at_formation`](Self::at_formation).
     pub fn at(mut self, position: Vec3, heading_rad: f64) -> Self {
-        self.body.placement = Some(v1::spawn_group::Placement::At(v1::SpawnAt {
-            position: Some(position.into()),
-            heading_rad,
-        }));
+        self.body
+            .place_at(position, heading_rad, v1::SpawnHeadingMode::Unspecified);
+        self
+    }
+
+    /// Spawn the template's formation turned as one body (API revision 3, 0.4.0): the first
+    /// unit stands at `position`, and the whole formation turns about it by `heading_rad` minus
+    /// the template's reference heading (the facing the template was drawn for: the manifest's
+    /// `Template.heading_rad`, else the first unit's own heading). Each unit's offset from the
+    /// first unit turns by that angle, and each unit faces its template heading plus the same
+    /// angle, so the differences between the units' headings stay as in the template (two
+    /// launchers drawn at -15° and +15° of the reference face `heading_rad` -15° and +15°).
+    /// Headings are radians clockwise from north. As with [`at`](Self::at), the group gets
+    /// one route point at `position`.
+    ///
+    /// A logic that declares an API revision below 3 gets `Error::Revision`, an engine older
+    /// than revision 3 `Error::EngineTooOld`, and nothing is sent. Under a key that already
+    /// ran a `.at(..)` spawn this is another command (`Error::Invalid`): give it a new key.
+    pub fn at_formation(mut self, position: Vec3, heading_rad: f64) -> Self {
+        self.body
+            .place_at(position, heading_rad, v1::SpawnHeadingMode::Formation);
         self
     }
 }
@@ -544,10 +601,20 @@ impl<K: Kind> CommandBody for SpawnGroup<K> {
     type Output = Group<K>;
     const OP: &'static str = "spawn_group";
     const KEY_REQUIRED_IN_DEV: bool = true;
+    /// A formation spawn ([`Cmd::at_formation`]) is API revision 3 (0.4.0); every other
+    /// placement is 0.1.0's.
+    fn since_api_rev(&self) -> u32 {
+        if self.in_formation() { 3 } else { 0 }
+    }
     fn target(&self) -> String {
+        let formation = if self.in_formation() {
+            " (a formation spawn)"
+        } else {
+            ""
+        };
         match &self.name {
-            Some(name) => format!("template `{}` as {name:?}", self.template),
-            None => format!("template `{}`", self.template),
+            Some(name) => format!("template `{}` as {name:?}{formation}", self.template),
+            None => format!("template `{}`{formation}", self.template),
         }
     }
     fn to_proto(&self, _: &Session) -> Result<Body> {
@@ -597,8 +664,20 @@ pub struct SetTask {
 impl CommandBody for SetTask {
     type Output = ();
     const OP: &'static str = "set_task";
+    /// The typed ground route is API revision 3 (ground wave); every other task is 0.1.0's.
+    fn since_api_rev(&self) -> u32 {
+        if matches!(self.task, Task::GroundRoute(_)) {
+            3
+        } else {
+            0
+        }
+    }
     fn target(&self) -> String {
-        format!("group {:?}", self.group_name)
+        if matches!(self.task, Task::GroundRoute(_)) {
+            format!("group {:?} (a ground route)", self.group_name)
+        } else {
+            format!("group {:?}", self.group_name)
+        }
     }
     fn to_proto(&self, _: &Session) -> Result<Body> {
         Ok(Body::SetTask(v1::SetTask {
@@ -767,5 +846,78 @@ mod tests {
         assert_eq!(e.code(), "sortie::engine_too_old");
         assert!(e.to_string().contains("the engine has 0"), "{e}");
         assert_eq!(e.failure().map(|f| f.command_id.as_str()), Some("abcd-p-1"));
+    }
+
+    /// A typed ground route is API revision 3: refused for a logic of revision 2 and against
+    /// an engine of revision 2, before anything is sent; every other task stays 0.1.0's.
+    #[test]
+    fn a_ground_route_is_api_revision_3() {
+        use crate::task::RoutePoint;
+        use sortie_types::MapPoint;
+        let set = |task: Task| SetTask {
+            group: v1::GroupSel::default(),
+            group_name: "Convoy".into(),
+            push: false,
+            task,
+        };
+        let route = set(Task::ground_route([RoutePoint::on_road(MapPoint::new(1.0, 2.0))]).into());
+        assert_eq!(route.since_api_rev(), 3);
+        assert_eq!(route.target(), "group \"Convoy\" (a ground route)");
+        let raw = set(Task::raw(sortie_proto::LuaValue::nil()));
+        assert_eq!(raw.since_api_rev(), 0);
+        assert_eq!(raw.target(), "group \"Convoy\"");
+        let failure = || Failure {
+            op: SetTask::OP,
+            target: route.target(),
+            ..Failure::default()
+        };
+        let e = check_since(2, 3, route.since_api_rev(), failure()).unwrap_err();
+        assert_eq!(e.code(), "sortie::revision");
+        let e = check_since(3, 2, route.since_api_rev(), failure()).unwrap_err();
+        assert_eq!(e.code(), "sortie::engine_too_old");
+        assert!(e.to_string().contains("(a ground route)"), "{e}");
+        assert!(check_since(3, 3, route.since_api_rev(), failure()).is_ok());
+    }
+
+    /// A formation spawn is API revision 3: refused for a logic of revision 2 and against an
+    /// engine of revision 2, before anything is sent. `.at(..)` stays 0.1.0's and sends no mode.
+    #[test]
+    fn a_formation_spawn_is_api_revision_3_and_at_stays_0_1_0s() {
+        use sortie_types::Ground;
+        let p = Vec3::new(-30_000.0, 0.0, 460_000.0);
+        let mut at = SpawnGroup::<Ground>::new("SAM_PAIR", None);
+        at.place_at(p, 1.5, v1::SpawnHeadingMode::Unspecified);
+        let mut formation = SpawnGroup::<Ground>::new("SAM_PAIR", None);
+        formation.place_at(p, 1.5, v1::SpawnHeadingMode::Formation);
+        assert_eq!(at.since_api_rev(), 0);
+        assert_eq!(formation.since_api_rev(), 3);
+        assert_eq!(at.target(), "template `SAM_PAIR`");
+        assert_eq!(
+            formation.target(),
+            "template `SAM_PAIR` (a formation spawn)"
+        );
+        let spawn_at = |g: &SpawnGroup<Ground>| match &g.placement {
+            Some(v1::spawn_group::Placement::At(a)) => *a,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(
+            spawn_at(&formation).heading_mode,
+            v1::SpawnHeadingMode::Formation as i32
+        );
+        // `.at` leaves the mode at its default, which proto3 does not put on the wire: the
+        // 0.3.0 bytes (the engine's codec tests pin the encoding and the key's body hash).
+        assert_eq!(spawn_at(&at).heading_mode, 0);
+        let failure = || Failure {
+            op: "spawn_group",
+            target: formation.target(),
+            ..Failure::default()
+        };
+        let e = check_since(2, 3, formation.since_api_rev(), failure()).unwrap_err();
+        assert_eq!(e.code(), "sortie::revision");
+        let e = check_since(3, 2, formation.since_api_rev(), failure()).unwrap_err();
+        assert_eq!(e.code(), "sortie::engine_too_old");
+        assert!(e.to_string().contains("(a formation spawn)"), "{e}");
+        assert!(check_since(3, 3, formation.since_api_rev(), failure()).is_ok());
+        assert!(check_since(0, 0, at.since_api_rev(), failure()).is_ok());
     }
 }

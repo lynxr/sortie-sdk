@@ -92,6 +92,35 @@ class ErrorCode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     ERROR_CODE_QUARANTINED: _ClassVar[ErrorCode]
     ERROR_CODE_CONFLICT: _ClassVar[ErrorCode]
 
+class LimitKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    LIMIT_KIND_UNSPECIFIED: _ClassVar[LimitKind]
+    LIMIT_KIND_CALL_RATE: _ClassVar[LimitKind]
+    LIMIT_KIND_DCS_TIME: _ClassVar[LimitKind]
+    LIMIT_KIND_BATCH_SIZE: _ClassVar[LimitKind]
+    LIMIT_KIND_REQUEST_SIZE: _ClassVar[LimitKind]
+    LIMIT_KIND_CREATED_HANDLES: _ClassVar[LimitKind]
+    LIMIT_KIND_READ_HANDLES: _ClassVar[LimitKind]
+    LIMIT_KIND_SLOW_CALLS: _ClassVar[LimitKind]
+    LIMIT_KIND_SPAWN_GATE: _ClassVar[LimitKind]
+    LIMIT_KIND_SPAWN_WINDOW: _ClassVar[LimitKind]
+    LIMIT_KIND_TASKING_DELAY: _ClassVar[LimitKind]
+    LIMIT_KIND_HEAVY_SLOT: _ClassVar[LimitKind]
+    LIMIT_KIND_LINK_CREDITS: _ClassVar[LimitKind]
+    LIMIT_KIND_LINK_DOWN: _ClassVar[LimitKind]
+    LIMIT_KIND_AFTER: _ClassVar[LimitKind]
+    LIMIT_KIND_QUEUE: _ClassVar[LimitKind]
+    LIMIT_KIND_BRIDGE_DEADLINE: _ClassVar[LimitKind]
+
+class Liquid(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    LIQUID_UNSPECIFIED: _ClassVar[Liquid]
+    LIQUID_JET_FUEL: _ClassVar[Liquid]
+    LIQUID_AVIATION_GASOLINE: _ClassVar[Liquid]
+    LIQUID_MW50: _ClassVar[Liquid]
+    LIQUID_DIESEL: _ClassVar[Liquid]
+    LIQUID_UNKNOWN: _ClassVar[Liquid]
+
 class Modulation(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     MODULATION_UNSPECIFIED: _ClassVar[Modulation]
@@ -186,6 +215,29 @@ ERROR_CODE_NAME_CONFLICT: ErrorCode
 ERROR_CODE_PAUSED: ErrorCode
 ERROR_CODE_QUARANTINED: ErrorCode
 ERROR_CODE_CONFLICT: ErrorCode
+LIMIT_KIND_UNSPECIFIED: LimitKind
+LIMIT_KIND_CALL_RATE: LimitKind
+LIMIT_KIND_DCS_TIME: LimitKind
+LIMIT_KIND_BATCH_SIZE: LimitKind
+LIMIT_KIND_REQUEST_SIZE: LimitKind
+LIMIT_KIND_CREATED_HANDLES: LimitKind
+LIMIT_KIND_READ_HANDLES: LimitKind
+LIMIT_KIND_SLOW_CALLS: LimitKind
+LIMIT_KIND_SPAWN_GATE: LimitKind
+LIMIT_KIND_SPAWN_WINDOW: LimitKind
+LIMIT_KIND_TASKING_DELAY: LimitKind
+LIMIT_KIND_HEAVY_SLOT: LimitKind
+LIMIT_KIND_LINK_CREDITS: LimitKind
+LIMIT_KIND_LINK_DOWN: LimitKind
+LIMIT_KIND_AFTER: LimitKind
+LIMIT_KIND_QUEUE: LimitKind
+LIMIT_KIND_BRIDGE_DEADLINE: LimitKind
+LIQUID_UNSPECIFIED: Liquid
+LIQUID_JET_FUEL: Liquid
+LIQUID_AVIATION_GASOLINE: Liquid
+LIQUID_MW50: Liquid
+LIQUID_DIESEL: Liquid
+LIQUID_UNKNOWN: Liquid
 MODULATION_UNSPECIFIED: Modulation
 MODULATION_AM: Modulation
 MODULATION_FM: Modulation
@@ -236,16 +288,38 @@ class LatLon(_message.Message):
     def __init__(self, lat: _Optional[float] = ..., lon: _Optional[float] = ...) -> None: ...
 
 class CommandError(_message.Message):
-    __slots__ = ("code", "message", "lua_traceback", "capability")
+    __slots__ = ("code", "message", "lua_traceback", "capability", "limit")
     CODE_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     LUA_TRACEBACK_FIELD_NUMBER: _ClassVar[int]
     CAPABILITY_FIELD_NUMBER: _ClassVar[int]
+    LIMIT_FIELD_NUMBER: _ClassVar[int]
     code: ErrorCode
     message: str
     lua_traceback: str
     capability: str
-    def __init__(self, code: _Optional[_Union[ErrorCode, str]] = ..., message: _Optional[str] = ..., lua_traceback: _Optional[str] = ..., capability: _Optional[str] = ...) -> None: ...
+    limit: Limit
+    def __init__(self, code: _Optional[_Union[ErrorCode, str]] = ..., message: _Optional[str] = ..., lua_traceback: _Optional[str] = ..., capability: _Optional[str] = ..., limit: _Optional[_Union[Limit, _Mapping]] = ...) -> None: ...
+
+class Limit(_message.Message):
+    __slots__ = ("kind", "budget", "writer", "capacity", "per_second", "needed", "available", "retry_after_ms")
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    BUDGET_FIELD_NUMBER: _ClassVar[int]
+    WRITER_FIELD_NUMBER: _ClassVar[int]
+    CAPACITY_FIELD_NUMBER: _ClassVar[int]
+    PER_SECOND_FIELD_NUMBER: _ClassVar[int]
+    NEEDED_FIELD_NUMBER: _ClassVar[int]
+    AVAILABLE_FIELD_NUMBER: _ClassVar[int]
+    RETRY_AFTER_MS_FIELD_NUMBER: _ClassVar[int]
+    kind: LimitKind
+    budget: str
+    writer: str
+    capacity: int
+    per_second: int
+    needed: int
+    available: int
+    retry_after_ms: int
+    def __init__(self, kind: _Optional[_Union[LimitKind, str]] = ..., budget: _Optional[str] = ..., writer: _Optional[str] = ..., capacity: _Optional[int] = ..., per_second: _Optional[int] = ..., needed: _Optional[int] = ..., available: _Optional[int] = ..., retry_after_ms: _Optional[int] = ...) -> None: ...
 
 class LuaValue(_message.Message):
     __slots__ = ("nil", "boolean", "number", "string", "table")
@@ -338,6 +412,26 @@ class WarehouseSel(_message.Message):
     cargo: ObjSel
     dcs_name: str
     def __init__(self, airbase: _Optional[_Union[AirbaseSel, _Mapping]] = ..., cargo: _Optional[_Union[ObjSel, _Mapping]] = ..., dcs_name: _Optional[str] = ...) -> None: ...
+
+class WarehouseItem(_message.Message):
+    __slots__ = ("name", "ws_type")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    WS_TYPE_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    ws_type: WsType
+    def __init__(self, name: _Optional[str] = ..., ws_type: _Optional[_Union[WsType, _Mapping]] = ...) -> None: ...
+
+class WsType(_message.Message):
+    __slots__ = ("level1", "level2", "level3", "level4")
+    LEVEL1_FIELD_NUMBER: _ClassVar[int]
+    LEVEL2_FIELD_NUMBER: _ClassVar[int]
+    LEVEL3_FIELD_NUMBER: _ClassVar[int]
+    LEVEL4_FIELD_NUMBER: _ClassVar[int]
+    level1: int
+    level2: int
+    level3: int
+    level4: int
+    def __init__(self, level1: _Optional[int] = ..., level2: _Optional[int] = ..., level3: _Optional[int] = ..., level4: _Optional[int] = ...) -> None: ...
 
 class ZoneSel(_message.Message):
     __slots__ = ("ident", "name")

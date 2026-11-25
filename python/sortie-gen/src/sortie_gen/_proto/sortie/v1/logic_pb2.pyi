@@ -53,18 +53,22 @@ END_REASON_MISSION_UNLOADED: EndReason
 END_REASON_ENGINE_SHUTDOWN: EndReason
 
 class LogicUp(_message.Message):
-    __slots__ = ("attach", "done", "command", "state", "resync")
+    __slots__ = ("attach", "done", "command", "state", "resync", "actions", "action_reply")
     ATTACH_FIELD_NUMBER: _ClassVar[int]
     DONE_FIELD_NUMBER: _ClassVar[int]
     COMMAND_FIELD_NUMBER: _ClassVar[int]
     STATE_FIELD_NUMBER: _ClassVar[int]
     RESYNC_FIELD_NUMBER: _ClassVar[int]
+    ACTIONS_FIELD_NUMBER: _ClassVar[int]
+    ACTION_REPLY_FIELD_NUMBER: _ClassVar[int]
     attach: Attach
     done: TickDone
     command: _commands_pb2.Command
     state: StateOp
     resync: Resync
-    def __init__(self, attach: _Optional[_Union[Attach, _Mapping]] = ..., done: _Optional[_Union[TickDone, _Mapping]] = ..., command: _Optional[_Union[_commands_pb2.Command, _Mapping]] = ..., state: _Optional[_Union[StateOp, _Mapping]] = ..., resync: _Optional[_Union[Resync, _Mapping]] = ...) -> None: ...
+    actions: ActionSet
+    action_reply: ActionReply
+    def __init__(self, attach: _Optional[_Union[Attach, _Mapping]] = ..., done: _Optional[_Union[TickDone, _Mapping]] = ..., command: _Optional[_Union[_commands_pb2.Command, _Mapping]] = ..., state: _Optional[_Union[StateOp, _Mapping]] = ..., resync: _Optional[_Union[Resync, _Mapping]] = ..., actions: _Optional[_Union[ActionSet, _Mapping]] = ..., action_reply: _Optional[_Union[ActionReply, _Mapping]] = ...) -> None: ...
 
 class Resync(_message.Message):
     __slots__ = ("have_rev", "reason")
@@ -99,7 +103,7 @@ class Attach(_message.Message):
     def __init__(self, logic: _Optional[str] = ..., build_id: _Optional[str] = ..., scenario_schema_sha256: _Optional[bytes] = ..., symbols_used: _Optional[_Iterable[str]] = ..., mode: _Optional[_Union[Mode, str]] = ..., scenario: _Optional[str] = ..., schema: _Optional[int] = ..., event_rev: _Optional[int] = ..., api_rev: _Optional[int] = ..., required_capabilities: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class LogicDown(_message.Message):
-    __slots__ = ("start", "tick", "event", "result", "promote", "shutdown", "ended", "state", "rejected", "resync")
+    __slots__ = ("start", "tick", "event", "result", "promote", "shutdown", "ended", "state", "rejected", "resync", "action")
     START_FIELD_NUMBER: _ClassVar[int]
     TICK_FIELD_NUMBER: _ClassVar[int]
     EVENT_FIELD_NUMBER: _ClassVar[int]
@@ -110,6 +114,7 @@ class LogicDown(_message.Message):
     STATE_FIELD_NUMBER: _ClassVar[int]
     REJECTED_FIELD_NUMBER: _ClassVar[int]
     RESYNC_FIELD_NUMBER: _ClassVar[int]
+    ACTION_FIELD_NUMBER: _ClassVar[int]
     start: Start
     tick: Tick
     event: _events_pb2.Event
@@ -120,7 +125,8 @@ class LogicDown(_message.Message):
     state: StateResult
     rejected: AttachRejected
     resync: _world_pb2.WorldSnapshot
-    def __init__(self, start: _Optional[_Union[Start, _Mapping]] = ..., tick: _Optional[_Union[Tick, _Mapping]] = ..., event: _Optional[_Union[_events_pb2.Event, _Mapping]] = ..., result: _Optional[_Union[_commands_pb2.CommandResult, _Mapping]] = ..., promote: _Optional[_Union[Promote, _Mapping]] = ..., shutdown: _Optional[_Union[Shutdown, _Mapping]] = ..., ended: _Optional[_Union[SessionEnded, _Mapping]] = ..., state: _Optional[_Union[StateResult, _Mapping]] = ..., rejected: _Optional[_Union[AttachRejected, _Mapping]] = ..., resync: _Optional[_Union[_world_pb2.WorldSnapshot, _Mapping]] = ...) -> None: ...
+    action: ActionCall
+    def __init__(self, start: _Optional[_Union[Start, _Mapping]] = ..., tick: _Optional[_Union[Tick, _Mapping]] = ..., event: _Optional[_Union[_events_pb2.Event, _Mapping]] = ..., result: _Optional[_Union[_commands_pb2.CommandResult, _Mapping]] = ..., promote: _Optional[_Union[Promote, _Mapping]] = ..., shutdown: _Optional[_Union[Shutdown, _Mapping]] = ..., ended: _Optional[_Union[SessionEnded, _Mapping]] = ..., state: _Optional[_Union[StateResult, _Mapping]] = ..., rejected: _Optional[_Union[AttachRejected, _Mapping]] = ..., resync: _Optional[_Union[_world_pb2.WorldSnapshot, _Mapping]] = ..., action: _Optional[_Union[ActionCall, _Mapping]] = ...) -> None: ...
 
 class Start(_message.Message):
     __slots__ = ("session", "kind", "manifest", "snapshot", "turn", "model_time", "capabilities", "api_rev", "event_rev", "writer")
@@ -199,7 +205,7 @@ class AttachRejected(_message.Message):
     def __init__(self, code: _Optional[_Union[_common_pb2.ErrorCode, str]] = ..., message: _Optional[str] = ..., missing_symbols: _Optional[_Iterable[str]] = ..., missing_capabilities: _Optional[_Iterable[_Union[_common_pb2.Capability, _Mapping]]] = ...) -> None: ...
 
 class StateOp(_message.Message):
-    __slots__ = ("id", "get", "put", "once_check", "once_mark", "timer_arm", "report_set")
+    __slots__ = ("id", "get", "put", "once_check", "once_mark", "timer_arm", "report_set", "publish", "unpublish")
     ID_FIELD_NUMBER: _ClassVar[int]
     GET_FIELD_NUMBER: _ClassVar[int]
     PUT_FIELD_NUMBER: _ClassVar[int]
@@ -207,6 +213,8 @@ class StateOp(_message.Message):
     ONCE_MARK_FIELD_NUMBER: _ClassVar[int]
     TIMER_ARM_FIELD_NUMBER: _ClassVar[int]
     REPORT_SET_FIELD_NUMBER: _ClassVar[int]
+    PUBLISH_FIELD_NUMBER: _ClassVar[int]
+    UNPUBLISH_FIELD_NUMBER: _ClassVar[int]
     id: int
     get: StateGet
     put: StatePut
@@ -214,7 +222,77 @@ class StateOp(_message.Message):
     once_mark: OnceMark
     timer_arm: TimerArm
     report_set: ReportSet
-    def __init__(self, id: _Optional[int] = ..., get: _Optional[_Union[StateGet, _Mapping]] = ..., put: _Optional[_Union[StatePut, _Mapping]] = ..., once_check: _Optional[_Union[OnceCheck, _Mapping]] = ..., once_mark: _Optional[_Union[OnceMark, _Mapping]] = ..., timer_arm: _Optional[_Union[TimerArm, _Mapping]] = ..., report_set: _Optional[_Union[ReportSet, _Mapping]] = ...) -> None: ...
+    publish: PublishDoc
+    unpublish: UnpublishDoc
+    def __init__(self, id: _Optional[int] = ..., get: _Optional[_Union[StateGet, _Mapping]] = ..., put: _Optional[_Union[StatePut, _Mapping]] = ..., once_check: _Optional[_Union[OnceCheck, _Mapping]] = ..., once_mark: _Optional[_Union[OnceMark, _Mapping]] = ..., timer_arm: _Optional[_Union[TimerArm, _Mapping]] = ..., report_set: _Optional[_Union[ReportSet, _Mapping]] = ..., publish: _Optional[_Union[PublishDoc, _Mapping]] = ..., unpublish: _Optional[_Union[UnpublishDoc, _Mapping]] = ...) -> None: ...
+
+class PublishDoc(_message.Message):
+    __slots__ = ("name", "json")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    JSON_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    json: bytes
+    def __init__(self, name: _Optional[str] = ..., json: _Optional[bytes] = ...) -> None: ...
+
+class UnpublishDoc(_message.Message):
+    __slots__ = ("name",)
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    def __init__(self, name: _Optional[str] = ...) -> None: ...
+
+class PublishedDoc(_message.Message):
+    __slots__ = ("logic", "name", "rev", "updated_unix_ms", "changed")
+    LOGIC_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    REV_FIELD_NUMBER: _ClassVar[int]
+    UPDATED_UNIX_MS_FIELD_NUMBER: _ClassVar[int]
+    CHANGED_FIELD_NUMBER: _ClassVar[int]
+    logic: str
+    name: str
+    rev: int
+    updated_unix_ms: int
+    changed: bool
+    def __init__(self, logic: _Optional[str] = ..., name: _Optional[str] = ..., rev: _Optional[int] = ..., updated_unix_ms: _Optional[int] = ..., changed: _Optional[bool] = ...) -> None: ...
+
+class ActionSet(_message.Message):
+    __slots__ = ("names",)
+    NAMES_FIELD_NUMBER: _ClassVar[int]
+    names: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, names: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class ActionCall(_message.Message):
+    __slots__ = ("id", "name", "json", "token", "role")
+    ID_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    JSON_FIELD_NUMBER: _ClassVar[int]
+    TOKEN_FIELD_NUMBER: _ClassVar[int]
+    ROLE_FIELD_NUMBER: _ClassVar[int]
+    id: int
+    name: str
+    json: bytes
+    token: str
+    role: str
+    def __init__(self, id: _Optional[int] = ..., name: _Optional[str] = ..., json: _Optional[bytes] = ..., token: _Optional[str] = ..., role: _Optional[str] = ...) -> None: ...
+
+class ActionReply(_message.Message):
+    __slots__ = ("id", "json", "refused", "unanswered")
+    ID_FIELD_NUMBER: _ClassVar[int]
+    JSON_FIELD_NUMBER: _ClassVar[int]
+    REFUSED_FIELD_NUMBER: _ClassVar[int]
+    UNANSWERED_FIELD_NUMBER: _ClassVar[int]
+    id: int
+    json: bytes
+    refused: ActionRefusal
+    unanswered: str
+    def __init__(self, id: _Optional[int] = ..., json: _Optional[bytes] = ..., refused: _Optional[_Union[ActionRefusal, _Mapping]] = ..., unanswered: _Optional[str] = ...) -> None: ...
+
+class ActionRefusal(_message.Message):
+    __slots__ = ("status", "message")
+    STATUS_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    status: int
+    message: str
+    def __init__(self, status: _Optional[int] = ..., message: _Optional[str] = ...) -> None: ...
 
 class StateGet(_message.Message):
     __slots__ = ("scope", "name")
@@ -269,20 +347,22 @@ class ReportSet(_message.Message):
     def __init__(self, key: _Optional[str] = ..., value_json: _Optional[str] = ...) -> None: ...
 
 class StateResult(_message.Message):
-    __slots__ = ("id", "doc", "once", "timer", "ack", "err")
+    __slots__ = ("id", "doc", "once", "timer", "ack", "published", "err")
     ID_FIELD_NUMBER: _ClassVar[int]
     DOC_FIELD_NUMBER: _ClassVar[int]
     ONCE_FIELD_NUMBER: _ClassVar[int]
     TIMER_FIELD_NUMBER: _ClassVar[int]
     ACK_FIELD_NUMBER: _ClassVar[int]
+    PUBLISHED_FIELD_NUMBER: _ClassVar[int]
     ERR_FIELD_NUMBER: _ClassVar[int]
     id: int
     doc: _state_pb2.StateDoc
     once: OnceStatus
     timer: TimerStatus
     ack: StateAck
+    published: PublishedDoc
     err: _common_pb2.CommandError
-    def __init__(self, id: _Optional[int] = ..., doc: _Optional[_Union[_state_pb2.StateDoc, _Mapping]] = ..., once: _Optional[_Union[OnceStatus, _Mapping]] = ..., timer: _Optional[_Union[TimerStatus, _Mapping]] = ..., ack: _Optional[_Union[StateAck, _Mapping]] = ..., err: _Optional[_Union[_common_pb2.CommandError, _Mapping]] = ...) -> None: ...
+    def __init__(self, id: _Optional[int] = ..., doc: _Optional[_Union[_state_pb2.StateDoc, _Mapping]] = ..., once: _Optional[_Union[OnceStatus, _Mapping]] = ..., timer: _Optional[_Union[TimerStatus, _Mapping]] = ..., ack: _Optional[_Union[StateAck, _Mapping]] = ..., published: _Optional[_Union[PublishedDoc, _Mapping]] = ..., err: _Optional[_Union[_common_pb2.CommandError, _Mapping]] = ...) -> None: ...
 
 class OnceStatus(_message.Message):
     __slots__ = ("done",)

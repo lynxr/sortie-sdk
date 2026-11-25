@@ -268,3 +268,54 @@ proptest! {
         prop_assert_eq!(again, j);
     }
 }
+
+/// `CommandError` as SDK 0.1.0 - 0.3.0 read it: fields 1 to 4, no `limit` (field 5, 0.4.0).
+#[derive(Clone, PartialEq, prost::Message)]
+struct CommandErrorBefore040 {
+    #[prost(enumeration = "v1::ErrorCode", tag = "1")]
+    code: i32,
+    #[prost(string, tag = "2")]
+    message: String,
+    #[prost(string, tag = "3")]
+    lua_traceback: String,
+    #[prost(string, tag = "4")]
+    capability: String,
+}
+
+/// 0.4.0 adds `CommandError.limit`: a client that reads only the fields of 0.3.0 gets the same
+/// code, message and capability from a refusal that carries a limit, and an error of an engine
+/// before 0.4.0 reads as one without a limit.
+#[test]
+fn a_command_error_with_a_limit_reads_as_before_for_a_0_3_0_client() {
+    let new = v1::CommandError {
+        code: v1::ErrorCode::Rejected as i32,
+        message: "rate limit: `w` may make 200 read calls per second".into(),
+        lua_traceback: String::new(),
+        capability: "call:mission:Spot.createLaser".into(),
+        limit: Some(Box::new(v1::Limit {
+            kind: v1::LimitKind::CallRate as i32,
+            budget: "call_rate.read".into(),
+            writer: "w".into(),
+            capacity: 200,
+            per_second: 200,
+            needed: 200,
+            available: -56,
+            retry_after_ms: 1280,
+        })),
+    };
+    round_trip(&new);
+    let old = CommandErrorBefore040::decode(new.encode_to_vec().as_slice()).unwrap();
+    assert_eq!(
+        old,
+        CommandErrorBefore040 {
+            code: v1::ErrorCode::Rejected as i32,
+            message: new.message.clone(),
+            lua_traceback: String::new(),
+            capability: "call:mission:Spot.createLaser".into(),
+        }
+    );
+    let from_old = v1::CommandError::decode(old.encode_to_vec().as_slice()).unwrap();
+    assert_eq!(from_old.limit, None);
+    assert_eq!(from_old.capability, new.capability);
+    assert_eq!(from_old.code, new.code);
+}

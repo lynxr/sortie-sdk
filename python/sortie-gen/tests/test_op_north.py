@@ -143,6 +143,16 @@ def test_template_carries_its_dcs_group_but_is_not_in_the_miz(op_north_build, mi
     assert "Red CAP" not in names
 
 
+def test_template_carries_its_reference_heading(op_north_build):
+    """0.4.0: the facing the formation was drawn for, which SpawnGroup.at_formation turns from
+    (the leader's heading: pydcs draws an aircraft group around it). A set 0.0 is present."""
+    t = op_north_build.manifest.templates[0]
+    assert t.HasField("heading_rad")
+    assert t.heading_rad == t.units[0].heading_rad
+    group = json.loads(t.dcs_group_json)
+    assert math.isclose(t.heading_rad, group["units"][0]["heading"], abs_tol=1e-12)
+
+
 def test_miz_has_the_bootstrap_trigger(op_north_build, mission):
     scripts = mizmod.start_scripts(mission)
     assert [c for c, _ in scripts].count(mizmod.BOOTSTRAP_COMMENT) == 1

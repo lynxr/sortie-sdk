@@ -1,7 +1,7 @@
 # Agent instructions: a Sortie mission repository
 
-This repository is one DCS World mission built on the Sortie SDK 0.3.0
-(`https://github.com/lynxr/sortie-sdk`, tag `v0.3.0`). It has two halves:
+This repository is one DCS World mission built on the Sortie SDK 0.4.0
+(`https://github.com/lynxr/sortie-sdk`, tag `v0.4.0`). It has two halves:
 
 - `scenario.py`: the static mission in Python (sortie-gen over pydcs). It builds the `.miz`,
   its manifest and `scenario.lock.json`, the list of symbols the logic may use.
@@ -46,25 +46,39 @@ uv run python scenario.py watch               # live events; `results` after the
 
 ## Rules
 
-1. **Symbols come from the scenario.** A new group, zone, template, flag, airbase or menu for
+1. **Game logic lives in the Rust logic, never in the `.miz`.** The `.miz` that `scenario.py`
+   builds holds the map side only (groups, units, statics, zones, weather, briefing, the
+   warehouses' starting stock) and Sortie's own bootstrap. Everything that happens in the
+   mission (what happens when, spawns, tasks, scoring, menus, marks, stock changes) is Rust.
+   When the SDK lacks something, in this order: a typed command or query; a catalog call
+   (its generated wrapper such as `ctx.dcs().land().height(p)`; by path, `ctx.dcs().call(..)`,
+   and a batch of many calls in one frame, `ctx.dcs().batch()`, with the cargo feature
+   `dcs-raw`); a raw DCS task table with `Task::raw(..)` (any group, for what the typed tasks
+   lack; a ground group's route is the typed `Task::ground_route(..)`); then tell the Sortie
+   team what is missing. A DO SCRIPT in a `@sc.pydcs` hook is only for a third-party script the mission
+   must keep (Sortie does not check it), never for the mission's logic: the template's
+   `scenario.py` sets `do_scripts="deny"`, so the build fails when a hook puts Lua in the
+   `.miz` (an init script, a DO SCRIPT or DO SCRIPT FILE, a LUA PREDICATE). Lua in a group's
+   waypoint tasks is not checked, and is no place for logic either.
+2. **Symbols come from the scenario.** A new group, zone, template, flag, airbase or menu for
    the logic: add it with `ident=` in `scenario.py`, run `lock`, then `cargo build`. A logic
    built from another lock is refused by the running mission.
-2. **Key commands by step.** `spawn_group` and `destroy` always get `.key("step-name")` (they
+3. **Key commands by step.** `spawn_group` and `destroy` always get `.key("step-name")` (they
    are refused without one under `--dev`); so does any command a replay must not repeat. A key
    is stable across runs (a literal or a deterministic counter) and belongs to one command.
-3. **The mission function replays.** After a restart of the logic process it runs again from
+4. **The mission function replays.** After a restart of the logic process it runs again from
    the top in the same session. Wait on world state (`ctx.wait_until`), delay with named
    timers (`ctx.timer`), run one-time steps in `ctx.once` and campaign changes in
    `ctx.once_per_turn`.
-4. **One thread, short borrows.** No blocking calls; background work through `ctx.spawn`;
+5. **One thread, short borrows.** No blocking calls; background work through `ctx.spawn`;
    `ctx.world()` and `StateDoc::get()` are dropped before the next `.await`.
-5. **No tests without DCS in SDK 0.3.0.** FakeDcs and `#[sortie::test]` arrive in
-   SDK 0.2 (`#[sortie::test]` is a compile error until then). Unit-test plain functions with
+6. **No tests without DCS in the public SDK.** FakeDcs carries the engine and is not part of
+   the SDK yet, so `#[sortie::test]` is a compile error. Unit-test plain functions with
    `#[test]`; test the mission in DCS with `sortied --dev`.
-6. **The `.miz` comes from `scenario.py`.** Change groups, units and zones there, not in the
-   Mission Editor. A DO SCRIPT added in a `@sc.pydcs` hook uses
+7. **The `.miz` comes from `scenario.py`.** Change groups, units and zones there, not in the
+   Mission Editor. A third-party DO SCRIPT a `@sc.pydcs` hook adds (rule 1) uses
    `sortie_gen.miz.InlineDoScript`; a built `.miz` is never loaded and saved again with pydcs.
-7. **Multiplayer slots:** a player flight starts at an airfield of its own coalition
+8. **Multiplayer slots:** a player flight starts at an airfield of its own coalition
    (`player_flight` sets the owner; a hook that adds client groups must do it too).
 
 ## Docs and skills
@@ -72,7 +86,7 @@ uv run python scenario.py watch               # live events; `results` after the
 - Skills, one per task: `sortie-mission-logic` (the Rust logic), `sortie-scenario`
   (`scenario.py` and its commands), `sortie-live-debugging` (install, logs, failures in DCS).
   They are in the `agents/` folder of the SDK repository and in
-  [the skills zip](sortie-agent-skills-0.3.0.zip); online:
+  [the skills zip](sortie-agent-skills-0.4.0.zip); online:
   [mission logic](sortie-mission-logic/SKILL.html),
   [scenario](sortie-scenario/SKILL.html),
   [live debugging](sortie-live-debugging/SKILL.html).

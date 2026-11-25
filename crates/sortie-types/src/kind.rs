@@ -19,6 +19,12 @@ pub trait Kind: sealed::Sealed + Copy + Default + Debug + Send + Sync + 'static 
 }
 
 /// Kinds that fly (can take CAP/orbit/RTB tasks).
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` groups do not fly: CAP and orbit are tasks for aircraft and helicopters",
+    label = "a task for aircraft",
+    note = "a ground group takes a route, `Task::ground_route(..)`, or a raw DCS task table, \
+            `Task::raw(..)`; a naval group takes a raw DCS task table"
+)]
 pub trait Flying: Kind {}
 
 macro_rules! kinds {

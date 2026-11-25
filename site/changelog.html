@@ -24,7 +24,7 @@
 <a class="skip" href="#content">Перейти к содержанию</a>
 <header class="topbar">
 <div class="topbar-inner">
-<a class="brand" href="index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.3.0</span></a>
+<a class="brand" href="index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.4.0</span></a>
 <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
 <nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="docs/quickstart.html">Быстрый старт</a><a href="docs/index.html">Документация</a><a href="agents.html">Для агентов</a><a href="downloads.html">Загрузки</a><a href="changelog.html" aria-current="page">Изменения</a></nav>
 <div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
@@ -37,9 +37,713 @@
 <p>Формат — <a href="https://keepachangelog.com/ru/1.1.0/">Keep a Changelog</a>, версии — по
 <a href="https://semver.org/lang/ru/">SemVer</a>. До 1.0 API может меняться между минорными версиями; каждое
 такое изменение описано здесь.</p>
+<h2 id="unreleased">[Unreleased]<a class="anchor" href="#unreleased" aria-label="Ссылка на этот раздел">#</a></h2>
+<h2 id="040--2026-11-25">[0.4.0] — 2026-11-25<a class="anchor" href="#040--2026-11-25" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Ревизия API 3 и ревизия событий 2. Логика ревизий 0, 1 и 2 работает с этим движком; новым
+операциям нужен <code>#[sortie::mission(api_rev = 3)]</code>, событию <code>AirbaseOwnerChanged</code> — ещё и
+<code>event_rev = 2</code>. Что изменилось в поведении для любой логики и где нужна правка кода — в
+«Совместимости». Главное: метки F10 больше не останавливают часы сессии и таймеры; пока в сессии
+нет игроков, спавн идёт в темпе моста, а не 2 группы в секунду; время DCS оплачивают два бюджета
+писателя (чтения и тяжёлые вызовы), и отказ по лимиту называет лимит и когда повторить. Ещё —
+Web API движка, аэродромы и склады второй волны широкого API, задачи и маршрут наземных групп.
+Остальное из второй волны (состояние юнитов, обнаружение, слежение Watch, поздняя активация,
+правила слотов и другое) — в 0.5.0. В живой DCS ничего из этого ещё не проверялось.</p>
+<h3 id="добавлено">Добавлено<a class="anchor" href="#добавлено" aria-label="Ссылка на этот раздел">#</a></h3>
+<ul>
+<li>
+<p>Web API: движок отдаёт HTTP/JSON для сайта сервера и сторонних приложений (страница
+<a href="docs/web-api.html">Web API</a>). Выключен, пока владелец не задаст адрес в <code>engine.toml</code>:
+<code>[http] listen = "127.0.0.1:50780"</code>, там же <code>cors_origins</code>, <code>max_body_bytes</code>,
+<code>actions_per_s</code>. Чтение из зеркала мира, без DCS и без логики: <code>GET /api/v1/session</code>
+(сессия, миссия и сборка, модельное время, пауза, связи, версии), <code>GET /api/v1/world</code> (юниты,
+группы, статики, аэродромы; фильтры <code>coalition</code> и <code>category</code>), <code>GET /api/v1/world/units/{eid}</code>,
+<code>GET /api/v1/players</code> (игроки и их юниты, без UCID), <code>GET /api/v1/events</code> (Server-Sent Events:
+бои, взлёты и посадки, игроки, пауза; id события — <code>&lt;session&gt;:&lt;seq&gt;</code>, переподключение с
+<code>Last-Event-ID</code> продолжает из журнала движка, а что журнал уже не держит, называет <code>gap</code>).
+JSON — собственные стабильные формы (snake_case, коалиция <code>"red"</code> / <code>"blue"</code> / <code>"neutral"</code>,
+точки <code>{x, y, z}</code> в метрах DCS), ошибки — <code>{"error": {"code", "message"}}</code> с HTTP-статусом.</p>
+</li>
+<li>
+<p>Каждый запрос Web API несёт <code>Authorization: Bearer &lt;токен&gt;</code> из <code>tokens.toml</code>, как gRPC;
+читает любая роль. Токен нужен всегда, и с <code>sortied --dev</code> тоже: <code>--dev</code> пускает локальные
+программы без токена только в gRPC, потому что по HTTP программу на той же машине не отличить
+от страницы в её браузере или от обратного прокси. Если <code>[http]</code> включён, а в <code>tokens.toml</code> нет
+ни одного токена, <code>sortied</code> предупреждает при старте, что Web API откажет в каждом запросе.</p>
+</li>
+<li>
+<p>Роль токена <code>operator</code>: читает и вызывает действия логики через Web API, в gRPC — только
+чтение.</p>
+</li>
+<li>
+<p>Документы логики для сайта (ревизия API 3, страница
+<a href="docs/web-api.html#%D0%B4%D0%BE%D0%BA%D1%83%D0%BC%D0%B5%D0%BD%D1%82%D1%8B-%D0%BB%D0%BE%D0%B3%D0%B8%D0%BA%D0%B8">Web API</a>): <code>ctx.publish("front", &amp;значение)</code> пишет любое
+<code>Serialize</code> в JSON и завершается, когда движок сохранил документ
+(<code>sortie::publish::Published { rev, updated_unix_ms, changed }</code>; те же байты ещё раз ничего не
+меняют, <code>changed == false</code>), <code>ctx.unpublish(имя)</code> убирает документ и отвечает, был ли он. Документ принадлежит логике (её
+имени), а не сессии: он переживает конец сессии, перезапуск логики и движка (лежит в
+<code>sortie.db</code>). Движок отдаёт документы сам, не трогая ни логику, ни DCS:
+<code>GET /api/v1/docs</code> (список: <code>logic</code>, <code>name</code>, <code>rev</code>, <code>updated_unix_ms</code>),
+<code>GET /api/v1/docs/{logic}/{name}</code> (JSON как есть, <code>ETag</code> — <code>"&lt;эпоха&gt;-&lt;rev&gt;"</code>, <code>304</code> на
+<code>If-None-Match</code>; эпоха — случайная метка базы движка, так что после перезапуска движка без базы
+старый <code>ETag</code> не совпадёт с новым содержимым), <code>GET /api/v1/docs/{logic}/{name}/events</code>
+(Server-Sent Events: документ сейчас и после каждого изменения, id — <code>&lt;эпоха&gt;-&lt;rev&gt;</code>,
+<code>unpublished</code>, когда его нет). Правила: имя — 1–64 байта
+<code>a-z0-9_-</code>, документ — до 256 КиБ JSON, у логики — до 64 документов; иначе <code>Error::Invalid</code>.
+Протокол: <code>StateOp.publish</code> (<code>PublishDoc</code>), <code>StateOp.unpublish</code> (<code>UnpublishDoc</code>), ответ
+<code>StateResult.published</code> (<code>PublishedDoc</code>).</p>
+</li>
+<li>
+<p>Действия логики для сайта (ревизия API 3, страница
+<a href="docs/web-api.html#%D0%B4%D0%B5%D0%B9%D1%81%D1%82%D0%B2%D0%B8%D1%8F-%D0%BB%D0%BE%D0%B3%D0%B8%D0%BA%D0%B8">Web API</a>): <code>ctx.api().action("send_cap")?</code> объявляет
+действие и возвращает поток его запросов (<code>sortie::api::ActionRequests</code>, <code>next().await</code>).
+Сайт или стороннее приложение с токеном роли <code>operator</code> (или <code>admin</code>) вызывает его
+<code>POST /api/v1/actions/{logic}/{action}</code> с JSON в теле; движок передаёт запрос логике по её
+потоку, и её ответ становится ответом: <code>req.reply(&amp;значение)</code> — 200 с JSON (до 1 МиБ),
+<code>req.fail(статус, текст)</code> — 400–499, <code>code</code> <code>refused</code>; запрос, брошенный без ответа, SDK
+отвечает 500 <code>unanswered</code>. У запроса — <code>req.json::&lt;T&gt;()</code>, <code>req.body()</code>, имя токена
+<code>req.token()</code> и роль <code>req.role()</code>. Движок ждёт ответа 10 секунд
+(<code>sortie::api::ACTION_TIMEOUT</code>; потом 504 <code>timeout</code>), и запрос, который столько пролежал в
+очереди логики, SDK ей уже не отдаёт, а отвечает <code>unanswered</code> сам. Движок отвечает 404 на
+действие, которого никто не объявлял, 503 <code>unavailable</code>, пока логика не подключена или не
+объявила его в этой сессии, 429 <code>rate_limited</code> сверх <code>[http] actions_per_s</code> вызовов токена
+(считает сам токен, не имя; с <code>Retry-After</code>), 413 сверх <code>max_body_bytes</code>, 400 на тело не в
+JSON; <code>GET /api/v1/actions</code> — что объявлено сейчас. Каждый вызов пишется в журнал движка (токен, логика, действие, статус,
+время; без тела). Объявления живут, пока жив поток и идёт сессия; после перезапуска логики
+функция миссии объявляет их снова. Правила: имя — 1–64 байта <code>a-z0-9_-</code>, до 64 действий, у
+действия один поток; иначе <code>Error::Invalid</code>. Протокол: <code>LogicUp.actions</code> (<code>ActionSet</code>),
+<code>LogicDown.action</code> (<code>ActionCall</code>), <code>LogicUp.action_reply</code> (<code>ActionReply</code>, <code>ActionRefusal</code>).</p>
+</li>
+<li>
+<p>Аэродромы (ревизия API 3, страница <a href="docs/airbases.html">Аэродромы</a>):
+<code>ctx.airbase_control([airbases::X, ..]).owner(Coalition::Red).auto_capture(false) .radio_silent(true)</code> меняет у 1–32 аэродромов владельца, автозахват DCS и радиомолчание за
+один кадр DCS (сначала автозахват, потом владелец, потом радио) и читает каждую базу обратно;
+больше баз — несколько команд (<code>sortie::cmd::MAX_AIRBASES</code> = 32: около 11 вызовов DCS на
+базу в одном кадре, стоимость ещё не измерена).
+Результат <code>sortie::cmd::AirbasesControlled { bases }</code>: по одной <code>AirbaseControlled { eid, name, before, after }</code> на базу, <code>before</code> / <code>after</code> — <code>AirbaseState { owner, auto_capture, radio_silent }</code>, своя ошибка базы — <code>error()</code> (<code>Error::Gone</code>, <code>Error::Lua</code>), остальные базы
+выполняются. Новый владелец сразу в <code>ctx.world()</code>, и захват, который DCS подняла раньше
+команды, но движок получил после её ответа, его не откатывает (движок сравнивает их место в
+порядке событий DCS). Движок проверяет весь список до отправки: базы нет в мире, база
+дважды, пустой список или длиннее 32, нечего
+менять — <code>Error::Invalid</code> с её именем, в DCS ничего не уходит. Ключ — как у любой меняющей
+команды. Возможность <code>caps::AIRBASE_CONTROL</code> включена по умолчанию; живая проверка <code>AWC-T20</code>
+(ещё не измерена). FakeDcs: <code>airbase_auto_capture(имя)</code>, <code>airbase_radio_silent(имя)</code>; сырые
+<code>Airbase.autoCapture</code>, <code>setRadioSilentMode</code> и их чтения работают с тем же состоянием.
+Протокол: <code>Command.body.airbase_control = 36</code> (<code>AirbaseControl</code>), <code>Reply.airbase_control = 11</code>
+(<code>AirbasesControlled</code>, <code>AirbaseControlResult</code>, <code>AirbaseControlState</code>); операция слоя Lua
+<code>airbase_control</code>.</p>
+</li>
+<li>
+<p>Событие смены владельца аэродрома (ревизия событий 2, страница
+<a href="docs/airbases.html#%D1%81%D0%BC%D0%B5%D0%BD%D0%B0-%D0%B2%D0%BB%D0%B0%D0%B4%D0%B5%D0%BB%D1%8C%D1%86%D0%B0-%D1%81%D0%BE%D0%B1%D1%8B%D1%82%D0%B8%D0%B5">Аэродромы</a>):
+<code>ctx.events().of::&lt;v1::AirbaseOwnerChanged&gt;()</code> — ровно одно событие на каждую смену владельца
+в мире движка, что бы о ней ни сообщило: <code>cause</code> — <code>Captured</code> (DCS подняла
+<code>S_EVENT_BASE_CAPTURED</code>; сразу после её <code>BaseCaptured</code>), <code>Control</code> (<code>ctx.airbase_control</code>;
+раньше ответа команды), <code>Discovered</code> (снимок мира после разрыва связи или потери событий
+или запрос состояния нашёл другого владельца). Поля <code>airbase</code> (база после смены),
+<code>previous</code> (прежний владелец, <code>Unspecified</code> — не знал), <code>owner</code>. Сообщение о том, что мир
+уже знает, второго события не даёт; захват, который DCS подняла раньше чтения базы, а движок
+получил позже его ответа, тоже (только его <code>BaseCaptured</code>); первый снимок сессии ничего не
+публикует. Мир знает нового владельца, когда событие пришло. Владельца, которого другой
+скрипт сменил без события, мир узнаёт только при чтении: логика, которой это нужно,
+опрашивает <code>ctx.airbases_state(..)</code>. Фильтры <code>.airbase(..)</code>, <code>.cause(..)</code>, <code>.coalition(..)</code> (новый владелец). То же
+событие — в <code>GET /api/v1/events</code> как <code>airbase_owner_changed</code>. FakeDcs:
+<code>capture_airbase(имя, коалиция)</code> (захват, как его сообщает DCS),
+<code>set_airbase_coalition_silently(имя, коалиция)</code> (без события), <code>lose_events(n)</code> (движок
+снимает мир заново), <code>hold_events()</code> / <code>release_events()</code> (события DCS ждут в очереди
+моста, ответы команд уходят сразу). Живая проверка <code>AWC-T21</code> (ещё не измерена). Протокол:
+<code>Event.kind.airbase_owner_changed = 55</code> (<code>AirbaseOwnerChanged</code>, <code>OwnerChangeCause</code>),
+<code>EVENT_KIND_AIRBASE_OWNER_CHANGED = 41</code>.</p>
+</li>
+<li>
+<p>Запросы аэродромов (ревизия API 3, страница
+<a href="docs/airbases.html#%D1%81%D1%82%D0%BE%D1%8F%D0%BD%D0%BA%D0%B8-%D0%BF%D0%BE%D0%BB%D0%BE%D1%81%D1%8B-%D0%B8-%D1%81%D0%BE%D1%81%D1%82%D0%BE%D1%8F%D0%BD%D0%B8%D0%B5-%D0%B7%D0%B0%D0%BF%D1%80%D0%BE%D1%81%D1%8B">Аэродромы</a>): стоянки, полосы и
+состояние, ничего не меняют в DCS и не требуют ключа. Одна база —
+<code>ctx.airbase(sel).parking()</code> (<code>.available_only()</code> — только свободные) -&gt; <code>Vec&lt;ParkingSpot&gt;</code>,
+<code>.runways()</code> -&gt; <code>Vec&lt;Runway&gt;</code>, <code>.state()</code> -&gt; <code>AirbaseState</code>; много баз одним запросом —
+<code>ctx.airbases_parking(..)</code> (до 16), <code>ctx.airbases_runways(..)</code> и <code>ctx.airbases_state(..)</code> (до
+256) -&gt; <code>AirbasesRead { bases }</code>, по одной <code>AirbaseRead { eid, name, value }</code> на базу, своя
+ошибка базы — <code>error()</code> (<code>Error::Gone</code>, <code>Error::Lua</code>, <code>Error::Rejected</code>), остальные базы
+отвечают. <code>ParkingSpot { term_index, terminal, point, taken, taken_by, taken_by_name, dist_to_runway, to_ac, term_index_0 }</code>: тип стоянки по имени (<code>TerminalType</code>, неизвестное
+число — <code>TerminalType::Unknown("unknown(&lt;n&gt;)")</code>), занята ли (нет среди свободных DCS) и кем
+(Eid мира, если DCS назвала объект). <code>Runway { name, course, length, width, center }</code>, <code>course</code>
+— в радианах, как отдаёт DCS, <code>heading_deg()</code> — курс в градусах по документации DCS.
+Владелец, которого DCS прочитала иначе, чем знает мир, сразу в <code>ctx.world()</code> и даёт одно
+<code>AirbaseOwnerChanged</code> с причиной <code>Discovered</code> (если только движок уже не получил захват,
+который DCS подняла после чтения). Слой читает по частям, чтобы большой список не
+останавливал игру: состояние и полосы по 32 базы за кадр, стоянки около 300 за кадр
+(<code>sortie::cmd::MAX_READ_BASES</code> = 256 для полос и состояния). Возможности
+<code>caps::AIRBASE_PARKING</code>, <code>caps::AIRBASE_RUNWAYS</code>, <code>caps::AIRBASE_STATE</code> включены по
+умолчанию; живые проверки <code>AWC-T22</code>, <code>AWC-T23</code>, <code>AWC-T24</code> (ещё не измерены). FakeDcs: у
+каждого аэродрома раскладка стоянок и полоса, <code>take_parking_spot(имя, номер, юнит)</code> и
+<code>free_parking_spot(имя, номер)</code>; сырые <code>Airbase.getParking</code> и <code>getRunways</code> отдают её же.
+Протокол: <code>Query.airbase_parking = 5</code>, <code>airbase_runways = 6</code>, <code>airbase_state = 7</code>,
+<code>Reply.airbase_read = 12</code> (<code>AirbasesRead</code>, <code>AirbaseRead</code>, <code>ParkingSpot</code>, <code>TerminalType</code>,
+<code>Runway</code>); операции слоя Lua <code>airbase_parking</code>, <code>airbase_runways</code>, <code>airbase_state</code>.</p>
+</li>
+<li>
+<p>Запас складов (ревизия API 3, страница <a href="docs/warehouses.html">Склады</a>): запрос, ничего не
+меняет в DCS и не требует ключа. Один склад — <code>ctx.warehouse(sel).stock()</code> -&gt;
+<code>WarehouseStock { aircraft, weapons, liquids, items }</code>, много — <code>ctx.warehouses_stock(..)</code> (до
+64) -&gt; <code>WarehousesRead { warehouses }</code>, по одному <code>WarehouseRead { warehouse, name, eid, value }</code> на склад в порядке списка, своя ошибка склада — <code>error()</code> (<code>Error::Gone</code>,
+<code>Error::Lua</code>, <code>Error::Rejected</code>). Склад — аэродрома, груза-статика или по имени в DCS
+(<code>WarehouseSel</code>), каждый не больше одного раза. Без уточнений запрос читает склад целиком
+(<code>Warehouse.getInventory</code>, один склад за кадр, большой — копируется по 400 записей за кадр):
+класс самолётов и оружия — <code>StockClass::Unlimited</code>
+(DCS, по сообщениям, отдаёт безлимитный класс пустой таблицей) или
+<code>StockClass::Limited(имя -&gt; количество)</code>, жидкости — <code>Liquids::Unlimited</code> или по
+<code>Liquid::{JetFuel, AviationGasoline, Mw50, Diesel}</code> (килограммы предполагаются). <code>.items([..])</code>
+(до 64, имя или wsType) и <code>.liquids()</code> читают только это (<code>getItemCount</code>, <code>getLiquidAmount</code>;
+64 вызова DCS за кадр, около 4 из них на поиск склада): <code>stock.count(предмет)</code> -&gt; <code>Amount::Counted(n)</code> или <code>Amount::Unlimited</code>
+(число больше 2^29). Предмет — <code>sortie::cmd::WarehouseItem</code>; это тот же тип, что
+<code>sortie::dcs::WarehouseItem</code> у сырых обёрток (путь <code>sortie::dcs::WarehouseItem</code> остался).
+Возможность <code>caps::WAREHOUSE_STOCK</code> включена по умолчанию; живая проверка <code>AWC-T25</code> (ещё не
+измерена). Протокол: <code>Query.warehouse_stock = 8</code> (<code>WarehouseStocks</code>), <code>Reply.warehouse_stock = 13</code> (<code>WarehousesStock</code>, <code>WarehouseStock</code>, <code>StockClass</code>, <code>StockEntry</code>, <code>LiquidStock</code>,
+<code>LiquidAmount</code>, <code>ItemCount</code>), в <code>common.proto</code> <code>WarehouseItem</code>, <code>WsType</code>, <code>Liquid</code>; операция
+слоя Lua <code>warehouse_stock</code>.</p>
+</li>
+<li>
+<p>Изменение запаса складов (ревизия API 3, страница
+<a href="docs/warehouses.html#%D0%B8%D0%B7%D0%BC%D0%B5%D0%BD%D0%B8%D1%82%D1%8C-%D0%B7%D0%B0%D0%BF%D0%B0%D1%81">Склады</a>): <code>ctx.warehouse_op()</code> с <code>.set(склад, что, n)</code>,
+<code>.add(..)</code>, <code>.remove(..)</code> и <code>.transfer(откуда, куда, что, n)</code> — до 16 замен одной командой
+(<code>sortie::cmd::MAX_STOCK_CHANGES</code>), в одном кадре DCS, всё или ничего. <code>что</code> —
+<code>sortie::cmd::StockItem</code>: предмет (имя, wsType, <code>WarehouseItem</code>; целые до 1 000 000) или
+жидкость (<code>Liquid</code>; до 100 000 000). Слой Lua сначала читает каждый счёт и проверяет каждую
+замену с учётом замен перед ней (склад есть, запас не безлимитный, его хватает); не прошла
+хоть одна — ничего не меняется; перед каждым шагом счёт читается снова, и замена, на которой
+DCS упала, которая не сдвинула счёт или чей счёт уже сдвинула замена раньше (один предмет
+назван именем и wsType), откатывает сделанное до неё. Перевод — один шаг: убрано там и добавлено здесь в том же кадре или ничего.
+Убрать больше, чем есть, нельзя (<code>NotEnough</code>, до нуля не обрезается). Результат
+<code>StockChanges { applied, undo_failed, changes }</code>, по одному <code>StockChanged { what, outcome, message, warehouse, to }</code> на замену; сторона <code>StockSide { name, eid, before, after, unlimited }</code>;
+исход <code>StockOutcome</code> (<code>Done</code>, <code>NotApplied</code>, <code>Undone</code>, <code>UndoFailed</code>, <code>Unlimited</code>, <code>NotEnough</code>,
+<code>Gone</code>, <code>DcsError</code>, <code>Unchanged</code>, <code>Aliased</code>); <code>out.failed()</code> — замены, из-за которых команда не
+применилась. Склад, которого мир не держит живым, перевод на свой же склад, число вне пределов
+— <code>Error::Invalid</code> до DCS. В режиме dev (и с <code>sortied --require-keys</code>) <code>.key(..)</code> нужен каждой
+команде, и из одних <code>set</code> тоже: повтор после перезагрузки поставил бы счёт поверх того, что
+успели израсходовать. Возможность
+<code>caps::WAREHOUSE_OP</code> включена по умолчанию; живая проверка <code>AWC-T26</code> (ещё не измерена).
+Протокол: <code>Command.body.warehouse_op = 37</code> (<code>WarehouseOp</code>, <code>StockChange</code>, <code>StockTransfer</code>),
+<code>Reply.warehouse_op = 14</code> (<code>StockChanges</code>, <code>StockChanged</code>, <code>StockSide</code>, <code>StockOutcome</code>);
+операция слоя Lua <code>warehouse_op</code>. FakeDcs выполняет её на том же запасе, что запрос и сырые
+вызовы.</p>
+</li>
+<li>
+<p>Имена предметов (ревизия API 3, страница <a href="docs/warehouses.html#%D0%B8%D0%BC%D0%B5%D0%BD%D0%B0-%D0%BF%D1%80%D0%B5%D0%B4%D0%BC%D0%B5%D1%82%D0%BE%D0%B2">Склады</a>):
+<code>ctx.item_names()</code> — как запущенная DCS называет всё, что знает, и wsType каждого
+(<code>Warehouse.getResourceMap()</code>, есть с DCS 2.8.8): оружие — так, как его называют склады
+(<code>"weapons.missiles.AIM_120C"</code>), самолёты и техника — по типу. Результат <code>ItemNames { names, unknown, total, skipped, dcs_version, cached, source }</code>, <code>names</code> — <code>ItemName { name, ws_type }</code>
+по алфавиту (<code>ws_type</code> — <code>None</code> там, где DCS даёт <code>{0, 0, 0, 0}</code>); <code>ws_type_of(имя)</code>,
+<code>names_of(ws)</code>, <code>knows(предмет)</code>, <code>get(имя)</code>, <code>ItemName::item()</code>. <code>.items([..])</code> (до 64,
+<code>sortie::cmd::MAX_NAME_LOOKUPS</code>) — только нужные, остальное — в <code>unknown</code>. Движок читает карту
+DCS один раз за процесс DCS и её версию и дальше отвечает из памяти (<code>cached</code>), на диск её не
+пишет; таблицы DCS в SDK нет. Запрос ничего не меняет и ключа не принимает (с <code>.key(..)</code> —
+<code>Error::Invalid</code>: вся карта ушла бы в хранилище движка). Возможность
+<code>caps::ITEM_NAMES</code> включена по умолчанию (<code>MISSING_IN_DCS</code> в DCS до 2.8.8); живая проверка
+<code>AWC-T27</code> (ещё не измерена). Протокол: <code>Query.item_names = 9</code> (<code>ItemNames</code>),
+<code>Reply.item_names = 15</code> (<code>ItemNameList</code>, <code>ItemName</code>); операция слоя Lua <code>item_names</code>. FakeDcs:
+<code>dcs.set_item_names([(имя, [a, b, c, d]), ..])</code> — карта (пустая, пока тест её не задал); wsType,
+которому карта даёт одно имя, — запас этого имени в складах FakeDcs; перезагрузка миссии
+карту не сбрасывает. Генератор не изменился:
+<code>munitions</code> аэродрома — по wsType (имена знает только запущенная DCS).</p>
+</li>
+<li>
+<p><code>.of::&lt;T&gt;()</code> пишет в журнал предупреждение, если тип события новее ревизии событий, которая
+действует (<code>ctx.event_rev()</code>): такие события не приходят. Ревизия события —
+<code>sortie::events::EventType::EVENT_REV</code>.</p>
+</li>
+<li>
+<p>Задачи наземных и морских групп (страница
+<a href="docs/sdk.html#%D0%B7%D0%B0%D0%B4%D0%B0%D1%87%D0%B8-%D0%BD%D0%B0%D0%B7%D0%B5%D0%BC%D0%BD%D1%8B%D1%85-%D0%B8-%D0%BC%D0%BE%D1%80%D1%81%D0%BA%D0%B8%D1%85-%D0%B3%D1%80%D1%83%D0%BF%D0%BF">Логика на Rust</a>): <code>push_task</code> и <code>set_task</code>
+теперь есть у групп любого вида (в 0.3.0 — только у самолётов и вертолётов). Наземная или
+морская группа принимает сырую таблицу задачи DCS <code>Task::raw(..)</code>, например маршрут колонны
+по дорогам — задачу DCS <code>Mission</code> с точками <code>action = "On Road"</code> (пример в документации;
+как DCS ведёт колонну, вживую ещё не замерено, живая проверка <code>AI-L3</code>). <code>Task::cap</code> и
+<code>Task::orbit</code> для неё не компилируются («<code>Ground</code> groups do not fly»), <code>Task::rtb</code> движок
+отклоняет (<code>Error::Invalid</code>). Аргумент методов — <code>impl sortie::TaskFor&lt;K&gt;</code> (закрытый трейт:
+<code>Task</code> для любой группы, <code>CapTask</code> и <code>OrbitTask</code> для летающих).</p>
+</li>
+<li>
+<p>Правило «вся логика миссии — в Rust» записано везде, где его читают клиент и его агент
+(AGENTS.md шаблона, навыки, <code>llms.txt</code>, страницы <a href="docs/faq.html">Вопросы</a>,
+<a href="docs/generator.html#%D0%BB%D0%BE%D0%B3%D0%B8%D0%BA%D0%B0-%D0%BC%D0%B8%D1%81%D1%81%D0%B8%D0%B8-%D0%B8-do-script">Сценарий на Python</a>): в <code>.miz</code> — только карта и
+bootstrap Sortie, а если чего-то нет в SDK — типизированная команда, вызов из каталога,
+<code>Task::raw</code>, и сообщить команде Sortie.</p>
+</li>
+<li>
+<p>Генератор: после хуков <code>build</code> и <code>register</code> перечисляют весь Lua миссии, кроме триггеров
+Sortie: скрипт инициализации миссии и его файл (строка <code>mission init: ...</code>), условия LUA
+PREDICATE и действия DO SCRIPT и DO SCRIPT FILE в триггерах, любого класса pydcs (номер
+триггера, комментарий, тип, начало кода или имя файла). Lua в задачах точек маршрута группы
+сборка не ищет. Параметр <code>Scenario(do_scripts=..)</code> (и свойство <code>sc.do_scripts</code>): <code>"warn"</code> — по
+умолчанию, предупреждение, сборка идёт; <code>"deny"</code> — сборка падает с тем же списком;
+<code>"allow"</code> — молча, для стороннего скрипта, который миссия обязана сохранить.
+<code>sortie-gen adopt</code> показывает скрипты миссии из редактора так же
+(<code>AdoptReport.scripts</code>; у скрипта инициализации <code>trigger = 0</code>). <code>sortie_gen.miz</code>:
+<code>MissionScript</code>, <code>mission_scripts</code>, <code>scripts_report</code>, <code>SCRIPTS_RULE</code>.</p>
+</li>
+<li>
+<p>Путь по дорогам (ревизия API 3, страница <a href="docs/dcs.html#%D0%BF%D1%83%D1%82%D1%8C-%D0%BF%D0%BE-%D0%B4%D0%BE%D1%80%D0%BE%D0%B3%D0%B0%D0%BC">Вызовы DCS</a>):
+<code>ctx.dcs().land().path_on_roads("roads", x1, y1, x2, y2)</code> — функция DCS
+<code>land.findPathOnRoads</code> в каталоге; <code>x</code> — север, <code>y</code> — восток начала и конца, ответ —
+<code>Option&lt;Vec&lt;MapPoint&gt;&gt;</code>, точки от начала к концу, <code>None</code> — DCS ответил nil. Класс <code>heavy</code>:
+длинный путь на большой карте дорог, поэтому вызовы идут по одному, не чаще 2 в секунду и не
+в пакете. Слово для железных дорог (<code>"railroads"</code> по документации, <code>"rails"</code> по вики
+Hoggit), ответ для места без дорог и время длинного пути вживую ещё не замерены (живая
+проверка <code>ENV-LC7</code>). Возможность <code>call:mission:land.findPathOnRoads</code>
+(<code>caps::call::mission::LAND_FIND_PATH_ON_ROADS</code>); в Python — <code>Dcs(client).land() .path_on_roads(..)</code>. FakeDcs отвечает прямой (начало и конец) или путём из
+<code>dcs.set_road_path(..)</code>.</p>
+</li>
+<li>
+<p>Сводка пути по дорогам (ревизия API 3, страница
+<a href="docs/dcs.html#%D1%81%D0%B2%D0%BE%D0%B4%D0%BA%D0%B0-%D0%BF%D1%83%D1%82%D0%B8-%D0%BF%D0%BE-%D0%B4%D0%BE%D1%80%D0%BE%D0%B3%D0%B0%D0%BC">Вызовы DCS</a>):
+<code>ctx.dcs().land().road_path("roads", начало, конец, max_points, keep)</code> спрашивает у DCS тот же
+путь, но целиком он в логику не идёт: Lua-слой Sortie внутри DCS в том же кадре считает
+<code>sortie::dcs::RoadPath</code> — сколько в пути точек (<code>count</code>), его длину по точкам (<code>length_m</code>),
+первую и последнюю точку и сколько метров от них до заданных начала и конца (<code>start_gap_m</code>,
+<code>end_gap_m</code>), и отдаёт не больше <code>max_points</code> точек пути (от 2 до 10 000) с обоими концами:
+точки самых крутых поворотов (<code>keep</code> = <code>None</code> или <code>Some("turns")</code>; на прямых участках точек
+не берёт, поэтому их может быть меньше) или через равные расстояния вдоль пути
+(<code>Some("even")</code>); <code>thinned</code> — точек меньше, чем в пути. Без <code>max_points</code> — только сводка.
+<code>None</code> — DCS не нашёл пути. Начало и конец — <code>MapPoint</code>. Это первая функция самого слоя в
+каталоге: запись <code>sortie.findPathOnRoads</code>, класс <code>heavy</code>, возможность
+<code>call:mission:sortie.findPathOnRoads</code> (<code>caps::call::mission::SORTIE_FIND_PATH_ON_ROADS</code>); в
+Python — <code>Dcs(client).land().road_path(..)</code> и <code>sortie_gen.dcs.RoadPath</code>. Совпадение сводки с
+путём целиком на живом DCS проверяет живая проверка <code>ENV-LC7</code>. FakeDcs считает сводку так же,
+как слой, по своему пути (прямому или из <code>dcs.set_road_path(..)</code>). Сам <code>path_on_roads(..)</code> не
+изменился.</p>
+</li>
+<li>
+<p>Справочник каталога и обёртки называют ревизию API записи, если она выше 1 («ревизия API 3»
+в столбце «Класс», «API revision 3» в документации обёртки).</p>
+</li>
+<li>
+<p>Маршрут наземной группы (ревизия API 3, страница
+<a href="docs/sdk.html#%D0%B7%D0%B0%D0%B4%D0%B0%D1%87%D0%B8-%D0%BD%D0%B0%D0%B7%D0%B5%D0%BC%D0%BD%D1%8B%D1%85-%D0%B8-%D0%BC%D0%BE%D1%80%D1%81%D0%BA%D0%B8%D1%85-%D0%B3%D1%80%D1%83%D0%BF%D0%BF">Логика на Rust</a>):
+<code>group.set_task(Task::ground_route([RoutePoint::on_road(p1), RoutePoint::off_road(p2) .speed(kmh(20))]))</code> и <code>push_task(..)</code> для <code>Group&lt;Ground&gt;</code>, без самодельной таблицы DCS.
+Точка — <code>MapPoint</code> (центр зоны, точка пути <code>path_on_roads</code>, позиция юнита) с построением:
+<code>on_road</code>, <code>off_road</code>, <code>on_railroads</code> или <code>RoutePoint::new(p, GroundFormation::..)</code>
+(<code>Rank</code>, <code>Cone</code>, <code>Vee</code>, <code>Diamond</code>, <code>EchelonLeft</code>, <code>EchelonRight</code>); скорость — у точки
+(<code>.speed(..)</code>), иначе у маршрута (<code>GroundRoute::speed</code>), иначе 20 км/ч; от 1 до 256 точек.
+Движок строит задачу DCS <code>Mission</code>, как её пишет редактор миссий для техники: первая точка —
+там, где стоит первый живой юнит группы в кадре, когда DCS принимает задачу (слой Lua читает
+его тогда же), с построением и скоростью первой точки маршрута; построение и скорость точки
+— у отрезка, который в ней кончается. Для самолёта, вертолёта и корабля маршрут не
+компилируется, а через <code>Task::from(..)</code> его отклоняет движок (<code>Error::Invalid</code>); пустой
+маршрут, больше 256 точек, скорость не больше 0, неизвестное построение — тоже
+<code>Error::Invalid</code>, в DCS ничего не уходит. <code>RoutePoint</code> и <code>GroundFormation</code> — в прелюдии,
+<code>sortie::GroundRoute</code> — тип маршрута. Как DCS ведёт колонну (дорога, точка в воде или за
+краем карты), вживую ещё не замерено (живая проверка <code>AI-L4</code>). FakeDcs записывает задачу
+(<code>group.tasks()</code>, <code>command_log()</code>) и наземную технику по ней не двигает. Протокол:
+<code>SetTask.task.ground_route = 13</code> (<code>GroundRoute</code>, <code>GroundRoutePoint</code>, <code>GroundFormation</code>);
+операция слоя Lua <code>set_task</code> получила необязательный <code>lead_start</code>.</p>
+</li>
+<li>
+<p>Три чтения экрана выбора слотов DCS в каталоге (ревизия API 3, окружение хуков, семейство
+<code>server</code>, страница <a href="docs/dcs.html#%D1%81%D0%BB%D0%BE%D1%82%D1%8B-farp-%D0%B3%D0%BB%D0%B0%D0%B7%D0%B0%D0%BC%D0%B8-%D1%81%D0%B5%D1%80%D0%B2%D0%B5%D1%80%D0%B0">Вызовы DCS</a>):
+<code>ctx.dcs().server().farps_and_carriers()</code> (<code>DCS.getFarpsAndCarriersMissionData</code>, класс
+<code>heavy</code>: FARP и корабли миссии по id юнита), <code>.dynamic_spawn_settings(id, is_airdrome)</code>
+(<code>DCS.getDynamicSpawnSettings</code>: <code>dynamicSpawnAvailable</code>, <code>allowHotSpawn</code>) и
+<code>.aircraft_in_warehouse(тип, id, is_farp)</code> (<code>DCS.getAircraftAmountInAirportWarehouse</code>).
+Документации ED у этих функций нет: их сигнатуры взяты из скриптов экрана слотов DCS 2.9.31.
+Это взгляд DCS сервера, а не того, что показывают подключённому игроку; ответы вживую ещё не
+замерены (живая проверка <code>AWC-T30</code>). Возможности <code>call:hooks:DCS.getFarpsAndCarriersMissionData</code>
+и др.; в Python — <code>Dcs(client).server()...</code>. FakeDcs эти функции не моделирует (<code>MISSING</code>;
+тест задаёт ответ через <code>dcs.on_dcs_call(..)</code>). Динамические слоты и горячий старт у FARP,
+созданного во время миссии, типизированной настройки пока не имеют: что DCS с ними делает,
+исследует команда Sortie, решение — после живых проверок <code>AWC-T28</code> … <code>AWC-T32</code>.</p>
+</li>
+<li>
+<p><code>Engine.Health</code>: у связи миссии — во что Sortie обходятся копии внутри DCS с момента
+подключения: <code>LinkHealth.event_copies</code>, <code>event_copy_calls</code>, <code>event_copy_us</code> (события, которые
+скопировал обработчик событий слоя Lua, их вызовы DCS и время; он работает внутри рассылки
+событий DCS, вне бюджета pump), <code>event_copy_max_us</code> (самое долгое копирование между двумя pump
+по последнему heartbeat моста), <code>snapshot_objects</code>, <code>snapshot_calls</code>, <code>snapshot_us</code> (снимки
+мира). Поля дополнительные, ревизия API не нужна; от движка или моста до 0.4.0 — нули.
+<code>sortie status</code> их показывает, <code>sortie top</code> — самое долгое копирование (<code>ev&lt;N&gt;us</code>).</p>
+</li>
+<li>
+<p>Причина отказа по лимиту данными (ревизия API 3; запрос клиента): <code>e.limit()</code> —
+<code>Option&lt;&amp;sortie::Limit&gt;</code> (вид <code>sortie::LimitKind</code>, имя бюджета вроде <code>call_rate.read</code> или
+<code>dcs_time.read</code>, чей он, его числа целыми), <code>e.retry_after()</code> — когда та же команда, отправленная
+снова без изменений, пройдёт свои бюджеты (из пополнения корзины: после пакета из 256 чтений
+следующий такой же ждёт 1,28 с, одиночное чтение — 0,285 с), <code>e.is_limit()</code>,
+<code>e.is_forbidden()</code> (запрет: <code>Rejected</code> с <code>capability()</code> и без лимита; повтор не поможет).
+Лимиты: число вызовов класса, время DCS (<code>dcs_time.read</code>, <code>dcs_time.heavy</code>), размер пакета и
+запроса, 256 созданных объектов, 1024 дескриптора чтений (дескриптор, который слой отбросил,
+по-прежнему <code>Error::Gone</code>, но с <code>limit()</code> и своим текстом вместо «unknown here»), функция,
+которую мост закрыл после медленных вызовов. <code>Error::Timeout</code> с <code>limit()</code> — команда не дошла
+до DCS, и лимит называет, чего она ждала (задержка после спавна, тяжёлый слот, кредиты связи,
+<code>after</code>, мост не успел начать); без него — ушла в DCS, ответа не было. У остальных отказов
+код ошибки, текст и <code>capability()</code> — как в 0.3.0. SDK сам не повторяет; цикл повтора — в
+<a href="docs/dcs.html#%D0%BE%D1%82%D0%BA%D0%B0%D0%B7-%D0%BF%D0%BE-%D0%BB%D0%B8%D0%BC%D0%B8%D1%82%D1%83">вызовах DCS</a>.
+Протокол: <code>CommandError.limit</code> (<code>Limit</code>, <code>LimitKind</code>). Python: <code>CommandFailed.limit</code>
+(<code>sortie_gen.errors.Limit</code>), <code>retry_after</code> (секунды), <code>forbidden</code>.</p>
+</li>
+<li>
+<p>Перенос группы шаблона со строем (ревизия API 3; запрос клиента):
+<code>ctx.spawn_group(шаблон).at_formation(точка, курс)</code> поворачивает строй как одно целое вокруг
+первой машины на <code>курс − опорный курс шаблона</code>, и каждая машина смотрит на свой курс из шаблона
+плюс тот же угол: две пусковые под −15° и +15° от опорного курса встанут под −15° и +15° от
+нового. Опорный курс — новое поле манифеста <code>Template.heading_rad</code>, без него — курс первой
+машины; генератор пишет его в шаблоны, которые строит. Элемент <code>ctx.spawn_batch()</code> с
+<code>.at_formation</code> ставится так же. Протокол: <code>SpawnAt.heading_mode</code>, <code>SpawnHeadingMode</code>.
+(<a href="docs/objects.html#%D0%B3%D1%80%D1%83%D0%BF%D0%BF%D0%B0-%D0%B8%D0%B7-%D1%88%D0%B0%D0%B1%D0%BB%D0%BE%D0%BD%D0%B0-%D0%B2-%D1%82%D0%BE%D1%87%D0%BA%D0%B5">Группа из шаблона в точке</a>.)</p>
+</li>
+<li>
+<p>Запись владельца в <code>engine.toml</code> может назвать полный путь опубликованной таблицы DCS:
+<code>enum:&lt;таблица&gt;</code> — от 2 до 6 имён (было до 4) от одного из корней перечислений (<code>AI</code>,
+<code>Airbase</code>, <code>Controller</code>, <code>Group</code>, <code>Object</code>, <code>Spot</code>, <code>StaticObject</code>, <code>Unit</code>, <code>Weapon</code>,
+<code>coalition</code>, <code>country</code>, <code>land</code>, <code>radio</code>, <code>trigger</code>, <code>world</code>), например
+<code>enum:AI.Option.Ground.val.ALARM_STATE</code> (запрос клиента: <code>sortied</code> 0.3.0 отклонял его с
+«the enum table path is not a Lua path»). Аргумент такого типа принимает ключ таблицы
+(<code>arg::enum_key(таблица, "RED")</code>) или её число (<code>arg::number(2.0)</code>): слой Lua проверяет, что
+число есть в таблице. (<a href="docs/dcs.html#%D0%B7%D0%B0%D0%BF%D0%B8%D1%81%D1%8C-%D0%B2%D0%BB%D0%B0%D0%B4%D0%B5%D0%BB%D1%8C%D1%86%D0%B0-%D1%81-%D0%BF%D0%B5%D1%80%D0%B5%D1%87%D0%B8%D1%81%D0%BB%D0%B5%D0%BD%D0%B8%D0%B5%D0%BC-dcs">Запись владельца с перечислением
+DCS</a>.)</p>
+</li>
+<li>
+<p>Генератор: <code>sc.ground_template(..)</code> — наземный шаблон для <code>ctx.spawn_group(..)</code>, в манифесте,
+а не в <code>.miz</code> (раньше генератор строил только шаблоны самолётов и вертолётов). Строй рисуется,
+как у <code>ground_group</code> (<code>formation</code>, <code>spacing</code>, первая машина в <code>at</code>), для опорного курса
+<code>heading</code>, который манифест хранит в <code>Template.heading_rad</code>; <code>unit_headings</code> — курс каждой
+машины относительно опорного, например <code>[-15, 15]</code> для двух пусковых. <code>.at_formation(..)</code>
+поворачивает такой строй, сохраняя разницу курсов.
+(<a href="docs/generator.html">Генератор</a>.)</p>
+</li>
+</ul>
+<h3 id="изменено">Изменено<a class="anchor" href="#изменено" aria-label="Ссылка на этот раздел">#</a></h3>
+<ul>
+<li>
+<p>Шаблон проекта: <code>scenario.py</code> задаёт <code>do_scripts="deny"</code>, так что новая миссия не
+соберётся со своим DO SCRIPT. Пример хука с DO SCRIPT в документации теперь показывает
+сторонний скрипт и <code>sc.do_scripts = "allow"</code>.</p>
+</li>
+<li>
+<p>Запись владельца в <code>engine.toml [calls]</code> с именем на <code>find</code> теперь считается чтением, как
+get/is/has: новый путь <code>find*</code> может быть <code>read</code>, а <code>heavy</code> с таким именем включён по
+умолчанию, а не выключен как <code>mutate</code>.</p>
+</li>
+<li>
+<p>Задачи наземных групп: сырая таблица <code>Task::raw</code> теперь для того, чего нет в типизированном
+маршруте (остановка, задачи в точках, маршрут корабля); документация, навыки, AGENTS.md и
+<code>llms.txt</code> показывают сначала <code>Task::ground_route</code>. <code>Task::rtb</code> для наземной группы движок
+отклоняет с текстом «only a ground route or a raw task applies to it» (для морской — по-прежнему
+«only raw tasks apply to it»); подсказки компилятора <code>Flying</code> и <code>TaskFor</code> называют
+<code>Task::ground_route(..)</code>.</p>
+</li>
+<li>
+<p>Ошибка компиляции <code>#[sortie::test]</code> без FakeDcs больше не обещает тесты в SDK 0.2: FakeDcs
+содержит движок и в публичный SDK пока не входит. Текст: «#[sortie::test] runs the logic
+against FakeDcs, which is not part of the public Sortie SDK yet: it carries the engine.
+Test the mission against a live DCS with <code>sortied --dev</code>, and its plain functions with
+<code>#[test]</code>.» Так же исправлены документация, навыки, AGENTS.md, <code>llms.txt</code> и README.</p>
+</li>
+<li>
+<p>Спавн при старте миссии. Пока в сессии никого нет (связь hooks не видит ни одного игрока, и ни
+у одного юнита нет игрока), спавны идут через ворота разогрева: по умолчанию 200 групп и
+4000 юнитов в секунду, то есть их ограничивает бюджет моста в DCS, а не 2 группы в секунду.
+Пока мост оценивает спавн дороже доли команд в pump (так до первых замеров: оценка 1500 мкс,
+доля по умолчанию не больше 900 мкс), идёт один спавн за pump: 50 в секунду при 50 fps и
+выше, 30 при 30 fps, 20 при 20 fps; спавн, который мост замерил дешёвым, идёт по несколько за
+pump. Как только игрок подключился, занял слот или летит в одиночной игре, действуют обычные
+ворота (2 группы и 24 юнита в секунду). Без связи hooks разогрева нет. Игроки — клиенты того процесса DCS, чья
+связь hooks о них сообщила: DCS, упавшая или убитая при клиентах на сервере, об их уходе не
+сообщает, поэтому новый процесс DCS начинает без игроков, и разогрев снова действует (а не
+только после перезапуска движка). Настройки — <code>engine.toml spawn_gate = { warmup_groups_per_s, warmup_units_per_s }</code> рядом с прежними; равные значения выключают
+разогрев. Для логики меняется только время: спавны в пустой сессии приходят быстрее.</p>
+</li>
+<li>
+<p>Мост допускает спавн в ближайший pump: первая команда <code>BULK</code> за pump выполняется, даже если её
+оценка (1500 мкс до замеров) больше доли команд, пока осталось не меньше половины этой доли.
+Раньше спавн ждал 250 мс и pump без других команд, то есть шёл не чаще 4 раз в секунду. Запрос
+(<code>QUERY</code>), который ждёт 250 мс, идёт раньше спавнов, так что поток спавнов не держит снимок
+мира. Оценку стоимости вызова каталога DCS мост ведёт отдельно по каждому пути: один медленный
+вызов (<code>land.findPathOnRoads</code> клиента на 2241 мс) больше не делает дорогими все остальные
+вызовы, и они снова идут несколько за кадр. Медленные вызовы мост считает отдельно от сбоев
+(<code>bridge.status().slow_calls</code>).</p>
+</li>
+<li>
+<p>Владелец задаёт бюджет моста в <code>engine.toml [bridge]</code>: <code>pump_budget_us</code> (по умолчанию 1500),
+<code>hooks_budget_us</code> (500), <code>min_budget_us</code> (200), <code>max_events_per_frame</code> (256), <code>heartbeat_ms</code>
+(1000) и <code>sample_rates</code> (<code>players</code>, <code>air_ai</code>, <code>ground_moving</code>, <code>ground_static</code>, <code>ships</code>, Гц).
+Значение вне границ останавливает <code>sortied</code> при старте. Документация называла бюджет pump
+1000 мкс; по умолчанию он 1500.</p>
+</li>
+<li>
+<p>Выборка позиций в DCS больше не просматривает всех юнитов каждый pump. Раньше, когда читать
+было почти некого, слой Lua 50 раз в секунду проходил каждого отслеживаемого юнита (при 5000
+юнитах — 5000 записей за pump). Теперь у каждого класса своя очередь в порядке последних
+чтений, и pump смотрит только на голову каждой из пяти очередей и на то, что читает. Игроки
+читаются первыми, остальные — кто дольше ждёт. Чтение юнита — один <code>pcall</code> вместо восьми,
+массив пачки один на все pump. Движок и логика получают то же, что раньше. Нужен новый слой
+Lua: <code>sortie install</code> и перезапуск миссии.</p>
+</li>
+<li>
+<p>Снимок мира (при старте миссии, до которого логика ждёт, и после потери событий) больше не
+читает в одном pump 50 групп без оглядки на время. Порция кончается между объектами, когда
+вышло время, которое мост даёт шагу (десятая доля бюджета pump и то, что команды оставили от
+своей: около 1 мс при 50 fps без команд, около 0,3 мс при 20 fps), или набралось 100 юнитов;
+первая группа порции идёт целиком. Мир, который получает логика, тот же; большой мир на
+низком FPS читается дольше, но без фриза. <code>getDesc</code> слой зовёт один раз на тип юнита, а не
+для каждого (рождение юнита звало его дважды), и выборка берёт класс родившегося юнита из
+копии события: рождение юнита — 12 вызовов DCS вместо 16. Нужен новый слой Lua:
+<code>sortie install</code> и перезапуск миссии; со старой DLL моста (DCS ещё не перезапущена) порцию
+ограничивают 100 юнитов.</p>
+</li>
+<li>
+<p>Пакет <code>DcsBatch</code> с вызовом <code>mutate</code> теперь оплачивает своё время DCS бюджетом чтений
+<code>dcs_time.read</code> и отклоняется, пока он исчерпан, как пакет чтений (раньше такой пакет время
+DCS не оплачивал вовсе); его вызовы <code>mutate</code> по-прежнему считаются и в лимите 50 в секунду.
+Отдельный вызов <code>mutate</code> время DCS не оплачивает, как раньше.</p>
+</li>
+<li>
+<p>Проверка <code>span_300km</code> (концы не дальше 300 км друг от друга по карте, иначе <code>Error::Invalid</code>
+до DCS) теперь стоит и на <code>land().path_on_roads(..)</code>, и на <code>land().road_path(..)</code>. Запись
+каталога называет точки, которые лежат в простых числах, новым полем <code>points</code> (пары имён
+аргументов: север, восток); владелец может задать его в своей записи <code>engine.toml [calls]</code>,
+а у встроенной записи — нет. Справочник каталога, обёртки Rust и Python называют проверку и
+точки, которые она меряет.</p>
+</li>
+<li>
+<p>Документация ошибок: <code>Error::Timeout</code> теперь описан как два случая (не дошла до DCS / ушла,
+а ответа нет), задержка после спавна — для <code>set_task</code>, <code>push_task</code> и <code>set_option</code> группы
+любого вида, ключ, под которым уже была другая команда, — <code>Error::Invalid</code>, и совет не
+завершать функцию миссии одной необязательной командой (повтор с тем же ключом, запись
+ошибки). Подсказки <code>Error::Timeout</code> и <code>Error::Rejected</code> (<code>e.help()</code>) говорят то же.</p>
+</li>
+<li>
+<p>Документация объектов: что DCS знает о местности — ни леса и деревьев, ни объёма скал и
+моделей скрипту не видно; что делать вместо этого (сетка высот, поиск объектов вокруг,
+проверенные площадки зонами сценария). Комментарий <code>OBJECT_CATEGORY_SCENERY</code> больше не
+обещает деревьев; у <code>land().surface_type(..)</code> в каталоге заметка: значения «лес» нет, лес —
+<code>LAND</code>.</p>
+</li>
+<li>
+<p><code>.at(точка, курс)</code> у <code>ctx.spawn_group(..)</code> работает как раньше, но документация теперь
+говорит, что он делает: первая машина — в точке, остальные — со смещениями из шаблона без
+поворота, <strong>у всех машин один курс</strong>, маршрут шаблона заменяет одна точка маршрута (раньше
+doc-комментарий говорил, что маршрут шаблона «сдвигается»; так не было никогда).</p>
+</li>
+<li>
+<p>Справочник каталога DCS и страницы складов и вызовов DCS говорят, где читать карту имён
+предметов DCS (<code>Warehouse.getResourceMap</code>): в типизированном <code>ctx.item_names()</code>, записи в
+каталоге у этой функции нет. Им и проверяют предметы кампании до наполнения склада.</p>
+</li>
+<li>
+<p>Тяжёлые вызовы логики идут по одному: следующий тяжёлый вызов, отправленный, пока предыдущий
+ещё не вернулся (ждёт тяжёлого слота, выполняется или ждёт позднего ответа после
+<code>Error::Timeout</code>), отклоняется сразу — <code>Error::Rejected</code>, <code>limit()</code> — <code>DcsTime</code>
+<code>dcs_time.heavy</code>, <code>retry_after()</code> — <code>None</code>: сколько ждать, станет ясно, когда придёт ответ
+предыдущего и движок спишет его время. Раньше такой вызов принимался на полный бюджет и шёл
+сразу за первым: два пути по дорогам по 2,2 с подряд останавливали DCS на 4,5 с. Отправляйте
+следующий тяжёлый вызов после ответа предыдущего. (<a href="docs/dcs.html#%D0%B2%D1%80%D0%B5%D0%BC%D1%8F-dcs">Время DCS</a>.)</p>
+</li>
+<li>
+<p>Документация ожиданий: команда с <code>.after(a)</code>, у которой <code>a</code> упала, получает код и
+<code>capability()</code> команды <code>a</code> и <code>limit()</code> вида <code>After</code> (<code>wait.after</code>): это не обязательно
+<code>Error::Timeout</code> (у отклонённой <code>a</code> — <code>Error::Rejected</code>), <code>is_forbidden()</code> — <code>false</code>,
+<code>retry_after()</code> — <code>None</code>, и та же команда, отправленная снова, сразу упадёт так же. Раньше
+документация говорила, что любое ожидание кончается <code>Error::Timeout</code>, а повтор безопасен.</p>
+</li>
+</ul>
+<h3 id="устарело">Устарело<a class="anchor" href="#устарело" aria-label="Ссылка на этот раздел">#</a></h3>
+<ul>
+<li>Обёртки каталога <code>ctx.dcs().airbase(..).set_coalition(..)</code>, <code>.auto_capture(..)</code> и
+<code>.set_radio_silent_mode(..)</code> помечены <code>#[deprecated]</code> в пользу <code>ctx.airbase_control(..)</code>
+(<code>superseded_by = "airbase_control"</code> в каталоге и в возможностях <code>call:mission:Airbase.*</code>).
+Они работают как раньше; чтения (<code>coalition()</code>, <code>auto_capture_is_on()</code>,
+<code>radio_silent_mode()</code>) не устарели.</li>
+<li>Обёртки каталога <code>ctx.dcs().warehouse(..).set_item(..)</code>, <code>.add_item(..)</code>, <code>.remove_item(..)</code>,
+<code>.set_liquid_amount(..)</code>, <code>.add_liquid(..)</code> и <code>.remove_liquid(..)</code> помечены <code>#[deprecated]</code> в
+пользу <code>ctx.warehouse_op()</code> (<code>superseded_by = "warehouse_op"</code>). Они работают как раньше;
+чтения (<code>inventory(..)</code>, <code>item_count(..)</code>, <code>liquid_amount(..)</code>) не устарели.</li>
+</ul>
+<h3 id="исправлено">Исправлено<a class="anchor" href="#исправлено" aria-label="Ссылка на этот раздел">#</a></h3>
+<ul>
+<li>Часы сессии. В миссии, которая начинается не в полночь, первая же метка F10 (панель логики,
+<code>MarkCommand</code> или метка игрока) останавливала часы движка: DCS кладёт в поле <code>time</code> событий
+<code>S_EVENT_MARK_*</code> время суток (по вики Hoggit — <code>timer.getAbsTime</code>, секунды от полуночи первого
+дня миссии), а движок двигал часы по времени любого события и назад их не ведёт. В миссии с
+09:00 часы вставали около 32 400 с: <code>Tick.model_time</code> и <code>ctx.model_time()</code> замирали,
+<code>ctx.sleep</code> и <code>ctx.timer</code> не срабатывали, дедлайн именованного таймера сохранялся во времени
+суток, <code>model_time</code> результатов команд стоял, а задача группе сразу после спавна кончалась
+<code>DEADLINE</code> («tasking delay after spawn»). Теперь часы движка идут только по модельному
+времени DCS (pump миссии в heartbeat, выборки, снимки мира); время события двигает их, только
+если оно не дальше 5 с впереди последнего такого отчёта. Время дальше часы не двигает,
+пишется в лог движка раз на вид события и считается в <code>Engine.Health</code> (новое поле
+<code>LinkHealth.event_times_ignored</code>, <code>sortie status</code> показывает его, когда оно не 0). Слой Lua
+0.4.0 переводит время метки в модельное в момент события и хранит значение DCS в новом поле
+<code>Mark.dcs_time</code> (ревизия API 3). Что меняется для логики SDK 0.1.0–0.3.0: <code>model_time</code>
+события <code>Mark</code> теперь модельное время, а не время суток (с новым слоем Lua: <code>sortie install</code>
+и перезапуск миссии), а тики, результаты команд и дедлайны таймеров после метки снова идут
+модельным временем; поле <code>dcs_time</code> ей не отправляется, остальное — байт в байт как было.
+Что DCS кладёт в <code>time</code> метки на самом деле, измерит новый шаг пробы <code>EVT-L18</code>.</li>
+<li><code>Missions.GetResults</code> сразу после того, как <code>ctx.end_session(..)</code> завершился, иногда отвечал
+«no results for session»: движок отвечал логике раньше, чем записывал итоги. Теперь итоги
+записаны до ответа; логика по-прежнему получает ответ на <code>EndSession</code> раньше, чем конец
+сессии.</li>
+<li>Ожидание у ворот спавна съедало срок команды. Из 100 <code>spawn_group</code>, отправленных разом,
+около 38 последних кончались <code>Error::Timeout</code> («spawn rate limit»): при 2 группах в секунду
+очередь идёт 50 с, а срок полосы BULK — 30 с. Теперь время, которое команда ждёт ворота спавна
+(и место среди 16 спавнов, на которые DCS ещё не ответила), в срок не идёт: все 100 выполнятся.
+То же для пакета <code>spawn_batch</code> (два пакета сразу теперь получают места по очереди; раньше
+второй ждал, пока первый не кончится, и мог не успеть в срок) и для задержки задач после
+спавна: <code>set_task</code> или <code>set_option</code> группе, чей спавн ещё стоит в очереди, ждёт его, не
+расходуя свой срок, и уходит в DCS после спавна и 0,5 с (отчёт клиента:
+<code>set_option(Alarm::Red)</code> сразу после спавна). Срок по-прежнему идёт, пока команда ждёт связь,
+кредиты или <code>after</code>, пока спавн, которого ждёт задача, потерян или ответил <code>Timeout</code>, и пока
+пакет ждёт ответа DCS на свои же элементы, занявшие все 16 мест: если DCS замолчала, пакет
+кончается <code>Timeout</code>, и спавны и задачи за ним идут дальше, а не ждут вечно.</li>
+<li>Позиции замирали во время полного обхода. Раз в 30 с слой Lua читает всех юнитов, чтобы
+найти тех, о чьей гибели DCS не сообщила, и пока обход шёл (при 5000 юнитах — больше секунды),
+обычные чтения стояли: позиции игроков в мире логики не менялись. Теперь обход берёт четверть
+квоты выборки, остальное идёт обычным чтениям, и игроки сохраняют свои 5 Гц. Игрок, севший в
+уже существующий юнит, теперь опрашивается с частотой игрока (раньше — с частотой класса,
+который юнит имел при появлении), вышедший — снова с частотой ИИ. Новые <code>sample_rates</code> (их
+мост получает, когда движок перезапущен с другим <code>[bridge]</code>) действуют сразу: юнит класса,
+у которого частота была 0, раньше ждал следующего обхода. Нужен новый слой Lua:
+<code>sortie install</code> и перезапуск миссии.</li>
+<li>Снимок мира больше не обрывается через 60 с, пока порции идут: срок считается от последней
+порции. Раньше снимок большого мира, который не успел за 60 с, кончался <code>TIMEOUT</code>, и сессия
+шла на мире без последних порций (заметка «the world snapshot failed»).</li>
+<li>Один медленный тяжёлый вызов больше не закрывает логике чтения на минуты (отчёт клиента:
+<code>land.findPathOnRoads</code> за 2241 мс, после которого ни одно назначение маршрута не прошло).
+Тяжёлый вызов оплачивал время DCS бюджетом чтений писателя (20 мс в секунду) без нижней
+границы, и <code>timer.getTime</code>, <code>Controller.hasTask</code> и остальные чтения той логики отклонялись
+около 111 с. Теперь у тяжёлых вызовов свой бюджет <code>dcs_time.heavy</code>: 20 мс в секунду, не больше
+200 мс сразу, долг хранится целиком — после вызова длиной <code>C</code> мс следующий тяжёлый вызов ждёт
+около <code>(C − 200) / 20</code> с (после 2241 мс — 102 с, текст отказа называет бюджет и сколько ждать),
+а чтения идут сразу. Одиночное чтение видит долг бюджета чтений <code>dcs_time.read</code> не глубже
+20 мс: чтение или пакет, которые заняли больше, закрывают одиночные чтения не больше чем на
+секунду. Пакет видит долг целиком: следующий пакет ждёт, пока долг не выплачен, так что
+пакетами бюджет не обойти (пакет из 256 чтений за 770 мс раз в секунду держал бы DCS около
+60 % времени кадра; теперь следующий такой пакет ждёт 37,5 с). Текст отказа по бюджету чтений
+не изменился. (<a href="docs/dcs.html#%D0%B2%D1%80%D0%B5%D0%BC%D1%8F-dcs">Время DCS</a>.)</li>
+<li>Вызов, на который движок ответил <code>Error::Timeout</code>, а DCS его всё же выполнила, теперь
+оплачивает своё время, когда приходит поздний ответ (раньше — ничего).</li>
+<li>Долг писателя переживает перезапуск логики под тем же токеном или именем, как и раньше, но
+движок больше не держит писателей вечно: через 10 минут тишины он забывает того, чьи бюджеты
+снова полны (долг так не прощается).</li>
+</ul>
+<h3 id="совместимость">Совместимость<a class="anchor" href="#совместимость" aria-label="Ссылка на этот раздел">#</a></h3>
+<ul>
+<li>Нужны новые <code>sortied</code>, мост и слой Lua: <code>sortie install</code> и перезапуск DCS (DLL моста DCS
+загружает при старте). Что из нового требует слоя Lua 0.4.0 и что отвечает старый слой,
+сказано в пунктах ниже и в «Изменено».</li>
+<li>Документы и действия — операции ревизии API 3: логика объявляет
+<code>#[sortie::mission(api_rev = 3)]</code> (иначе <code>Error::Revision</code>), движок 0.3.x отвечает
+<code>Error::EngineTooOld</code>; в обоих случаях ничего не отправлено. <code>Engine.Version</code>,
+<code>Start.api_rev</code> и <code>Engine.Capabilities</code> теперь говорят <code>api_rev = 3</code>. Логика ревизий 0, 1 и 2
+продолжает работать; что меняется для неё, сказано в пунктах ниже.</li>
+<li><code>ctx.airbase_control</code> — тоже ревизия API 3, с тем же правилом. Слою Lua 0.3.x нужен
+<code>sortie install</code>, иначе <code>airbase_control</code> — <code>NOT_IMPLEMENTED</code>.</li>
+<li>Запросы аэродромов (<code>ctx.airbase(..)</code>, <code>ctx.airbases_parking/runways/state(..)</code>) — тоже
+ревизия API 3 и тоже требуют нового слоя Lua (<code>sortie install</code>), иначе <code>airbase_parking</code>,
+<code>airbase_runways</code>, <code>airbase_state</code> — <code>NOT_IMPLEMENTED</code>.</li>
+<li>Запрос склада (<code>ctx.warehouse(..)</code>, <code>ctx.warehouses_stock(..)</code>) — тоже ревизия API 3 и тоже
+требует нового слоя Lua, иначе <code>warehouse_stock</code> — <code>NOT_IMPLEMENTED</code>.</li>
+<li><code>ctx.warehouse_op()</code> — тоже ревизия API 3 и тоже требует нового слоя Lua, иначе
+<code>warehouse_op</code> — <code>NOT_IMPLEMENTED</code>.</li>
+<li><code>ctx.item_names()</code> — тоже ревизия API 3 и тоже требует нового слоя Lua, иначе <code>item_names</code> —
+<code>NOT_IMPLEMENTED</code>.</li>
+<li><code>set_task</code> и <code>push_task</code> наземной или морской группы — не новая операция: ревизия не нужна,
+движок и слой Lua любой версии принимают сырую задачу для любой группы. Нужен только новый
+SDK. Код, который отдавал задачи самолётам, компилируется как раньше, кроме двух случаев:
+свой тип с <code>Into&lt;Task&gt;</code> и обобщённый аргумент <code>impl Into&lt;Task&gt;</code> (или <code>T: Into&lt;Task&gt;</code>), который
+код передаёт дальше в <code>push_task</code> / <code>set_task</code>: трейт <code>TaskFor</code> закрыт. В обоих случаях
+помогает <code>.into()</code> до <code>Task</code>: <code>g.push_task(task.into())</code>.</li>
+<li><code>Task::ground_route(..)</code> — ревизия API 3: логика объявляет <code>#[sortie::mission(api_rev = 3)]</code>,
+иначе <code>Error::Revision</code>; с движком 0.3.x — <code>Error::EngineTooOld</code>; в обоих случаях ничего не
+отправлено. Слой Lua 0.3.x принимает такую задачу, но точку старта не уточняет (<code>lead_start</code>
+он не знает): колонна стартует из позиции, которую видел движок (у едущей группы — до 2 с
+назад); <code>sortie install</code> ставит новый слой. Сырые задачи уходят в DCS ровно как раньше.</li>
+<li>У <code>Task</code> новый вариант <code>Task::GroundRoute</code>: <code>match</code> по <code>Task</code> без ветки <code>_</code> его не
+скомпилирует.</li>
+<li><code>land().path_on_roads(..)</code> — запись каталога ревизии API 3 (первая выше ревизии 1): логика
+объявляет <code>#[sortie::mission(api_rev = 3)]</code>, иначе <code>Error::Revision</code>; с движком 0.3.x —
+<code>Error::EngineTooOld</code>. Слой Lua не менялся: вызов идёт через <code>dcs_call</code>. Вызов по пути
+(<code>dcs-raw</code>, Python) к движку 0.3.x отвечает <code>Error::Rejected</code>: его каталог этой записи не знает.</li>
+<li><code>land().road_path(..)</code> — тоже ревизия API 3 с теми же правилами, и ей нужен слой Lua 0.4.0
+(<code>sortie install</code>): слой 0.3.x не знает функций <code>sortie.*</code> и отвечает <code>MISSING</code>
+(<code>Error::Unavailable</code>). Владелец движка может выключить её в <code>engine.toml</code> или сузить
+<code>max_points</code>, но своих записей <code>sortie.*</code> добавить не может: движок с такой записью не
+стартует (у слоя таких функций нет).</li>
+<li>Сборка сценария, в который хук добавил Lua (DO SCRIPT, DO SCRIPT FILE, скрипт инициализации,
+условие LUA PREDICATE), теперь предупреждает (по умолчанию <code>do_scripts="warn"</code>); сборка без
+своего Lua не меняется ни в одном байте.</li>
+<li>FakeDcs: <code>timer.getAbsTime</code> и <code>timer.getTime0</code> берут время суток старта из <code>start_time</code>
+манифеста (как оно записано; без него — полдень, как раньше всегда), <code>set_start_time_of_day</code>
+задаёт его в тесте. События меток F10 приходят от FakeDcs так, как по вики их даёт DCS и
+переводит слой Lua 0.4.0; <code>layer_before_0_4(true)</code> играет старый слой.</li>
+<li>FakeDcs: склад, которого тест не задал, теперь безлимитный во всех классах, как аэродром
+миссии без <code>munitions</code> (раньше он считал каждый предмет с нуля, а <code>getInventory</code> отдавал
+самолёты и жидкости пустыми): сырой <code>getItemCount</code> там отвечает <code>FAKE_UNLIMITED_COUNT</code>
+(2^30), а <code>set_item</code>, <code>add_item</code>, <code>remove_item</code> ничего не меняют. Тест, которому нужен
+счёт, задаёт запас: <code>dcs.set_warehouse_stock(имя, FakeStock::unlimited().weapons([..]))</code>.
+<code>dcs.warehouse_count(имя, предмет)</code> отвечает то, что ответил бы <code>getItemCount</code>.</li>
+<li>Ревизия событий движка теперь 2 (<code>Engine.Capabilities</code>, <code>Start.event_rev</code> логики, объявившей
+2): <code>AirbaseOwnerChanged</code> получает только логика с
+<code>#[sortie::mission(api_rev = 3, event_rev = 2)]</code>; логика и подписчик <code>Events.Subscribe</code>
+ревизий событий 0 и 1 его не видят, а <code>BaseCaptured</code> приходит всем как раньше. Номера <code>seq</code>
+у них пропускают такие события (как и события ревизии 1 у логики ревизии 0): это не потеря.
+Движок 0.3.x событий ревизии 2 не знает: <code>ctx.event_rev()</code> там 1.</li>
+<li>Ревизия событий 2 — часть ревизии API 3: <code>#[sortie::mission(api_rev = 2, event_rev = 2)]</code>
+теперь ошибка компиляции. Логике SDK 0.3.0 с таким объявлением (оно компилировалось) движок
+не отказывает, а отдаёт ревизию событий 1, как отдавал движок 0.3.0, и событий, которых её SDK
+не знает, она не получает; то же для подписчика <code>Events.Subscribe</code> с <code>api_rev = 2</code>.</li>
+<li><code>CommandError.limit</code> — поле ответа: движок 0.4.0 заполняет его для любой логики, SDK до 0.4.0
+его не читает и видит тот же код, текст и <code>capability</code>, что от движка 0.3.0. Против движка
+0.3.0 <code>e.limit()</code> и <code>e.retry_after()</code> — <code>None</code>. У <code>sortie::Failure</code> новое публичное поле
+<code>limit</code>: код, который строит <code>Failure</code> литералом без <code>..Default::default()</code>, его добавляет.
+<code>Limit</code> и <code>LimitKind</code> — <code>#[non_exhaustive]</code>.</li>
+<li>Пределы дескрипторов (<code>handles.created</code>, <code>handles.read</code>) называет слой Lua 0.4.0: со слоем
+0.3.x (без <code>sortie install</code>) их отказы приходят без <code>limit()</code>, как раньше (предел созданных
+объектов — с <code>capability</code>).</li>
+<li><code>.at_formation(..)</code> — ревизия API 3: логика объявляет <code>#[sortie::mission(api_rev = 3)]</code>,
+иначе <code>Error::Revision</code>; с движком 0.3.x — <code>Error::EngineTooOld</code>; в обоих случаях ничего не
+отправлено. <code>.at(..)</code> отправляет те же байты, что в 0.3.0, поэтому ключ старого спавна
+остаётся тем же. Тот же ключ у <code>.at</code>, а потом у <code>.at_formation</code> — другая команда:
+<code>Error::Invalid</code>; переходя на <code>.at_formation</code>, дайте спавну новый ключ. Слой Lua не менялся.
+Манифест с <code>Template.heading_rad</code> читают и движок, и SDK 0.4.0; JSON-манифест с этим полем SDK
+0.3.x не прочтёт (неизвестное поле), <code>.pb</code> — прочтёт. Пересобранные генератором манифесты
+получают новое поле (у примеров — новый build id и digest).</li>
+<li>Таблицы перечислений в каталоге проверяются строже при загрузке: <code>engine.toml</code> с записью
+<code>enum:env.&lt;..&gt;</code> (или другой таблицей данных: <code>net</code>, <code>DCS</code>, <code>timer</code>, <code>Warehouse</code> …), с таблицей
+из 7 имён или с таблицей DCS в записи среды <code>hooks</code> останавливает <code>sortied</code> при старте с
+правилом в сообщении; 0.3.0 такую запись загружал, а каждый её вызов отклонял слой Lua. Ключ
+перечисления из такой таблицы отклоняется с тем же правилом, а не с «no enum table».</li>
+<li>Число в аргументе <code>enum:&lt;таблица&gt;</code> — новое для 0.4.0: движок 0.3.x отвечает
+<code>Error::Invalid</code>, слой Lua 0.3.x — тоже (<code>Error::Invalid</code>, число до DCS не доходит), нужен
+<code>sortie install</code>. Ключи работают с любым слоем.</li>
+<li>Движок 0.4.0 отклоняет второй тяжёлый вызов писателя, пока первый не вернулся, для логики
+любой ревизии: логика, которая отправляла два тяжёлых вызова сразу (например, два
+<code>world.getAirbases</code> в <code>join!</code>), получит <code>Error::Rejected</code> на одном из них, где движок 0.3.0
+ставил второй в очередь. После пакета, который занял больше 20 мс времени DCS, следующий
+пакет того же писателя ждёт весь долг, а не секунду, как одиночное чтение.</li>
+<li>Остальные изменения бюджетов времени DCS тоже действуют для логики любой ревизии: тяжёлый
+вызов оплачивает своё время бюджетом <code>dcs_time.heavy</code>, а не бюджетом чтений, так что после
+долгого тяжёлого вызова ждёт следующий тяжёлый вызов, а чтения идут сразу; одиночное чтение
+видит долг бюджета чтений не глубже 20 мс; пакет с вызовом <code>mutate</code> оплачивает
+<code>dcs_time.read</code> и отклоняется, пока бюджет исчерпан; вызов, на который движок ответил
+<code>Error::Timeout</code>, оплачивает время, когда приходит его поздний ответ. Текст отказа по бюджету
+чтений прежний. (<a href="docs/dcs.html#%D0%B2%D1%80%D0%B5%D0%BC%D1%8F-dcs">Время DCS</a>.)</li>
+<li>Время события <code>Mark</code> у логики любой ревизии — модельное, а не время суток, когда в DCS стоит
+слой Lua 0.4.0; значение DCS получает только логика ревизии API 3 (<code>Mark.dcs_time</code>). Часы
+движка после метки идут правильно и со старым слоем («Исправлено», часы сессии).</li>
+<li>Спавн в пустой сессии быстрее (ворота разогрева, «Изменено»), и логика это видит только по
+времени. Разогрев выключают равные значения <code>warmup_groups_per_s</code> и <code>groups_per_s</code>,
+<code>warmup_units_per_s</code> и <code>units_per_s</code> в <code>engine.toml spawn_gate</code>. Файл 0.3.x, который поднял
+обычные ворота выше 200 групп и 4000 юнитов в секунду, загружается: разогрев тогда не ниже
+них. FakeDcs начинает как сервер, на который никто не зашёл, поэтому спавны в тестах идут
+через ворота разогрева; игрок (<code>dcs.connect_player(..)</code> или юнит с игроком) включает обычные.</li>
+<li>Запись владельца <code>heavy</code> в <code>engine.toml [calls]</code> с именем на <code>find</code> теперь включена по
+умолчанию (раньше она считалась изменяющей и была выключена, пока её не включат). Если она не
+должна работать, выключите её (<code>enabled = false</code> у записи или путь в списке <code>[calls] disable</code>).</li>
+<li>Устаревшие обёртки (раздел «Устарело») дают предупреждение компилятора <code>deprecated</code>: сборка с
+<code>-D warnings</code> на них остановится, пока код не перейдёт на <code>ctx.airbase_control(..)</code> и
+<code>ctx.warehouse_op()</code>.</li>
+</ul>
 <h2 id="030--2026-11-18">[0.3.0] — 2026-11-18<a class="anchor" href="#030--2026-11-18" aria-label="Ссылка на этот раздел">#</a></h2>
 <p>Ревизия API 2. Логика ревизий 0 и 1 работает без изменений.</p>
-<h3 id="добавлено">Добавлено<a class="anchor" href="#добавлено" aria-label="Ссылка на этот раздел">#</a></h3>
+<h3 id="добавлено-1">Добавлено<a class="anchor" href="#добавлено-1" aria-label="Ссылка на этот раздел">#</a></h3>
 <ul>
 <li>Поиск объектов в объёме: <code>ctx.search_objects(Volume::sphere_on_ground(точка, радиус))</code> с
 <code>.categories([ObjectCategory::Unit, ObjectCategory::Static, ObjectCategory::Scenery])</code> и
@@ -55,7 +759,7 @@
 (<code>SearchObjects</code>, <code>ObjectCategory</code>, <code>Found</code>, <code>FoundObject</code>). В FakeDcs поиск находит юниты,
 статики, грузы и аэродромы (объектов карты в нём нет).</li>
 </ul>
-<h3 id="совместимость">Совместимость<a class="anchor" href="#совместимость" aria-label="Ссылка на этот раздел">#</a></h3>
+<h3 id="совместимость-1">Совместимость<a class="anchor" href="#совместимость-1" aria-label="Ссылка на этот раздел">#</a></h3>
 <ul>
 <li>Поиск — операция ревизии API 2: логика объявляет <code>#[sortie::mission(api_rev = 2)]</code> (иначе
 <code>Error::Revision</code>), движок 0.2.x отвечает <code>Error::EngineTooOld</code>. <code>Engine.Version</code>,
@@ -66,7 +770,7 @@
 по <code>false</code>), в живой игре не проверялось (живая проверка OBJ-T32).</li>
 </ul>
 <h2 id="021--2026-11-18">[0.2.1] — 2026-11-18<a class="anchor" href="#021--2026-11-18" aria-label="Ссылка на этот раздел">#</a></h2>
-<h3 id="исправлено">Исправлено<a class="anchor" href="#исправлено" aria-label="Ссылка на этот раздел">#</a></h3>
+<h3 id="исправлено-1">Исправлено<a class="anchor" href="#исправлено-1" aria-label="Ссылка на этот раздел">#</a></h3>
 <ul>
 <li>Предмет склада можно назвать и wsType, а не только именем: <code>item_count</code>, <code>add_item</code>,
 <code>remove_item</code> и <code>set_item</code> принимают <code>"weapons.missiles.AIM_9"</code>, <code>[4, 4, 7, 22]</code> или
@@ -82,7 +786,7 @@
 </ul>
 <h2 id="020--2026-11-17">[0.2.0] — 2026-11-17<a class="anchor" href="#020--2026-11-17" aria-label="Ссылка на этот раздел">#</a></h2>
 <p>Основа широкого API (волна 1, ревизия API 1). Логика 0.1.0 работает без изменений.</p>
-<h3 id="добавлено-1">Добавлено<a class="anchor" href="#добавлено-1" aria-label="Ссылка на этот раздел">#</a></h3>
+<h3 id="добавлено-2">Добавлено<a class="anchor" href="#добавлено-2" aria-label="Ссылка на этот раздел">#</a></h3>
 <ul>
 <li>
 <p>Общий словарь в <code>sortie.v1</code> (<code>common.proto</code>): селекторы <code>ObjSel</code>, <code>AirbaseSel</code>, <code>PlayerSel</code>,
@@ -320,7 +1024,7 @@ running build …»), <code>Engine.Health</code> перечисляет таки
 (частота кадров и 99-й процентиль работы Sortie за один pump, мкс).</p>
 </li>
 </ul>
-<h3 id="совместимость-1">Совместимость<a class="anchor" href="#совместимость-1" aria-label="Ссылка на этот раздел">#</a></h3>
+<h3 id="совместимость-2">Совместимость<a class="anchor" href="#совместимость-2" aria-label="Ссылка на этот раздел">#</a></h3>
 <ul>
 <li>Движок этой версии работает только с мостом и слоем Lua этой версии (версия связи 1.1):
 после обновления <code>sortied</code> выполните <code>sortie install</code> и перезапустите DCS. Старый мост
@@ -452,7 +1156,7 @@ F10 (или движок не нашёл её после переподключ�
 <code>sortied --dev</code>.</li>
 <li>Горячей перезагрузки логики (<code>sortie dev</code>).</li>
 </ul>
-<h3 id="совместимость-2">Совместимость<a class="anchor" href="#совместимость-2" aria-label="Ссылка на этот раздел">#</a></h3>
+<h3 id="совместимость-3">Совместимость<a class="anchor" href="#совместимость-3" aria-label="Ссылка на этот раздел">#</a></h3>
 <ul>
 <li>Движок поставляется отдельно: архив <code>sortie-runtime-0.1.0-win64.zip</code> в релизе <code>v0.1.0</code>.
 Используйте SDK и движок одной версии. Там же колесо генератора
@@ -465,7 +1169,7 @@ F10 (или движок не нашёл её после переподключ�
 </div>
 <footer class="footer">
 <div class="footer-inner">
-<p>Sortie SDK 0.3.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p>Sortie SDK 0.4.0. Лицензия SDK: MIT OR Apache-2.0.</p>
 <p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
 </div>
 </footer>

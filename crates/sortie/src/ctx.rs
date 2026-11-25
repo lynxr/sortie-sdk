@@ -541,6 +541,37 @@ impl<M: Scenario> Ctx<M> {
         }
     }
 
+    // ----- documents of the web API --------------------------------------------------------------
+
+    /// Publishes `value` as the JSON document `name` of this logic, which the engine serves
+    /// read-only over its web API (`GET /api/v1/docs/<logic>/<name>`): a site's live map,
+    /// campaign state. Resolves when the engine stored it; the document then outlives this
+    /// process, the session and the engine (API revision 3: declare
+    /// `#[sortie::mission(api_rev = 3)]`). See [`crate::publish`].
+    ///
+    /// ```ignore
+    /// let front = ctx.publish("front", &Front { sectors }).await?; // Published { rev, .. }
+    /// ```
+    #[track_caller]
+    pub fn publish<T: Serialize + ?Sized>(&self, name: &str, value: &T) -> crate::publish::Publish {
+        crate::publish::Publish::new(self.session.clone(), name, value, Location::caller())
+    }
+
+    /// Removes the published document `name`; resolves to whether there was one (API
+    /// revision 3).
+    #[track_caller]
+    pub fn unpublish(&self, name: &str) -> crate::publish::Unpublish {
+        crate::publish::Unpublish::new(self.session.clone(), name, Location::caller())
+    }
+
+    /// What this logic serves through the engine's web API: actions a web caller calls with
+    /// `POST /api/v1/actions/<logic>/<name>` (`ctx.api().action("move_convoy")?`, API revision
+    /// 3). See [`crate::api`].
+    #[must_use]
+    pub fn api(&self) -> crate::api::Api {
+        crate::api::Api::new(self.session.clone())
+    }
+
     // ----- tasks -------------------------------------------------------------------------------
 
     /// Starts a task that lives as long as the session (it is aborted when the session ends).
@@ -708,6 +739,191 @@ impl<M: Scenario> Ctx<M> {
         Cmd::new(
             self.session.clone(),
             cmd::SearchObjects::new(volume),
+            Location::caller(),
+        )
+    }
+
+    /// The owner, DCS's own capture and the radio silence of 1 to 32 airbases
+    /// ([`cmd::MAX_AIRBASES`]), applied in one DCS frame (API revision 3: declare
+    /// `#[sortie::mission(api_rev = 3)]`; see [`cmd::AirbaseControl`]); a longer list goes in
+    /// several commands. A new owner is in `ctx.world()` when the command returns.
+    ///
+    /// ```ignore
+    /// let out = ctx
+    ///     .airbase_control([airbases::KUTAISI, airbases::SENAKI])
+    ///     .owner(Coalition::Red)
+    ///     .auto_capture(false)
+    ///     .key("front-7")
+    ///     .await?;
+    /// assert_eq!(out.ok_count(), 2);
+    /// ```
+    #[track_caller]
+    pub fn airbase_control<A: Into<crate::sel::AirbaseSel>>(
+        &self,
+        airbases: impl IntoIterator<Item = A>,
+    ) -> Cmd<cmd::AirbaseControl> {
+        Cmd::new(
+            self.session.clone(),
+            cmd::AirbaseControl::new(airbases.into_iter().map(Into::into).collect()),
+            Location::caller(),
+        )
+    }
+
+    /// One airbase, FARP or ship deck to read (API revision 3: declare
+    /// `#[sortie::mission(api_rev = 3)]`): `.parking()`, `.runways()`, `.state()`, each a
+    /// query (nothing changes in DCS, no key needed; see [`cmd::AirbaseHandle`]).
+    ///
+    /// ```ignore
+    /// let spots = ctx.airbase(airbases::KUTAISI).parking().available_only().await?;
+    /// let runways = ctx.airbase(airbases::KUTAISI).runways().await?;
+    /// let state = ctx.airbase(AirbaseSel::name("FARP North")).state().await?;
+    /// ```
+    #[must_use]
+    pub fn airbase(&self, airbase: impl Into<crate::sel::AirbaseSel>) -> cmd::AirbaseHandle {
+        cmd::AirbaseHandle::new(self.session.clone(), airbase.into())
+    }
+
+    /// The parking spots of 1 to 16 airbases in one query (API revision 3), each base answered
+    /// or with its own error (see [`cmd::ReadAirbases`]); `.available_only()` lists the free
+    /// spots only.
+    #[track_caller]
+    pub fn airbases_parking<A: Into<crate::sel::AirbaseSel>>(
+        &self,
+        airbases: impl IntoIterator<Item = A>,
+    ) -> Cmd<cmd::ReadAirbases<cmd::Parking>> {
+        Cmd::new(
+            self.session.clone(),
+            cmd::ReadAirbases::new(airbases.into_iter().map(Into::into).collect()),
+            Location::caller(),
+        )
+    }
+
+    /// The runways of 1 to 256 airbases in one query (API revision 3).
+    #[track_caller]
+    pub fn airbases_runways<A: Into<crate::sel::AirbaseSel>>(
+        &self,
+        airbases: impl IntoIterator<Item = A>,
+    ) -> Cmd<cmd::ReadAirbases<cmd::Runways>> {
+        Cmd::new(
+            self.session.clone(),
+            cmd::ReadAirbases::new(airbases.into_iter().map(Into::into).collect()),
+            Location::caller(),
+        )
+    }
+
+    /// The owner, auto capture and radio silence of 1 to 256 airbases, 32 read per DCS frame
+    /// (API revision 3). An owner the world held otherwise is in `ctx.world()` when the query
+    /// returns, with one `AirbaseOwnerChanged{Discovered}` per such base, unless DCS reported a
+    /// capture of that base after the read (the world keeps the newer owner). This is how a
+    /// logic sees owners changed without an event (another script's `setCoalition`): poll.
+    ///
+    /// ```ignore
+    /// let read = ctx.airbases_state([airbases::KUTAISI, airbases::SENAKI]).await?;
+    /// for b in &read.bases {
+    ///     if let Some(s) = &b.value { /* s.owner, s.auto_capture, s.radio_silent */ }
+    /// }
+    /// ```
+    #[track_caller]
+    pub fn airbases_state<A: Into<crate::sel::AirbaseSel>>(
+        &self,
+        airbases: impl IntoIterator<Item = A>,
+    ) -> Cmd<cmd::ReadAirbases<cmd::ControlState>> {
+        Cmd::new(
+            self.session.clone(),
+            cmd::ReadAirbases::new(airbases.into_iter().map(Into::into).collect()),
+            Location::caller(),
+        )
+    }
+
+    /// One warehouse to read (API revision 3: declare `#[sortie::mission(api_rev = 3)]`): of an
+    /// airbase (`airbases::SENAKI`, `WarehouseSel::airbase(..)`), of a cargo static
+    /// (`WarehouseSel::cargo(..)`) or by DCS name (`WarehouseSel::named(..)`). `.stock()` is a
+    /// query (nothing changes in DCS, no key needed; see [`cmd::WarehouseHandle`]).
+    ///
+    /// ```ignore
+    /// let stock = ctx.warehouse(airbases::SENAKI).stock().await?;
+    /// let unlimited = stock.weapons.as_ref().is_some_and(|w| w.is_unlimited());
+    /// let amraams = ctx
+    ///     .warehouse(airbases::SENAKI)
+    ///     .stock()
+    ///     .items(["weapons.missiles.AIM_120C"])
+    ///     .await?
+    ///     .count("weapons.missiles.AIM_120C");
+    /// ```
+    #[must_use]
+    pub fn warehouse(
+        &self,
+        warehouse: impl Into<crate::sel::WarehouseSel>,
+    ) -> cmd::WarehouseHandle {
+        cmd::WarehouseHandle::new(self.session.clone(), warehouse.into())
+    }
+
+    /// The stock of 1 to 64 warehouses in one query (API revision 3), each answered or with its
+    /// own error (see [`cmd::ReadStocks`]): the whole inventory of each (`getInventory`, one
+    /// warehouse a DCS frame), or with `.items([..])` / `.liquids()` only those (cheaper).
+    ///
+    /// ```ignore
+    /// let read = ctx
+    ///     .warehouses_stock([airbases::SENAKI, airbases::KUTAISI])
+    ///     .items(["weapons.missiles.AIM_120C"])
+    ///     .liquids()
+    ///     .await?;
+    /// for w in &read.warehouses {
+    ///     if let Some(s) = &w.value { /* s.count(..), s.liquids */ }
+    /// }
+    /// ```
+    #[track_caller]
+    pub fn warehouses_stock<W: Into<crate::sel::WarehouseSel>>(
+        &self,
+        warehouses: impl IntoIterator<Item = W>,
+    ) -> Cmd<cmd::ReadStocks> {
+        Cmd::new(
+            self.session.clone(),
+            cmd::ReadStocks::new(warehouses.into_iter().map(Into::into).collect()),
+            Location::caller(),
+        )
+    }
+
+    /// Changes of warehouse stock in one DCS frame, all or nothing (API revision 3; see
+    /// [`cmd::WarehouseOp`]): `.set(..)`, `.add(..)`, `.remove(..)` of an item or a liquid in a
+    /// warehouse and `.transfer(..)` from one warehouse to another, 1 to 16 changes in order.
+    /// Every count is read and every change checked first; if one fails (an unlimited stock,
+    /// not enough to remove, a warehouse DCS lacks) nothing is changed, and the answer says
+    /// which and why. Every `warehouse_op` needs `.key(..)` in dev mode, sets too.
+    ///
+    /// ```ignore
+    /// let out = ctx
+    ///     .warehouse_op()
+    ///     .remove(airbases::SENAKI, "weapons.missiles.AIM_120C", 4.0)
+    ///     .set(airbases::SENAKI, Liquid::JetFuel, 20_000.0)
+    ///     .key("rearm-senaki-3")
+    ///     .await?;
+    /// assert!(out.applied);
+    /// ```
+    #[track_caller]
+    pub fn warehouse_op(&self) -> Cmd<cmd::WarehouseOp> {
+        Cmd::new(
+            self.session.clone(),
+            cmd::WarehouseOp::new(),
+            Location::caller(),
+        )
+    }
+
+    /// The names the running DCS gives the objects it knows, with their wsTypes (API revision
+    /// 3; see [`cmd::ItemNames`]): weapons as `weapons.missiles.AIM_120C`, aircraft by their
+    /// type. `.items([..])` looks up only those. The engine asks DCS once per DCS process and
+    /// answers later queries from memory. A read: nothing changes, and it takes no key
+    /// (`.key(..)` is `Error::Invalid`).
+    ///
+    /// ```ignore
+    /// let names = ctx.item_names().await?;
+    /// let ws = names.ws_type_of("weapons.missiles.AIM_120C");
+    /// ```
+    #[track_caller]
+    pub fn item_names(&self) -> Cmd<cmd::ReadItemNames> {
+        Cmd::new(
+            self.session.clone(),
+            cmd::ReadItemNames::default(),
             Location::caller(),
         )
     }

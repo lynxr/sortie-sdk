@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "generator": "sortie-gen 0.3.0",
+  "generator": "sortie-gen 0.4.0",
   "geometry": {
     "zones": {
       "OBJECTIVE": {

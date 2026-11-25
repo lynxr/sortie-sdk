@@ -24,6 +24,12 @@ message LogicUp {
     StateOp state = 4;
     // The replica no longer matches the tick deltas; the engine answers with LogicDown.resync.
     Resync resync = 5;
+    // 6 is kept for M4 (LogicFault fault).
+    // API revision 3. The actions of the web API this logic answers now: the whole set each
+    // time (an empty list declares none). Declarations end with the stream.
+    ActionSet actions = 7;
+    // API revision 3. The answer to LogicDown.action with the same id; one per call.
+    ActionReply action_reply = 8;
   }
 }
 
@@ -93,6 +99,9 @@ message LogicDown {
     // no longer build a delta for this logic). The logic replaces its replica; later ticks
     // continue from snapshot.rev.
     WorldSnapshot resync = 10;
+    // API revision 3. A web caller called an action this logic declared
+    // (POST /api/v1/actions/<logic>/<name>); answer with LogicUp.action_reply.
+    ActionCall action = 11;
   }
 }
 
@@ -175,7 +184,8 @@ message AttachRejected {
   repeated Capability missing_capabilities = 4;
 }
 
-// State documents, once markers, timers and the session report, multiplexed on the stream.
+// State documents, once markers, timers, the session report and the documents of the web API,
+// multiplexed on the stream.
 message StateOp {
   // Client-chosen correlation id, unique per stream.
   uint64 id = 1;
@@ -186,7 +196,86 @@ message StateOp {
     OnceMark once_mark = 5;
     TimerArm timer_arm = 6;
     ReportSet report_set = 7;
+    // API revision 3. Answered with StateResult.published; needs no session.
+    PublishDoc publish = 8;
+    // API revision 3. Answered with StateResult.published (rev 0: nothing was published).
+    UnpublishDoc unpublish = 9;
   }
+}
+
+// ---- API revision 3: documents of the web API ----
+// A logic publishes named JSON documents; the engine stores them under the logic's name
+// (Attach.logic) and serves them read-only over HTTP (GET /api/v1/docs/<logic>/<name>). They
+// outlive the logic process, the session and the engine (the state database). Requests never
+// reach the logic or DCS.
+message PublishDoc {
+  // 1 to 64 bytes of a-z, 0-9, `_` and `-`.
+  string name = 1;
+  // UTF-8 JSON (any JSON value), at most 256 KiB. The same bytes again change nothing.
+  bytes json = 2;
+}
+
+message UnpublishDoc {
+  string name = 1;
+}
+
+message PublishedDoc {
+  // The logic it belongs to (Attach.logic) and its name.
+  string logic = 1;
+  string name = 2;
+  // The engine-wide number of the change that stored it: it grows with every publish of any
+  // document of this engine, so one rev is one content. 0 = not published (an unpublish of
+  // nothing).
+  uint64 rev = 3;
+  // Wall time of that change, milliseconds since 1970-01-01 UTC.
+  int64 updated_unix_ms = 4;
+  // This op stored new content (publish) or removed a document (unpublish).
+  bool changed = 5;
+}
+
+// ---- API revision 3: actions of the web API ----
+// A logic declares named actions; a web caller (role operator or admin) calls one with
+// POST /api/v1/actions/<logic>/<name> and a JSON body; the engine hands the call to the logic
+// that declared it (LogicDown.action) and answers the caller with the logic's answer
+// (LogicUp.action_reply). The logic decides what happens in the game; the caller never sends
+// DCS commands. No answer within 10 s is 504.
+message ActionSet {
+  // 1 to 64 bytes of a-z, 0-9, `_` and `-` each; at most 64 names. The logic's own name
+  // (Attach.logic) is a path segment: 1 to 64 bytes of A-Z, a-z, 0-9, `.`, `_` and `-`.
+  repeated string names = 1;
+}
+
+message ActionCall {
+  // Chosen by the engine, unique per stream; the answer names it.
+  uint64 id = 1;
+  // The action called (one of ActionSet.names).
+  string name = 2;
+  // The request body: UTF-8 JSON (`null` for an empty body), at most [http] max_body_bytes.
+  bytes json = 3;
+  // The name of the caller's API token ("" without a token or without a name).
+  string token = 4;
+  // The caller's role: "operator" or "admin".
+  string role = 5;
+}
+
+message ActionReply {
+  // ActionCall.id.
+  uint64 id = 1;
+  oneof answer {
+    // HTTP 200 with this body: UTF-8 JSON, at most 1 MiB.
+    bytes json = 2;
+    // A refusal by the logic: HTTP 400 to 499.
+    ActionRefusal refused = 3;
+    // The logic gave no answer (the request was dropped, or its answer could not be
+    // written): HTTP 500 with this text.
+    string unanswered = 4;
+  }
+}
+
+message ActionRefusal {
+  // 400 to 499.
+  uint32 status = 1;
+  string message = 2;
 }
 
 message StateGet {
@@ -233,6 +322,8 @@ message StateResult {
     OnceStatus once = 3;
     TimerStatus timer = 4;
     StateAck ack = 5;
+    // API revision 3: PublishDoc / UnpublishDoc.
+    PublishedDoc published = 6;
     CommandError err = 9;
   }
 }

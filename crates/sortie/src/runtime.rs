@@ -23,7 +23,7 @@
 //! with the Rust call site ([`LogicHandle::errors`]), and it is aborted when its session ends.
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 use std::panic::AssertUnwindSafe;
 use std::process::ExitCode;
@@ -39,6 +39,7 @@ use sortie_world::World;
 use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tokio::task::AbortHandle;
 
+use crate::api::{ActionInbox, ActionRequest};
 use crate::menu::MenuInbox;
 use crate::menu_tree::TreeInbox;
 use crate::{Ctx, Error, Failure, Result, Start};
@@ -394,6 +395,8 @@ pub struct Session {
     menus: RefCell<Vec<Weak<MenuInbox>>>,
     /// Menu tree presses (`ctx.menus()`).
     trees: RefCell<Vec<Weak<TreeInbox>>>,
+    /// The web API actions this session declares (`ctx.api().action(..)`), by name.
+    actions: RefCell<BTreeMap<String, Weak<ActionInbox>>>,
     pub(crate) end: watch::Sender<Option<SessionEnd>>,
     tasks: RefCell<Vec<TrackedTask>>,
 }
@@ -449,6 +452,7 @@ impl Session {
             events: broadcast::Sender::new(1024),
             menus: RefCell::default(),
             trees: RefCell::default(),
+            actions: RefCell::default(),
             end: watch::Sender::new(None),
             tasks: RefCell::default(),
         }
@@ -596,6 +600,72 @@ impl Session {
         trees.push(Rc::downgrade(inbox));
     }
 
+    /// Declares a web API action (`ctx.api().action(..)`) and tells the engine the whole set;
+    /// `Err` for a name declared already by a live stream, or one too many.
+    pub(crate) fn declare_action(&self, inbox: &Rc<ActionInbox>) -> Result<(), String> {
+        {
+            let mut actions = self.actions.borrow_mut();
+            actions.retain(|_, a| a.strong_count() > 0);
+            if let Some(other) = actions.get(&inbox.name).and_then(Weak::upgrade) {
+                return Err(format!(
+                    "action `{}` is declared already (at {}); one stream per action: read its \
+                     requests there, or drop that stream first",
+                    inbox.name, other.origin
+                ));
+            }
+            if actions.len() >= crate::api::MAX_ACTIONS {
+                return Err(format!(
+                    "a logic declares at most {} actions",
+                    crate::api::MAX_ACTIONS
+                ));
+            }
+            actions.insert(inbox.name.clone(), Rc::downgrade(inbox));
+        }
+        self.send_action_set();
+        Ok(())
+    }
+
+    /// Withdraws the action `name` (its stream was dropped).
+    pub(crate) fn withdraw_action(&self, name: &str) {
+        let removed = self.actions.borrow_mut().remove(name).is_some();
+        if removed {
+            self.send_action_set();
+        }
+    }
+
+    /// `LogicUp.actions`: the names declared now.
+    fn send_action_set(&self) {
+        let names = self
+            .actions
+            .borrow()
+            .iter()
+            .filter(|(_, a)| a.strong_count() > 0)
+            .map(|(n, _)| n.clone())
+            .collect();
+        let _ = self.up.send(v1::LogicUp {
+            msg: Some(logic_up::Msg::Actions(v1::ActionSet { names })),
+        });
+    }
+
+    /// `LogicDown.action`: to the stream of that action; nobody reads it any more: answered
+    /// as unanswered at once.
+    fn deliver_action(&self, call: v1::ActionCall) {
+        let inbox = self
+            .actions
+            .borrow()
+            .get(&call.name)
+            .and_then(Weak::upgrade);
+        let name = call.name.clone();
+        let req = ActionRequest::new(call, self.up.clone());
+        match inbox {
+            Some(inbox) if !self.is_ended() => inbox.offer(req),
+            _ => {
+                tracing::debug!(action = %name, "a call of an action this session does not declare now");
+                drop(req);
+            }
+        }
+    }
+
     fn on_tick(&self, tick: &v1::Tick) {
         match self.world.try_borrow_mut() {
             Ok(mut world) => {
@@ -738,6 +808,11 @@ impl Session {
         self.shared.retire(tasks);
         self.menus.borrow_mut().clear();
         self.trees.borrow_mut().clear();
+        // The session's actions end with it (their streams drop with the aborted tasks).
+        let declared = !std::mem::take(&mut *self.actions.borrow_mut()).is_empty();
+        if declared {
+            self.send_action_set();
+        }
     }
 }
 
@@ -1000,6 +1075,11 @@ async fn drive<M: Scenario, F: Mission<M>>(
                     s.deliver_state(r);
                 }
             }
+            logic_down::Msg::Action(call) => match &session {
+                Some(s) => s.deliver_action(call),
+                // No session: nothing declares it (a call that crossed the withdrawal).
+                None => drop(ActionRequest::new(call, up.clone())),
+            },
             logic_down::Msg::Ended(ended) => {
                 if let Some(s) = &session
                     && !ended.session.is_empty()

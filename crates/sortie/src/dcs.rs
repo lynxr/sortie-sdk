@@ -3,7 +3,7 @@
 //!
 //! ```ignore
 //! let surface = ctx.dcs().land().surface_type(p).await?;           // "ROAD"
-//! ctx.dcs().airbase(airbases::KUTAISI).set_coalition(Coalition::Blue).key("kutaisi").await?;
+//! ctx.dcs().sounds().out_sound("l10n/DEFAULT/alarm.wav").key("alarm").await?;
 //! let n = ctx.dcs().warehouse(airbases::KUTAISI).item_count("weapons.missiles.AIM_120C").await?;
 //! ```
 //!
@@ -19,8 +19,10 @@
 //! * Low level: the mirror does not learn what a mutating call changed until its next sweep
 //!   (an airbase owner, a destroyed object). Where a typed operation exists the wrapper is
 //!   `#[deprecated]` and names it.
-//! * Every wrapper belongs to API revision 1: the logic declares
-//!   `#[sortie::mission(api_rev = 1)]`.
+//! * A wrapper belongs to the API revision of its entry, 1 unless its doc names a later one
+//!   (the road paths are 3): the logic declares `#[sortie::mission(api_rev = N)]`.
+//! * `sortie.*` entries are functions of the Sortie Lua layer over DCS functions, run inside
+//!   DCS in the frame of the call: `land().road_path(..)` answers a [`RoadPath`] summary.
 //! * The untyped call by string path is behind the cargo feature `dcs-raw`
 //!   (`ctx.dcs().call("land.getHeight")`).
 
@@ -665,6 +667,62 @@ impl<T: FromValue> FromValue for Vec<T> {
     }
 }
 
+/// The summary of a road path that the Sortie Lua layer computes inside DCS, in the frame of
+/// the call, from what `land.findPathOnRoads` returns: the answer of
+/// `ctx.dcs().land().road_path(..)` (catalog entry `sortie.findPathOnRoads`, API revision 3).
+/// `count`, `length_m` and the ends are of the whole path; `points` holds at most the cap the
+/// call asked for, both ends included (none without a cap).
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct RoadPath {
+    /// The points of the whole path.
+    pub count: u32,
+    /// Its length along the points, metres.
+    pub length_m: f64,
+    /// Its first point (`None` for an empty path).
+    pub first: Option<MapPoint>,
+    /// Its last point.
+    pub last: Option<MapPoint>,
+    /// How far the first point lies from the start asked, metres.
+    pub start_gap_m: Option<f64>,
+    /// How far the last point lies from the end asked, metres.
+    pub end_gap_m: Option<f64>,
+    /// The points kept, in path order: at most the cap, both ends included; the turning points
+    /// (`keep` "turns", the default) or points spaced evenly along the path ("even"). Empty
+    /// when the call gave no cap.
+    pub points: Vec<MapPoint>,
+    /// `points` holds fewer points than the path has (so always without a cap, except for an
+    /// empty path: `count == 0` is never thinned).
+    pub thinned: bool,
+}
+
+impl FromValue for RoadPath {
+    fn from_value(v: Value) -> std::result::Result<Self, String> {
+        if v.as_table().is_none() {
+            return Err(format!(
+                "{} where a road path summary was expected",
+                kind(&v)
+            ));
+        }
+        let take = |key: &str| v.get(key).cloned().unwrap_or(Value::Nil);
+        let count = f64::from_value(take("count")).map_err(|m| format!("count: {m}"))?;
+        if !(count >= 0.0 && count.fract() == 0.0 && count <= f64::from(u32::MAX)) {
+            return Err(format!("count {count} is no number of points"));
+        }
+        let with = |key: &'static str| move |m: String| format!("{key}: {m}");
+        Ok(RoadPath {
+            count: count as u32,
+            length_m: f64::from_value(take("length")).map_err(with("length"))?,
+            first: Option::<MapPoint>::from_value(take("first")).map_err(with("first"))?,
+            last: Option::<MapPoint>::from_value(take("last")).map_err(with("last"))?,
+            start_gap_m: Option::<f64>::from_value(take("start_gap")).map_err(with("start_gap"))?,
+            end_gap_m: Option::<f64>::from_value(take("end_gap")).map_err(with("end_gap"))?,
+            points: Vec::<MapPoint>::from_value(take("points")).map_err(with("points"))?,
+            thinned: bool::from_value(take("thinned")).map_err(with("thinned"))?,
+        })
+    }
+}
+
 impl FromReturn for () {
     fn from_return(_: Return) -> std::result::Result<Self, String> {
         Ok(())
@@ -688,7 +746,7 @@ macro_rules! single {
 }
 
 single!(
-    f64, bool, String, Value, Vec3, MapPoint, Coalition, DcsObject, Handle
+    f64, bool, String, Value, Vec3, MapPoint, Coalition, DcsObject, Handle, RoadPath
 );
 
 impl<T: FromValue + 'static> FromReturn for Option<T> {
@@ -728,53 +786,10 @@ impl<A: FromValue + 'static, B: FromValue + 'static, C: FromValue + 'static> Fro
 
 // ----- arguments and receivers (used by the generated wrappers) -----------------------------------
 
-/// A warehouse item as DCS's `Warehouse` functions take it: by its name or by its wsType.
-///
-/// ```ignore
-/// let stock = ctx.dcs().warehouse(airbases::SENAKI);
-/// let by_name = stock.item_count("weapons.missiles.AIM_9").await?;
-/// let by_type = stock.item_count([4, 4, 7, 22]).await?; // the same missile, by wsType
-/// ```
-///
-/// A wsType is four whole numbers (DCS's `Scripts/Database/wsTypes.lua`); the last one is
-/// reported to change between DCS builds for some items.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum WarehouseItem {
-    /// `weapons.missiles.AIM_9`, an aircraft type, ...
-    Name(String),
-    /// `{4, 4, 7, 22}`.
-    WsType([u32; 4]),
-}
-
-impl From<&str> for WarehouseItem {
-    fn from(s: &str) -> Self {
-        WarehouseItem::Name(s.to_owned())
-    }
-}
-
-impl From<String> for WarehouseItem {
-    fn from(s: String) -> Self {
-        WarehouseItem::Name(s)
-    }
-}
-
-impl From<&String> for WarehouseItem {
-    fn from(s: &String) -> Self {
-        WarehouseItem::Name(s.clone())
-    }
-}
-
-impl From<[u32; 4]> for WarehouseItem {
-    fn from(t: [u32; 4]) -> Self {
-        WarehouseItem::WsType(t)
-    }
-}
-
-impl From<(u32, u32, u32, u32)> for WarehouseItem {
-    fn from((a, b, c, d): (u32, u32, u32, u32)) -> Self {
-        WarehouseItem::WsType([a, b, c, d])
-    }
-}
+/// A warehouse item as DCS's `Warehouse` functions take it: by its name or by its wsType. One
+/// type for the raw wrappers and the typed stock query (`ctx.warehouse(..).stock().items(..)`):
+/// defined in [`crate::cmd`], re-exported here, where it has always been.
+pub use crate::cmd::WarehouseItem;
 
 /// Builders of [`v1::DcsArg`] (for code that builds calls itself).
 pub mod arg {

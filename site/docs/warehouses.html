@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Склады: запас аэродромов и грузов | Sortie SDK</title>
+<meta name="description" content="ctx.warehouse(sel).stock() читает запас одного склада, ctx.warehouses_stock(..) — до 64 складов одним запросом. Это типизированный запрос API ревизии 3, а не вызов DCS: движок…">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/docs/warehouses.html">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-doc has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.4.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Страницы документации">
+<nav class="toc">
+<a class="toc-home" href="index.html">Документация</a>
+<ul>
+<li><a href="index.html">Обзор</a></li>
+<li><a href="install-runtime.html">Установка рантайма</a></li>
+<li><a href="quickstart.html">Быстрый старт</a></li>
+<li><a href="dependency.html">Подключение SDK</a></li>
+<li><a href="sdk.html">Логика на Rust</a><ul>
+<li><a href="objects.html">Объекты: статики, уничтожение, мусор</a></li>
+<li><a href="airbases.html">Аэродромы: владелец, автозахват, радио, стоянки и полосы</a></li>
+<li><a href="warehouses.html" aria-current="page">Склады: запас аэродромов и грузов</a></li>
+<li><a href="map.html">Рисование на карте</a></li>
+<li><a href="menus.html">Деревья меню F10</a></li>
+<li><a href="dcs.html">Вызовы DCS</a></li>
+<li><a href="dcs-catalog.html">Справочник каталога DCS API</a></li>
+<li><a href="capabilities.html">Возможности движка</a></li>
+</ul>
+</li>
+<li><a href="generator.html">Сценарий на Python</a></li>
+<li><a href="testing.html">Тестирование</a></li>
+<li><a href="operations.html">Эксплуатация</a><ul>
+<li><a href="web-api.html">Web API</a></li>
+</ul>
+</li>
+<li><a href="troubleshooting.html">Диагностика</a></li>
+<li><a href="faq.html">Вопросы и ограничения</a></li>
+<li><a href="changelog.html">Что нового</a></li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="склады-запас-аэродромов-и-грузов">Склады: запас аэродромов и грузов<a class="anchor" href="#склады-запас-аэродромов-и-грузов" aria-label="Ссылка на этот раздел">#</a></h1>
+<p><code>ctx.warehouse(sel).stock()</code> читает запас одного склада, <code>ctx.warehouses_stock(..)</code> — до 64
+складов одним запросом. Это типизированный запрос API ревизии 3, а не <a href="dcs.html">вызов DCS</a>:
+движок проверяет весь список до отправки, у каждого склада свой ответ или своя ошибка, а
+безлимитный класс так и называется безлимитным, а не нулём и не огромным числом. Запрос
+ничего не меняет ни в DCS, ни в мире движка, ключ ему не нужен. Склад — аэродрома (в том числе
+FARP и корабля), груза-статика или по имени склада в DCS; селектор — <code>sortie::sel::WarehouseSel</code>.</p>
+<p>Меняет запас команда <code>ctx.warehouse_op()</code> (тоже API ревизии 3, раздел
+<a href="#%D0%B8%D0%B7%D0%BC%D0%B5%D0%BD%D0%B8%D1%82%D1%8C-%D0%B7%D0%B0%D0%BF%D0%B0%D1%81">Изменить запас</a>): поставить, добавить, убрать и перевести со склада на склад
+до 16 замен одной командой, в одном кадре DCS, всё или ничего. Сырые обёртки <code>set_item</code>,
+<code>add_item</code>, <code>remove_item</code> и жидкостные устарели (<code>#[deprecated]</code>).</p>
+<p>Как DCS называет предметы и какой у каждого wsType, говорит запрос <code>ctx.item_names()</code> (раздел
+<a href="#%D0%B8%D0%BC%D0%B5%D0%BD%D0%B0-%D0%BF%D1%80%D0%B5%D0%B4%D0%BC%D0%B5%D1%82%D0%BE%D0%B2">Имена предметов</a>): DCS отвечает сама, во время игры, — угадывать строки не
+нужно.</p>
+<h2 id="весь-склад">Весь склад<a class="anchor" href="#весь-склад" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">#[sortie::mission(api_rev = 3)] // ctx.warehouse(..).stock() — API ревизии 3
+pub async fn count_missiles(ctx: Ctx&lt;MyMission&gt;, _start: Start) -&gt; sortie::Result&lt;()&gt; {
+    // Весь склад Нальчика: самолёты, оружие и топливо, каждый класс — безлимитный или список.
+    let stock = ctx.warehouse(airbases::NALCHIK).stock().await?;
+    match &amp;stock.weapons {
+        // Пустой класс DCS считается безлимитным: так DCS, по сообщениям, отдаёт безлимитный.
+        Some(StockClass::Unlimited) =&gt; ctx.report().set(&quot;weapons&quot;, &quot;без лимита&quot;),
+        // Ограниченный: имя предмета, как его называет DCS, и сколько его.
+        Some(StockClass::Limited(items)) =&gt; {
+            let amraam = items
+                .get(&quot;weapons.missiles.AIM_120C&quot;)
+                .copied()
+                .unwrap_or(0.0);
+            ctx.report().set(&quot;amraam&quot;, amraam);
+        }
+        _ =&gt; {}
+    }
+    // Топливо — по имени жидкости (килограммы, но единицу DCS не документирует).
+    if let Some(Liquids::Amounts(fuel)) = &amp;stock.liquids {
+        let jet = fuel.get(&amp;Liquid::JetFuel).and_then(|a| a.count());
+        ctx.report().set(&quot;jet_fuel&quot;, format!(&quot;{jet:?}&quot;));
+    }
+    ctx.end_session(Outcome::Draw).await
+}
+</code></pre></div>
+<ul>
+<li>Без <code>.items(..)</code> и <code>.liquids()</code> запрос читает склад целиком (<code>Warehouse.getInventory</code>):
+<code>WarehouseStock { aircraft, weapons, liquids }</code>. <code>aircraft</code> и <code>weapons</code> — <code>StockClass</code>:
+<code>StockClass::Unlimited</code> или <code>StockClass::Limited(map)</code> — имя предмета, как его называет DCS
+(<code>"weapons.missiles.AIM_120C"</code>, тип самолёта), и сколько его. <code>class.get(имя)</code> —
+<code>Some(Amount::Unlimited)</code> в безлимитном классе, <code>Some(Amount::Counted(n))</code> для предмета из
+списка, <code>None</code> — ограниченный класс его не перечислил. <code>None</code> у самого класса — DCS его не
+отдала.</li>
+<li><strong>Безлимитный класс.</strong> DCS, по сообщениям, отдаёт безлимитный класс пустой таблицей; запрос
+так его и читает: пустой класс — <code>StockClass::Unlimited</code>. Отдаёт ли DCS пустой таблицей и
+ограниченный класс, в котором ничего нет, не известно (живая проверка <code>AWC-T25</code>). Склад
+аэродрома без <code>munitions</code> в сценарии (<a href="generator.html">генератор</a>) безлимитный во всех классах.</li>
+<li><code>liquids</code> — <code>Liquids::Unlimited</code> или <code>Liquids::Amounts(map)</code> по жидкости: <code>Liquid::JetFuel</code>,
+<code>AviationGasoline</code>, <code>Mw50</code> (водо-метаноловая смесь), <code>Diesel</code> (DCS нумерует их 0..3, номер,
+которого SDK не знает, — <code>Liquid::Unknown("unknown(&lt;n&gt;)")</code>). Единицу количества DCS не
+документирует; считаем, что это килограммы (в редакторе миссий начальный запас задаётся в
+тоннах; не измерено).</li>
+<li>Нагрузка на DCS: <code>getInventory</code> — тяжёлый вызов (класс <code>heavy</code> в каталоге), поэтому слой Lua
+читает целиком один склад за кадр. Большой склад он копирует по 400 записей за кадр: первые —
+в кадре вызова, остальные — в следующих, и следующий склад читается после копии; ответ
+приходит из кадра, в котором прочитан последний. В одном ответе — не больше 20 000 записей
+всех складов вместе; склад, который не поместился, и каждый склад после него —
+<code>Error::Rejected</code> (спросите его отдельно). Сколько стоит в кадре сам <code>getInventory</code> большого
+склада, решает DCS. Это оценки, стоимость в кадре ещё не измерена (<code>AWC-T25</code>).</li>
+</ul>
+<h2 id="нужные-предметы-и-топливо">Нужные предметы и топливо<a class="anchor" href="#нужные-предметы-и-топливо" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">// Только нужные предметы — getItemCount каждого, дешевле всего склада. Предмет — имя или
+// wsType из четырёх чисел; ответ — в том же порядке.
+let s = ctx
+    .warehouse(airbases::NALCHIK)
+    .stock()
+    .items([
+        WarehouseItem::from(&quot;weapons.missiles.AIM_120C&quot;),
+        WarehouseItem::from([4, 4, 7, 22]), // AIM-9M по wsType
+    ])
+    .liquids() // и четыре жидкости, getLiquidAmount каждой
+    .await?;
+match s.count(&quot;weapons.missiles.AIM_120C&quot;) {
+    Some(Amount::Counted(n)) =&gt; ctx.report().set(&quot;amraam&quot;, n),
+    // Число выше 2^29: DCS, по сообщениям, так отвечает про безлимитный склад.
+    Some(Amount::Unlimited) =&gt; ctx.report().set(&quot;amraam&quot;, &quot;без лимита&quot;),
+    None =&gt; {}
+}
+</code></pre></div>
+<ul>
+<li><code>.items([..])</code> считает только эти предметы (<code>Warehouse.getItemCount</code> каждого), до 64, каждый
+не больше одного раза; предмет — имя или wsType из четырёх чисел (<code>[4, 4, 7, 22]</code>,
+<code>WarehouseItem</code> — тот же тип, что у сырых обёрток <code>item_count(..)</code>). <code>.liquids()</code> читает четыре
+жидкости (<code>Warehouse.getLiquidAmount</code> каждой). С любым из них склад целиком не читается:
+это дешевле — 64 вызова DCS за кадр, около 4 на поиск склада и по одному на чтение (склады
+по одному предмету — 13 за кадр; оценка, <code>AWC-T25</code>).</li>
+<li><code>stock.items</code> — <code>Vec&lt;ItemCount { item, amount }&gt;</code> в порядке списка, <code>stock.count(предмет)</code> —
+<code>amount</code> этого предмета. <code>Amount::Counted(n)</code> — как ответила DCS; <code>Amount::Unlimited</code> — DCS
+ответила числом больше 2^29: так она, по сообщениям, отвечает про безлимитный склад (2^29 —
+порог, которым пользуется MOOSE; не измерено). Если же DCS отвечает про безлимитный класс
+маленьким числом, одно это чтение его не отличит: тип класса показывает только склад целиком.
+То же для жидкостей из <code>.liquids()</code>: безлимитными они бывают только по этому порогу.</li>
+<li>Имя предмета и его wsType, по сообщениям, — один и тот же запас; это не измерено (<code>AWC-T6</code>).
+Какой wsType у имени, говорит <a href="#%D0%B8%D0%BC%D0%B5%D0%BD%D0%B0-%D0%BF%D1%80%D0%B5%D0%B4%D0%BC%D0%B5%D1%82%D0%BE%D0%B2"><code>ctx.item_names()</code></a>.</li>
+</ul>
+<h2 id="много-складов">Много складов<a class="anchor" href="#много-складов" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">// До 64 складов одним запросом: аэродрома, груза (статика) или по имени склада в DCS.
+let read = ctx
+    .warehouses_stock([
+        WarehouseSel::airbase(airbases::NALCHIK),
+        WarehouseSel::airbase(AirbaseSel::name(&quot;FARP North&quot;)),
+        WarehouseSel::named(&quot;Kutaisi&quot;),
+    ])
+    .items([&quot;weapons.missiles.AIM_120C&quot;])
+    .await?;
+for w in &amp;read.warehouses {
+    match (&amp;w.value, w.error()) {
+        (Some(s), _) =&gt; {
+            let n = s.count(&quot;weapons.missiles.AIM_120C&quot;);
+            ctx.report().set(&amp;w.name, format!(&quot;{n:?}&quot;));
+        }
+        // Своя ошибка склада: Error::Gone — его нет в DCS или мир держит базу мёртвой.
+        (None, Some(e)) =&gt; ctx.report().set(&amp;w.name, e.code()),
+        (None, None) =&gt; {}
+    }
+}
+ctx.report().set(&quot;answered&quot;, read.ok_count());
+</code></pre></div>
+<ul>
+<li>До 64 складов (<code>sortie::cmd::MAX_STOCK_WAREHOUSES</code>), каждый не больше одного раза — по имени в
+DCS, каким бы селектором он ни был назван (склад аэродрома по имени и он же через
+<code>WarehouseSel::named</code> — дважды). Результат — <code>WarehousesRead { warehouses }</code>, по одному
+<code>WarehouseRead { warehouse, name, eid, value }</code> на склад в порядке списка: <code>warehouse</code> — склад,
+как его понял движок (аэродром или статик по Eid мира, если мир его держит живым), <code>name</code> —
+имя в DCS, <code>eid</code> — Eid аэродрома или статика в мире, <code>value</code> — запас, <code>None</code> при ошибке этого
+склада; <code>w.error()</code> — его ошибка: <code>Error::Gone</code> (склада нет в DCS, мир держит базу или статик
+мёртвыми, устаревший Eid), <code>Error::Lua</code> (чтение DCS упало), <code>Error::Rejected</code> (не поместился в
+ответ). <code>read.ok_count()</code> — сколько складов ответили. Сам запрос при этом успешен.</li>
+<li>Имя, которого мир не знает, запрос всё равно отправляет (склад мог добавить другой скрипт; DCS
+ответит или скажет <code>Error::Gone</code>); мёртвую базу и устаревший Eid движок отвечает сам, до DCS
+они не доходят. Целиком запрос отвергается (<code>Error::Invalid</code>) только когда список пуст или
+длиннее 64, склад или предмет в нём дважды, предметов больше 64, у предмета пустое имя или
+число wsType больше 2^31 − 1, символа нет в сценарии или Eid груза — не статика.</li>
+<li>Полоса QUERY, по умолчанию 10 с на ответ.</li>
+</ul>
+<h2 id="изменить-запас">Изменить запас<a class="anchor" href="#изменить-запас" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">// Колонна дошла: ракеты из Кутаиси в Нальчик, топливо Нальчику, две AIM-9M списаны —
+// одной командой, в одном кадре DCS, всё или ничего.
+let out = ctx
+    .warehouse_op()
+    .transfer(
+        airbases::KUTAISI,
+        airbases::NALCHIK,
+        &quot;weapons.missiles.AIM_120C&quot;,
+        6.0,
+    )
+    .add(airbases::NALCHIK, Liquid::JetFuel, 5_000.0)
+    .remove(airbases::KUTAISI, [4, 4, 7, 22], 2.0) // AIM-9M по wsType
+    .key(&quot;convoy-3-arrived&quot;) // каждая команда склада — с ключом
+    .await?;
+if out.applied {
+    // У каждой замены — счёт до неё и что DCS прочла после; у перевода — и у склада `to`.
+    let nalchik = out.changes[0].to.as_ref().and_then(|t| t.after);
+    ctx.report().set(&quot;nalchik_amraam&quot;, format!(&quot;{nalchik:?}&quot;));
+} else {
+    // Ничего не изменилось. Почему — у замен, что не прошли проверку.
+    for c in out.failed() {
+        let why = match c.outcome {
+            StockOutcome::NotEnough =&gt; &quot;мало на складе&quot;,
+            StockOutcome::Unlimited =&gt; &quot;склад без лимита&quot;,
+            StockOutcome::Gone =&gt; &quot;склада нет в DCS&quot;,
+            StockOutcome::Aliased =&gt; &quot;один предмет назван именем и wsType&quot;,
+            _ =&gt; &quot;DCS не приняла замену&quot;,
+        };
+        ctx.report()
+            .set(&amp;c.warehouse.name, format!(&quot;{why}: {}&quot;, c.message));
+    }
+}
+</code></pre></div>
+<ul>
+<li>Замены: <code>.set(склад, что, n)</code> — поставить счёт (количество жидкости) на <code>n</code>, <code>.add(..)</code> —
+добавить, <code>.remove(..)</code> — убрать, <code>.transfer(откуда, куда, что, n)</code> — перевести с одного склада
+на другой. <code>что</code> — <code>StockItem</code>: предмет (имя <code>"weapons.missiles.AIM_120C"</code>, wsType
+<code>[4, 4, 7, 22]</code>, <code>WarehouseItem</code>) или жидкость (<code>Liquid::JetFuel</code>, <code>AviationGasoline</code>, <code>Mw50</code>,
+<code>Diesel</code>). Предмет считается целыми числами до 1 000 000, жидкость — до 100 000 000
+(килограммы, единицу DCS не документирует); <code>set</code> принимает и 0, остальные — больше 0. До 16
+замен одной командой (<code>sortie::cmd::MAX_STOCK_CHANGES</code>), по порядку; один склад может стоять
+во многих заменах.</li>
+<li><strong>Всё или ничего.</strong> В том кадре, в котором команда выполняется, слой Lua сначала находит
+каждый склад и читает каждый счёт, который трогают замены, и проверяет замены по порядку —
+с учётом того, что сделают замены перед ней: склад есть в DCS, запас не безлимитный, для
+<code>remove</code> и <code>transfer</code> его хватает. Если не прошла хоть одна, ничего не меняется:
+<code>out.applied == false</code>, у не прошедших — своя причина, у остальных <code>NotApplied</code>. Иначе замены
+применяются по порядку; перед каждым шагом счёт читается снова и должен быть тем, что оставила
+ему проверка, а после шага — тем, что даёт замена. Если DCS при этом падает или счёт не тот,
+всё, что уже сделано, откатывается (каждый счёт ставится обратно, <code>set*</code>), у сделанных замен —
+<code>Undone</code>. Всё это — в одном кадре: другой скрипт между проверкой и заменой ничего не изменит.</li>
+<li><strong>Перевод</strong> — один шаг: со склада <code>откуда</code> убирается, на склад <code>куда</code> добавляется в том же
+кадре; если добавить не вышло, убранное возвращается. Запас никогда не уходит, не придя.</li>
+<li><strong>Убрать больше, чем есть,</strong> нельзя: это <code>NotEnough</code>, команда ничего не меняет. До нуля
+замена не обрезается (что делает с нехваткой сам <code>removeItem</code> DCS, не измерено); формы
+«сколько есть» в этой версии нет — прочитайте запас сначала.</li>
+<li>Ответ — <code>StockChanges { applied, undo_failed, changes }</code>, по одному <code>StockChanged</code> на замену в
+порядке списка: <code>what</code> — что меняли, <code>outcome</code> — исход, <code>message</code> — почему (у всех, кроме
+<code>Done</code>), <code>warehouse</code> — склад замены (у перевода — тот, откуда), <code>to</code> — у перевода склад, куда.
+У стороны (<code>StockSide</code>) — <code>name</code> и <code>eid</code> склада, <code>before</code> — счёт, с которого замена начинает (что
+прочла DCS, плюс замены перед ней), <code>after</code> — что DCS прочла после неё (после отката, если он
+был), <code>unlimited</code> — DCS ответила числом больше 2^29. <code>out.failed()</code> — замены, из-за которых
+команда не применилась.</li>
+</ul>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th><code>StockOutcome</code></th><th>Что случилось</th></tr></thead><tbody>
+<tr><td><code>Done</code></td><td>применена, <code>after</code> — что прочла DCS</td></tr>
+<tr><td><code>NotApplied</code></td><td>замена прошла бы, но не прошла другая: ничего не изменилось</td></tr>
+<tr><td><code>Undone</code></td><td>применена и откачена: позже упала другая замена</td></tr>
+<tr><td><code>UndoFailed</code></td><td>применена, а откат не вернул счёт; запас — как говорит <code>after</code>, <code>undo_failed == true</code></td></tr>
+<tr><td><code>Unlimited</code></td><td>запас безлимитный (счёт больше 2^29, у перевода — с любой стороны): DCS, по сообщениям, на нём ничего не меняет, поэтому замена отвергнута до изменений</td></tr>
+<tr><td><code>NotEnough</code></td><td><code>remove</code> или <code>transfer</code> больше, чем на складе</td></tr>
+<tr><td><code>Gone</code></td><td>склада нет в DCS</td></tr>
+<tr><td><code>DcsError</code></td><td>чтение или замена DCS упала (<code>message</code> называет функцию)</td></tr>
+<tr><td><code>Unchanged</code></td><td>DCS приняла замену, но счёт не стал таким, как надо (так повёл бы себя безлимитный склад, про который DCS отвечает маленьким числом; не измерено); сделанное до неё откачено</td></tr>
+<tr><td><code>Aliased</code></td><td>к её очереди счёт уже не тот, что оставила проверка: его сдвинула более ранняя замена той же команды под другой формой предмета (имя и его wsType или два имени одного wsType — для DCS это один запас); замена не выполнялась, сделанное до неё откачено</td></tr>
+</tbody></table>
+</div>
+<ul>
+<li><strong>Безлимитный запас</strong> никогда не считается нулём и замена на нём — сделанной: счёт больше
+2^29 — <code>Unlimited</code>, а если DCS ответит маленьким числом и ничего не изменит, —
+<code>Unchanged</code>. Не отличить только <code>set</code> на счёт, который DCS уже показывает (он <code>Done</code>). На что
+это опирается, не измерено (живая проверка <code>AWC-T26</code>).</li>
+<li><strong>Ключ.</strong> В режиме dev (и на движке с <code>--require-keys</code>) каждой команде склада нужен
+<code>.key(..)</code>, иначе <code>Error::Invalid</code> и ничего не отправляется: перезагрузка логики выполняет её
+снова, и без ключа <code>add</code>, <code>remove</code> и <code>transfer</code> сдвинули бы запас ещё раз, а <code>set</code> поставил бы
+счёт обратно поверх того, что успели израсходовать. Повтор с тем же ключом возвращает
+сохранённый ответ и запас не трогает — и отказ тоже: чтобы попробовать снова, дайте новый
+ключ.</li>
+<li>Целиком команда отвергается (<code>Error::Invalid</code>, в DCS ничего не уходит), если в ней нет замен
+или их больше 16, склада нет в мире движка (имя, которого мир не держит живым; символ, которого
+нет в сценарии), перевод — на тот же склад, число вне пределов или у предмета дробный счёт,
+жидкость — <code>Liquid::Unknown</code>; мёртвая база или устаревший Eid — <code>Error::Gone</code>. Сама команда
+успешна, даже когда замены не применились: смотрите <code>out.applied</code>.</li>
+<li>Один предмет по имени и по wsType в одной команде не называйте: слой Lua не знает, что это
+один запас, и проверяет их как два счёта. Чтение перед шагом это находит: замена — <code>Aliased</code>,
+команда откатывается, и что бы DCS ни делала с нехваткой, лишнее не убирается и запас из
+ничего не появляется. Чтобы называть одной формой, переведите wsType в имя через
+<a href="#%D0%B8%D0%BC%D0%B5%D0%BD%D0%B0-%D0%BF%D1%80%D0%B5%D0%B4%D0%BC%D0%B5%D1%82%D0%BE%D0%B2"><code>ctx.item_names()</code></a>: движок сам предметы команды не переписывает.</li>
+<li>Нагрузка на DCS: все замены — в одном кадре (без этого нет «всё или ничего»), примерно 4
+вызова DCS на <code>set</code>, <code>add</code> или <code>remove</code>, 8 на перевод, около 4 на каждый склад и до 3 на шаг
+отката. 16 замен — граница списка, а не то, что укладывается в долю кадра: 16 замен одного
+предмета на одном складе — около 50 вызовов (примерно 0,5 мс), 16 переводов между 32
+складами — около 260 (примерно 2,6 мс), с откатом больше. Переводы между многими складами
+делите на несколько команд — у каждой свой кадр и своё «всё или ничего». Это оценки
+(<code>AWC-T26</code>). Полоса REALTIME, по умолчанию 10 с на ответ.</li>
+</ul>
+<p>Только <code>set</code> — тоже с ключом:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">// Пополнение в начале миссии — тоже с ключом: без него перезагрузка логики поставила бы
+// эти числа снова, поверх того, что успели израсходовать.
+let out = ctx
+    .warehouse_op()
+    .set(airbases::NALCHIK, &quot;weapons.missiles.AIM_120C&quot;, 20.0)
+    .set(airbases::NALCHIK, Liquid::Diesel, 0.0)
+    .key(&quot;restock-nalchik&quot;)
+    .await?;
+ctx.report().set(&quot;restocked&quot;, out.applied);
+</code></pre></div>
+<h2 id="имена-предметов">Имена предметов<a class="anchor" href="#имена-предметов" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">// Как эта DCS называет то, что знает, и wsType каждого — один раз за процесс DCS,
+// дальше движок отвечает из памяти.
+let names = ctx.item_names().await?;
+// Имя -&gt; wsType и обратно.
+if let Some(ws) = names.ws_type_of(&quot;weapons.missiles.AIM_120C&quot;) {
+    let same: Vec&lt;&amp;str&gt; = names.names_of(ws).collect();
+    ctx.report().set(&quot;amraam_ws&quot;, format!(&quot;{ws:?} {same:?}&quot;));
+}
+// Свой список предметов кампании проверить до первого запроса склада.
+let mine = [&quot;weapons.missiles.AIM_120C&quot;, &quot;weapons.bombs.Mk_82&quot;];
+let unknown: Vec&lt;&amp;str&gt; = mine.into_iter().filter(|n| !names.knows(*n)).collect();
+ctx.report().set(&quot;unknown_items&quot;, format!(&quot;{unknown:?}&quot;));
+// Только нужные: имя или wsType; чего DCS не знает — в `unknown`.
+let some = ctx
+    .item_names()
+    .items([WarehouseItem::from([4, 4, 7, 22])])
+    .await?;
+for n in &amp;some.names {
+    ctx.report().set(&amp;n.name, format!(&quot;{:?}&quot;, n.ws_type));
+}
+</code></pre></div>
+<ul>
+<li><code>ctx.item_names()</code> спрашивает у DCS, к которой подключён движок, всё, что она знает:
+<code>Warehouse.getResourceMap()</code> (есть с DCS 2.8.8) отдаёт каждый объект по имени с его wsType.
+Оружие там названо так, как его называют склады: <code>"weapons.missiles.AIM_120C"</code>,
+<code>"weapons.bombs.Mk_82"</code>; самолёты и другая техника — по типу (<code>"F-16C_50"</code>). В SDK и в
+репозитории никакой таблицы DCS нет: последнее число wsType у многих предметов DCS назначает
+сама, когда грузит свою базу, поэтому оно может отличаться от сборки к сборке и от набора
+модулей; верный ответ знает только запущенная DCS.</li>
+<li>Ответ — <code>ItemNames { names, unknown, total, skipped, dcs_version, cached, source }</code>: <code>names</code> —
+<code>ItemName { name, ws_type }</code> по алфавиту, каждое имя один раз; <code>ws_type</code> — <code>None</code>, где DCS
+даёт <code>{0, 0, 0, 0}</code> (так у снарядов, статиков и башен: это не тип предмета, склад о нём не
+спросить). <code>names.get(имя)</code>, <code>names.ws_type_of(имя)</code> — wsType имени, <code>names.names_of(ws)</code> — все
+имена с этим wsType (обычно одно), <code>names.knows(предмет)</code> — знает ли DCS имя или wsType;
+<code>n.item()</code> — предмет для запросов склада и <code>ctx.warehouse_op()</code>. <code>total</code> — сколько имён в
+карте DCS, <code>skipped</code> — сколько записей слой Lua пропустил (не имя или не четыре целых числа),
+<code>source</code> — как слой позвал DCS.</li>
+<li><code>.items([..])</code> — только эти (до 64, каждый не больше одного раза): имя даёт свою запись,
+wsType — все записи с ним; чего DCS не знает — в <code>unknown</code>, в порядке списка. Так проверяют
+предметы кампании (оружие по имени, вертолёты и самолёты по типу) до наполнения склада:
+в <code>ctx.warehouse_op()</code> идут только <code>names</code>, опечатка остаётся в <code>unknown</code>. Записи
+<code>Warehouse.getResourceMap</code> в <a href="dcs-catalog.html">каталоге вызовов DCS</a> нет — его карту читает
+этот запрос.</li>
+<li><strong>Один раз за процесс DCS.</strong> Движок читает карту DCS при первом запросе и держит её в памяти
+для этого процесса DCS и её версии; следующие запросы он отвечает сам, ничего не отправляя
+(<code>cached == true</code>), — и после перезапуска миссии в той же DCS. Другой процесс DCS (перезапуск
+DCS, обновление) — карта читается снова. На диск движок её не пишет. Читайте имена один раз
+в начале миссии и держите <code>ItemNames</code> у себя: ответ без <code>.items(..)</code> — вся карта, тысячи имён.</li>
+<li>Нагрузка на DCS: карту DCS строит одним вызовом (сколько это стоит в кадре, не измерено), слой
+Lua копирует её в следующих кадрах, по 400 записей за кадр, — карта в 10 000 записей занимает
+около 25 кадров. Пока она читается, другие тяжёлые вызовы ждут. Больше 30 000 записей —
+<code>Error::Rejected</code>. Это оценки (<code>AWC-T27</code>). Полоса QUERY, по умолчанию 10 с на ответ.</li>
+<li><strong>Ключа запрос не принимает:</strong> с <code>.key(..)</code> он — <code>Error::Invalid</code>, и ничего не отправляется.
+Ответ — вся карта DCS, движок держит её только в памяти и в своё хранилище не пишет, а повтор
+и так отвечается из памяти.</li>
+<li><a href="generator.html">Генератор</a> по-прежнему берёт <code>munitions</code> аэродрома по wsType: имена знает только
+запущенная DCS, а сценарий собирается без неё. Если хочется писать сценарий именами, держите
+свою таблицу имя → wsType, прочитанную <code>ctx.item_names()</code> на своей DCS.</li>
+</ul>
+<h2 id="ревизия-и-возможности">Ревизия и возможности<a class="anchor" href="#ревизия-и-возможности" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li>Логика объявляет <code>#[sortie::mission(api_rev = 3)]</code>; с меньшей ревизией запрос —
+<code>Error::Revision</code>, против движка с ревизией API ниже 3 — <code>Error::EngineTooOld</code>, и ничего не
+отправляется.</li>
+<li>Возможность <code>caps::WAREHOUSE_STOCK</code> (<code>"warehouse_stock"</code>): включена по умолчанию; владелец
+движка выключает её в <code>engine.toml</code> (<code>[operations] disable = ["warehouse_stock"]</code>), тогда
+запрос — <code>Error::Rejected</code>. Если в сборке DCS нет <code>Airbase.getWarehouse</code>,
+<code>Warehouse.getInventory</code>, <code>Warehouse.getItemCount</code> или <code>Warehouse.getLiquidAmount</code>, её
+состояние — <code>MISSING_IN_DCS</code>. Слою Lua 0.3.x нужен <code>sortie install</code>, иначе она
+<code>NOT_IMPLEMENTED</code>.</li>
+<li>Сырые чтения каталога <code>ctx.dcs().warehouse(..).inventory(..)</code>, <code>.item_count(..)</code> и
+<code>.liquid_amount(..)</code> остаются и не устарели: они отдают ответ DCS как есть.</li>
+<li><code>ctx.warehouse_op()</code> — тоже API ревизии 3 (<code>Error::Revision</code>, <code>Error::EngineTooOld</code> так же).
+Возможность <code>caps::WAREHOUSE_OP</code> (<code>"warehouse_op"</code>): включена по умолчанию, выключается так же
+(<code>[operations] disable = ["warehouse_op"]</code>, тогда команда — <code>Error::Rejected</code>); если в сборке
+DCS нет <code>Airbase.getWarehouse</code>, <code>Warehouse.getItemCount</code>, <code>setItem</code>, <code>addItem</code> или
+<code>removeItem</code> — <code>MISSING_IN_DCS</code>. Жидкостных функций она не проверяет: если в DCS нет нужной
+замене, команда — <code>Error::Unavailable</code> (<code>MISSING</code>), а замены предметов работают.</li>
+<li>Сырые изменения каталога <code>set_item</code>, <code>add_item</code>, <code>remove_item</code>, <code>set_liquid_amount</code>,
+<code>add_liquid</code>, <code>remove_liquid</code> устарели (<code>superseded_by = "warehouse_op"</code>): они остаются, но
+выключены по умолчанию и ничего не проверяют.</li>
+<li><code>ctx.item_names()</code> — тоже API ревизии 3 (<code>Error::Revision</code>, <code>Error::EngineTooOld</code> так же).
+Возможность <code>caps::ITEM_NAMES</code> (<code>"item_names"</code>): включена по умолчанию, выключается так же
+(<code>[operations] disable = ["item_names"]</code>, тогда запрос — <code>Error::Rejected</code>); если в сборке DCS
+нет <code>Warehouse.getResourceMap</code> (DCS до 2.8.8), её состояние — <code>MISSING_IN_DCS</code>, а запрос —
+<code>Error::Unavailable</code>.</li>
+</ul>
+<h2 id="что-не-измерено">Что не измерено<a class="anchor" href="#что-не-измерено" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Что DCS отдаёт безлимитный класс пустой таблицей, а ограниченный, в котором ничего нет, —
+иначе; чем DCS отвечает <code>getItemCount</code> и <code>getLiquidAmount</code> на безлимитном складе; в каких
+единицах жидкости; сколько записей у ограниченного склада настоящей миссии и сколько стоит в
+кадре один склад — на реальной DCS ещё не измерено (живая проверка <code>AWC-T25</code>; проба
+<code>wide_probe</code>, шаг Foothold, читает склад Сенаки-Колхи с ограниченными ракетами и безлимитный
+склад Кутаиси рядом с сырыми вызовами). Что имя и wsType предмета — один запас и что
+<code>Airbase.getWarehouse</code> работает у аэродрома, FARP и корабля — тоже (<code>AWC-T6</code>, <code>CAT-L3</code>).</p>
+<p>Для <code>ctx.warehouse_op()</code> не измерено (живая проверка <code>AWC-T26</code>): что <code>setItem</code>, <code>addItem</code> и
+<code>removeItem</code> ограниченного склада DCS читает обратно в том же кадре; что безлимитный склад
+отвечает числом больше 2^29 и замена на нём ничего не делает; с какой точностью DCS хранит
+жидкости (замена жидкости считается сделанной, если прочитанное отличается не больше чем на
+миллионную долю и не больше чем на 1 кг); сколько стоит в кадре одна замена. Проба
+<code>wide_probe</code> (шаг Foothold) переводит AIM-120C с Сенаки-Колхи на ограниченный склад Кобулети и
+обратно, пробует убрать больше, чем есть, и одну замену на безлимитном Кутаиси, а потом
+возвращает запас.</p>
+<p>Для <code>ctx.item_names()</code> не измерено (живая проверка <code>AWC-T27</code>): что <code>Warehouse.getResourceMap</code>
+есть и в какой форме его звать (без аргументов или со складом); что его имена — те, которыми
+пользуются склады, а wsType — четыре целых числа; что имя и wsType из карты — один запас; сколько
+записей в карте и сколько стоит её чтение. Проба <code>wide_probe</code> (шаг Foothold) читает карту,
+сверяет AIM-120C с wsType, который кладёт на склад сценарий, проверяет, что каждое оружие
+ограниченного склада Сенаки-Колхи есть в карте и что ракеты по имени и по wsType из карты дают
+один счёт; безлимитный Кутаиси — для записи.</p>
+<h2 id="тестирование">Тестирование<a class="anchor" href="#тестирование" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>FakeDcs хранит запас каждого склада: <code>dcs.set_warehouse_stock(имя, FakeStock::..)</code> задаёт его
+по классам — так, как его записали бы в <code>.miz</code> <code>munitions</code> сценария (манифест их не несёт), и
+перезагрузка миссии начинает склад с него же. Склад, которого тест не задал, безлимитный во
+всех классах, как аэродром без <code>munitions</code>. Например,
+<code>FakeStock::unlimited().weapons([("weapons.missiles.AIM_120C", 20.0)])</code> — 20 AIM-120C и больше
+никакого оружия, самолёты и топливо без лимита; <code>FakeStock::limited()</code> — все классы
+ограничены и пусты; <code>.aircraft([..])</code> и <code>.liquids([(0, 1500.0)])</code> (номер жидкости DCS: 0 —
+авиатопливо) задают остальные классы.</p>
+<p>В безлимитном классе FakeDcs, как DCS по сообщениям, отдаёт пустую таблицу в <code>getInventory</code>,
+число <code>FAKE_UNLIMITED_COUNT</code> (2^30) в <code>getItemCount</code> и <code>getLiquidAmount</code> и ничего не меняет
+сырыми <code>set_item</code>, <code>add_item</code>, <code>remove_item</code>. Предмет — в классе самолётов, если тот его
+перечисляет или FakeDcs знает такой тип самолёта или вертолёта, иначе в оружии; wsType — свой
+запас, отдельно от имени, если тест не дал карту имён (ниже). <code>dcs.warehouse_stock(имя)</code> и <code>dcs.warehouse_count(имя, предмет)</code> —
+что на складе сейчас; сырые вызовы <code>Warehouse.*</code>, запрос и <code>ctx.warehouse_op()</code> работают с
+одним запасом.</p>
+<p><code>dcs.set_item_names([(имя, [a, b, c, d]), ..])</code> — что FakeDcs отвечает на <code>ctx.item_names()</code>
+(карта <code>Warehouse.getResourceMap</code>). Пока тест её не задал, карта пуста: FakeDcs данных DCS не
+держит, имена своей миссии тест даёт сам. Карта — процесса DCS, перезагрузка миссии её не
+сбрасывает. wsType, которому карта даёт ровно одно имя, в складах
+FakeDcs — запас этого имени (как в DCS, по сообщениям); без карты wsType — свой запас.</p>
+<p><code>ctx.warehouse_op()</code> в FakeDcs проверяет и применяет замены, как слой Lua: безлимитный класс
+отвечает <code>FAKE_UNLIMITED_COUNT</code> и даёт <code>Unlimited</code>, нехватка — <code>NotEnough</code>, склад, которого нет,
+— <code>Gone</code>. Имя и wsType одного предмета проверка считает двумя счетами, как слой Lua, а перед
+шагом замена находит общий запас: <code>Aliased</code> и откат. Замены FakeDcs не падают, поэтому
+<code>DcsError</code> и <code>Unchanged</code> в нём не встречаются (их проверяют тесты слоя Lua). Команда —
+изменение: она есть в <code>dcs.command_log()</code>.</p>
+</article>
+<nav class="pager" aria-label="Соседние страницы">
+<a class="pager-prev" rel="prev" href="airbases.html"><span class="pager-dir">Назад</span><span class="pager-title">Аэродромы: владелец, автозахват, радио, стоянки и полосы</span></a>
+<a class="pager-next" rel="next" href="map.html"><span class="pager-dir">Дальше</span><span class="pager-title">Рисование на карте</span></a>
+</nav>
+<p class="page-source"><a href="warehouses.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.4.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

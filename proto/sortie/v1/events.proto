@@ -60,6 +60,10 @@ message Event {
     // W1 (event revision 1). Synthesised by the engine: a capability's state changed after
     // Start (a quarantine, its release, a probe result, a fault-disabled op).
     CapabilityChanged capability_changed = 54;
+    // W2 (event revision 2). Synthesised by the engine: the owner the engine's world holds for
+    // an airbase changed, whatever told it (S_EVENT_BASE_CAPTURED, an AirbaseControl, a
+    // snapshot). One event per change.
+    AirbaseOwnerChanged airbase_owner_changed = 55;
     // Anything DCS emits that the engine does not decode yet.
     Unknown unknown = 99;
   }
@@ -93,6 +97,8 @@ enum EventKind {
   EVENT_KIND_RESOURCE_ENDED = 22;
   // W1 (event revision 1).
   EVENT_KIND_CAPABILITY_CHANGED = 40;
+  // W2 (event revision 2).
+  EVENT_KIND_AIRBASE_OWNER_CHANGED = 41;
 }
 
 message SubscribeEventsRequest {
@@ -186,6 +192,12 @@ message Mark {
   // W1. true when Sortie caused this event (DCS echoes marks made by scripts as events).
   // false with `name` set: a player changed or removed a registered editable mark.
   bool own = 9;
+  // 0.4.0 (API revision 3; sent to logics and subscribers of API revision 3 and up). The
+  // event's `time` exactly as DCS gave it: the time of day (seconds since midnight of the
+  // mission's first day, `timer.getAbsTime`), per the Hoggit wiki (live check EVT-L18).
+  // `Event.model_time` is model time, like every other event's. Unset from a Lua layer
+  // before 0.4.0, which sent DCS's value as `Event.model_time`.
+  optional double dcs_time = 10;
 }
 
 // Synthesised from BIRTH + Unit:getPlayerName() (MP clients do not get
@@ -289,6 +301,35 @@ message Unknown {
 message CapabilityChanged {
   Capability capability = 1;
   CapabilityState previous = 2;
+}
+
+// ---- W2: AirbaseOwnerChanged (event revision 2) ----
+// What told the engine that an airbase's owner changed.
+enum OwnerChangeCause {
+  OWNER_CHANGE_CAUSE_UNSPECIFIED = 0;
+  // DCS raised S_EVENT_BASE_CAPTURED (its BaseCaptured is published just before).
+  OWNER_CHANGE_CAUSE_CAPTURED = 1;
+  // An AirbaseControl set it: the owner DCS read back after the change.
+  OWNER_CHANGE_CAUSE_CONTROL = 2;
+  // A read of DCS found another owner than the world held, with neither of the above: a
+  // resync snapshot, a FARP spawn that kept an existing FARP.
+  OWNER_CHANGE_CAUSE_DISCOVERED = 3;
+}
+
+// Exactly one per change of the owner the engine's world holds for an airbase: a report of
+// a change the world already holds (DCS's S_EVENT_BASE_CAPTURED for an owner an AirbaseControl
+// set, a snapshot that reads what an event said) gives none; a flip there and back gives two.
+// The first report that reaches the engine names the cause. An owner that changed and changed
+// back between two reads of DCS without an event is never seen.
+message AirbaseOwnerChanged {
+  // The airbase as the world holds it after the change (its `coalition` is `owner`).
+  AirbaseSnap airbase = 1;
+  // The owner the world held before; UNSPECIFIED when it knew none (an airbase the world first
+  // learned from this capture).
+  Coalition previous = 2;
+  // The new owner (never UNSPECIFIED).
+  Coalition owner = 3;
+  OwnerChangeCause cause = 4;
 }
 
 // ---- W1: generic event form ----

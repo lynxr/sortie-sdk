@@ -148,18 +148,25 @@ impl<'a> Obj<'a> {
     }
 
     fn double(&mut self, name: &'static str) -> Result<f64, JsonError> {
+        Ok(self.opt_double(name)?.unwrap_or(0.0))
+    }
+
+    /// A double with presence (`optional double`): `None` when the field is absent or null.
+    fn opt_double(&mut self, name: &'static str) -> Result<Option<f64>, JsonError> {
         let path = self.sub(name);
         match self.get(name)? {
-            None => Ok(0.0),
+            None => Ok(None),
             Some(Value::Number(n)) => n
                 .as_f64()
+                .map(Some)
                 .ok_or_else(|| err(&path, format!("{n} is not a number"))),
             Some(Value::String(s)) => match s.as_str() {
-                "NaN" => Ok(f64::NAN),
-                "Infinity" => Ok(f64::INFINITY),
-                "-Infinity" => Ok(f64::NEG_INFINITY),
+                "NaN" => Ok(Some(f64::NAN)),
+                "Infinity" => Ok(Some(f64::INFINITY)),
+                "-Infinity" => Ok(Some(f64::NEG_INFINITY)),
                 other => other
                     .parse()
+                    .map(Some)
                     .map_err(|_| err(&path, format!("{other:?} is not a number"))),
             },
             Some(other) => Err(err(
@@ -377,6 +384,7 @@ fn template(v: &Value, path: &str) -> Result<pb::Template, JsonError> {
         units: o.list("units", unit)?,
         task: o.string("task")?,
         dcs_group_json: o.string("dcs_group_json")?,
+        heading_rad: o.opt_double("heading_rad")?,
     };
     o.finish()?;
     Ok(t)
@@ -543,6 +551,14 @@ impl Fields {
     fn double(mut self, name: &'static str, v: f64) -> Self {
         // proto3 omits 0.0 (but keeps -0.0, whose bits differ).
         if v.to_bits() != 0 {
+            self.0.push((name, double(v)));
+        }
+        self
+    }
+
+    /// A double with presence: written when set, 0.0 included (proto3 `optional`).
+    fn opt_double(mut self, name: &'static str, v: Option<f64>) -> Self {
+        if let Some(v) = v {
             self.0.push((name, double(v)));
         }
         self
@@ -747,6 +763,7 @@ fn j_manifest(m: &Manifest) -> J {
                 .list("units", t.units.iter().map(j_unit).collect())
                 .string("task", &t.task)
                 .string("dcs_group_json", &t.dcs_group_json)
+                .opt_double("heading_rad", t.heading_rad)
                 .done()
         })
         .collect();

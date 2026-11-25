@@ -87,19 +87,14 @@ sc.menu("SITREP", "Situation report")
 # snippet:end skills-scenario-flags-menus
 
 # snippet:start skills-scenario-pydcs
-from dcs.triggers import TriggerStart
-
-from sortie_gen.miz import InlineDoScript
-
-
 @sc.pydcs
 def extras(m):
-    # What Sortie does not wrap: statics, weather, briefing, your own triggers.
+    # What Sortie does not wrap: statics, weather, briefing. Never game logic: messages,
+    # spawns, tasks and scoring belong in the Rust logic, not in a DO SCRIPT here.
     hq = sc.latlon(44.61, 40.08)
     m.static_group(m.country("Russia"), "Red HQ", statics.Fortification._Command_Center, hq)
-    t = TriggerStart(comment="welcome")
-    t.add_action(InlineDoScript('trigger.action.outText("Frontline is live", 15)'))
-    m.triggerrules.triggers.append(t)
+    m.weather.clouds_density = 4
+    m.set_description_bluetask_text("Take down SAM North, then hold the front.")
 # snippet:end skills-scenario-pydcs
 
 # snippet:start skills-scenario-main

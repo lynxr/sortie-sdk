@@ -1,5 +1,5 @@
-//! What a logic crate can test without DCS in SDK 0.1: the scenario's symbols and geometry, and
-//! its own pure functions.
+//! What a logic crate can test without DCS with the public SDK (it has no FakeDcs): the
+//! scenario's symbols and geometry, and its own pure functions.
 
 #[cfg(test)]
 mod tests {

@@ -1,4 +1,4 @@
-Sortie SDK 0.3.0: third-party notices
+Sortie SDK 0.4.0: third-party notices
 =====================================
 
 The Rust crates of this repository name their dependencies in Cargo.toml / Cargo.lock;

@@ -21,8 +21,9 @@
 //! * [`runtime`] runs a mission (one task per session, `current_thread` + `LocalSet`),
 //!   [`connect`] opens `Logic.Attach` over gRPC, [`main!`] is the whole `main.rs`;
 //! * [`testing::TestHarness`] is what `#[sortie::test]` drives (implemented by FakeDcs, which
-//!   is not part of SDK 0.1: there `#[sortie::test]` is a compile error that says so).
+//!   is not part of the public SDK: there `#[sortie::test]` is a compile error that says so).
 
+pub mod api;
 pub mod caps;
 pub mod cmd;
 mod ctx;
@@ -36,6 +37,7 @@ pub mod menu_tree;
 #[cfg(doctest)]
 mod mission_checks;
 pub mod prelude;
+pub mod publish;
 pub mod runtime;
 pub mod sel;
 pub mod state;
@@ -45,7 +47,7 @@ pub mod timing;
 
 pub use cmd::Cmd;
 pub use ctx::{Ctx, FlagHandle, FlagValue, MessageTarget, Position, Report, Start, TaskHandle};
-pub use error::{Error, Failure, Result};
+pub use error::{Error, Failure, Limit, LimitKind, Result};
 pub use events::{EventType, Events, TypedEvents};
 pub use group::{AiOption, AnyGroup, Group};
 pub use menu::{
@@ -69,7 +71,7 @@ pub use sortie_types as types;
 pub use sortie_world as world;
 pub use sortie_world::World;
 pub use state::StateDoc;
-pub use task::Task;
+pub use task::{GroundFormation, GroundRoute, RoutePoint, Task, TaskFor};
 
 /// Runs a logic binary: what [`main!`] expands to. Parses `--engine` / `SORTIE_ENGINE`,
 /// `SORTIE_TOKEN` and the other [`runtime::Options`], attaches to the engine and serves

@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Аэродромы: владелец, автозахват, радио, стоянки и полосы | Sortie SDK</title>
+<meta name="description" content="ctx.airbase_control(..) меняет у списка аэродромов (до 32) владельца, автозахват DCS и радиомолчание диспетчеров одной командой: DCS применяет всё за один кадр и сразу читает…">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://lynxr.github.io/sortie-sdk/docs/airbases.html">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () {
+  var d = document.documentElement;
+  d.className += ' js';
+  try {
+    var t = localStorage.getItem('sortie-theme');
+    if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="page-doc has-sidebar">
+<a class="skip" href="#content">Перейти к содержанию</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.4.0</span></a>
+<button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
+<div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
+</div>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Страницы документации">
+<nav class="toc">
+<a class="toc-home" href="index.html">Документация</a>
+<ul>
+<li><a href="index.html">Обзор</a></li>
+<li><a href="install-runtime.html">Установка рантайма</a></li>
+<li><a href="quickstart.html">Быстрый старт</a></li>
+<li><a href="dependency.html">Подключение SDK</a></li>
+<li><a href="sdk.html">Логика на Rust</a><ul>
+<li><a href="objects.html">Объекты: статики, уничтожение, мусор</a></li>
+<li><a href="airbases.html" aria-current="page">Аэродромы: владелец, автозахват, радио, стоянки и полосы</a></li>
+<li><a href="warehouses.html">Склады: запас аэродромов и грузов</a></li>
+<li><a href="map.html">Рисование на карте</a></li>
+<li><a href="menus.html">Деревья меню F10</a></li>
+<li><a href="dcs.html">Вызовы DCS</a></li>
+<li><a href="dcs-catalog.html">Справочник каталога DCS API</a></li>
+<li><a href="capabilities.html">Возможности движка</a></li>
+</ul>
+</li>
+<li><a href="generator.html">Сценарий на Python</a></li>
+<li><a href="testing.html">Тестирование</a></li>
+<li><a href="operations.html">Эксплуатация</a><ul>
+<li><a href="web-api.html">Web API</a></li>
+</ul>
+</li>
+<li><a href="troubleshooting.html">Диагностика</a></li>
+<li><a href="faq.html">Вопросы и ограничения</a></li>
+<li><a href="changelog.html">Что нового</a></li>
+</ul>
+</nav>
+</aside>
+<main id="content" class="main" tabindex="-1">
+<article class="prose">
+<h1 id="аэродромы-владелец-автозахват-радио-стоянки-и-полосы">Аэродромы: владелец, автозахват, радио, стоянки и полосы<a class="anchor" href="#аэродромы-владелец-автозахват-радио-стоянки-и-полосы" aria-label="Ссылка на этот раздел">#</a></h1>
+<p><code>ctx.airbase_control(..)</code> меняет у списка аэродромов (до 32) владельца, автозахват DCS и
+радиомолчание диспетчеров одной командой: DCS применяет всё за один кадр и сразу читает каждую
+базу обратно. Это типизированная операция API ревизии 3, а не <a href="dcs.html">вызов DCS</a>: движок
+проверяет весь список до отправки, мир узнаёт нового владельца сразу, а у каждой базы свой
+результат. О каждой смене владельца, которую DCS сообщает событием или которую движок сам
+делает или читает, логика узнаёт одним событием <code>AirbaseOwnerChanged</code>
+(<a href="#%D1%81%D0%BC%D0%B5%D0%BD%D0%B0-%D0%B2%D0%BB%D0%B0%D0%B4%D0%B5%D0%BB%D1%8C%D1%86%D0%B0-%D1%81%D0%BE%D0%B1%D1%8B%D1%82%D0%B8%D0%B5">ниже</a>). Владельца, которого другой скрипт сменил без события, мир
+узнаёт только при чтении: логика, которой это важно, опрашивает <code>ctx.airbases_state(..)</code>.
+Стоянки, полосы и текущее состояние баз читают типизированные запросы
+(<a href="#%D1%81%D1%82%D0%BE%D1%8F%D0%BD%D0%BA%D0%B8-%D0%BF%D0%BE%D0%BB%D0%BE%D1%81%D1%8B-%D0%B8-%D1%81%D0%BE%D1%81%D1%82%D0%BE%D1%8F%D0%BD%D0%B8%D0%B5-%D0%B7%D0%B0%D0%BF%D1%80%D0%BE%D1%81%D1%8B">ниже</a>), запас складов аэродромов — запрос склада, а
+меняет его и переводит между складами команда <code>ctx.warehouse_op()</code> (<a href="warehouses.html">Склады</a>), а
+как DCS называет предметы склада, говорит <code>ctx.item_names()</code>
+(<a href="warehouses.html#%D0%B8%D0%BC%D0%B5%D0%BD%D0%B0-%D0%BF%D1%80%D0%B5%D0%B4%D0%BC%D0%B5%D1%82%D0%BE%D0%B2">Имена предметов</a>).</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">#[sortie::mission(api_rev = 3)] // ctx.airbase_control — API ревизии 3
+pub async fn front_moved(ctx: Ctx&lt;MyMission&gt;, _start: Start) -&gt; sortie::Result&lt;()&gt; {
+    // Оба аэродрома — красным, автозахват DCS выключен, диспетчеры молчат. Всё — за один кадр.
+    let out = ctx
+        .airbase_control([airbases::NALCHIK, airbases::KUTAISI])
+        .owner(Coalition::Red)
+        .auto_capture(false) // применяется раньше владельца: DCS не вернёт базу сама
+        .radio_silent(true)
+        .key(&quot;front-moved-1&quot;)
+        .await?;
+    // Мир знает нового владельца сразу, как команда вернулась.
+    let red = ctx
+        .world()
+        .airbase_by_name(&quot;Kutaisi&quot;)
+        .is_some_and(|a| a.coalition == Some(Coalition::Red));
+    // У каждой базы свой результат: что DCS прочитала до и после, или её ошибка.
+    for base in &amp;out.bases {
+        match base.error() {
+            None =&gt; {
+                let after = base.after.and_then(|s| s.owner);
+                ctx.report().set(&amp;base.name, format!(&quot;{after:?}&quot;));
+            }
+            // DCS не нашла базу (Error::Gone) или сеттер упал (Error::Lua) — только у неё.
+            Some(e) =&gt; ctx.report().set(&amp;base.name, e.code()),
+        }
+    }
+    ctx.report()
+        .set(&quot;all_ok&quot;, out.ok_count() == out.bases.len() &amp;&amp; red);
+    ctx.end_session(Outcome::Draw).await
+}
+</code></pre></div>
+<ul>
+<li>Аэродром выбирают как везде в SDK (<code>sortie::sel::AirbaseSel</code>): символ сценария
+(<code>airbases::KUTAISI</code>), имя DCS (<code>AirbaseSel::name("Kutaisi")</code>), Eid аэродрома или Eid
+статика FARP или корабля, который его несёт. В одном списке каждая база — не больше одного
+раза, в том числе под разными селекторами.</li>
+<li>Задайте хотя бы одно из трёх: <code>.owner(Coalition::Red / Blue / Neutral)</code>,
+<code>.auto_capture(bool)</code>, <code>.radio_silent(bool)</code>. Незаданное не меняется. Порядок в DCS у
+каждой базы: прочитать состояние, автозахват, владелец, радио, прочитать снова. Автозахват
+идёт первым, чтобы DCS не отдала базу обратно по наземным войскам рядом.</li>
+<li>Результат — <code>AirbasesControlled { bases }</code>, по одной <code>AirbaseControlled { eid, name, before, after }</code> на базу в порядке списка; <code>before</code> и <code>after</code> — <code>AirbaseState { owner, auto_capture, radio_silent }</code>, как их прочитала DCS (<code>None</code>, где DCS не ответила).
+<code>base.is_ok()</code> и <code>base.error()</code> — ошибка этой базы: <code>Error::Gone</code> (такой базы в DCS уже нет)
+или <code>Error::Lua</code> (сеттер DCS упал; <code>after</code> говорит, что DCS читает теперь). Остальные базы
+при этом выполняются, а сама команда успешна. <code>out.ok_count()</code> — сколько баз приняли всё.</li>
+<li>Новый владелец, которого DCS прочитала после изменения, сразу в <code>ctx.world()</code>: ждать
+ничего не нужно. В ответе команды и в мире — снимки этих баз.</li>
+<li>Захват, который DCS подняла до команды, может прийти в движок уже после её ответа (ответы
+мост отправляет сразу, а события ждут своей очереди). Владельца он не откатывает: движок
+сравнивает их место в порядке событий DCS, а не порядок прихода. Логика получит его
+<code>BaseCaptured</code>, но не <code>AirbaseOwnerChanged</code>; <code>ctx.world()</code> на время этого события берёт
+владельца из него (так делает любой SDK), а следующее обновление мира возвращает
+владельца движка.</li>
+<li>Вся команда — один кадр DCS: около 11 вызовов DCS на базу (найти базу, прочитать, до трёх
+сеттеров, прочитать снова), поэтому в одной команде не больше 32 баз (<code>cmd::MAX_AIRBASES</code>).
+Больше баз — несколько команд, у каждой свой кадр. Сколько база стоит в кадре, и
+<code>setCoalition</code> особенно, ещё не измерено (<code>AWC-T20</code>).</li>
+<li>Ключ (<code>.key(..)</code>) как у любой меняющей команды: повтор с тем же ключом вернёт сохранённый
+ответ и до DCS не дойдёт. В <code>sortie dev</code> ключ не обязателен, но после горячей перезагрузки
+логика выполнит команду снова — с ключом она не изменит базы второй раз.</li>
+<li>Полоса REALTIME, по умолчанию 10 с на ответ.</li>
+</ul>
+<h2 id="farp-и-отказы">FARP и отказы<a class="anchor" href="#farp-и-отказы" aria-label="Ссылка на этот раздел">#</a></h2>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">// FARP — тоже аэродром: по имени, по Eid аэродрома или по Eid его статика.
+let farp = ctx
+    .spawn_static(&quot;FARP&quot;, &quot;USA&quot;)
+    .named(&quot;FARP North&quot;)
+    .at(p, 0.0)
+    .heliport(Heliport::new())
+    .key(&quot;farp-north&quot;)
+    .await?;
+ctx.airbase_control([AirbaseSel::eid(farp.eid), AirbaseSel::name(&quot;Nalchik&quot;)])
+    .radio_silent(false) // только радио; владелец и автозахват не меняются
+    .key(&quot;farp-north-radio&quot;)
+    .await?;
+// Базы, которой нет в мире, команда не отправляет вовсе: Error::Invalid с её именем.
+match ctx
+    .airbase_control([AirbaseSel::name(&quot;Batumi&quot;)])
+    .owner(Coalition::Blue)
+    .await
+{
+    Err(Error::Invalid(f)) =&gt; ctx.report().set(&quot;refused&quot;, f.message.clone()),
+    other =&gt; {
+        other?;
+    }
+}
+</code></pre></div>
+<p>До DCS не доходит ничего, если команда неверна целиком, — <code>Error::Invalid</code> с тем, что не так:</p>
+<ul>
+<li>базы нет в мире: имя, которого мир не знает, символ сценария без такой базы в миссии;</li>
+<li>база в списке дважды;</li>
+<li>список пуст или длиннее 32;</li>
+<li>не задано ни одной настройки.</li>
+</ul>
+<p>База, чей носитель уничтожен (снятый FARP, потопленный корабль), — <code>Error::Gone</code>; устаревший
+Eid — тоже <code>Error::Gone</code>.</p>
+<h2 id="смена-владельца-событие">Смена владельца: событие<a class="anchor" href="#смена-владельца-событие" aria-label="Ссылка на этот раздел">#</a></h2>
+<p><code>AirbaseOwnerChanged</code> — одно событие на каждую смену владельца аэродрома в мире движка, что бы
+о ней ни сообщило: захват самой DCS (<code>S_EVENT_BASE_CAPTURED</code>), ваш или чужой
+<code>ctx.airbase_control(..)</code>, чтение DCS, которое нашло другого владельца. Это событие ревизии 2:
+логика объявляет <code>#[sortie::mission(api_rev = 3, event_rev = 2)]</code>, иначе не получает его
+вовсе (событие <code>BaseCaptured</code> при этом приходит как раньше, при любой ревизии).</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">#[sortie::mission(api_rev = 3, event_rev = 2)] // AirbaseOwnerChanged — событие ревизии 2
+pub async fn owner_events(ctx: Ctx&lt;MyMission&gt;, _start: Start) -&gt; sortie::Result&lt;()&gt; {
+    // Одно событие на каждую смену владельца — что бы о ней ни сообщило движку.
+    let mut owners = ctx.events().of::&lt;v1::AirbaseOwnerChanged&gt;();
+    while let Some(e) = owners.next().await {
+        let name = e
+            .airbase
+            .as_ref()
+            .map(|a| a.name.clone())
+            .unwrap_or_default();
+        // Мир уже знает нового владельца, когда событие пришло.
+        let in_world = ctx.world().airbase_by_name(&amp;name).and_then(|a| a.coalition);
+        let why = match e.cause() {
+            v1::OwnerChangeCause::Captured =&gt; &quot;захват DCS&quot;, // S_EVENT_BASE_CAPTURED
+            v1::OwnerChangeCause::Control =&gt; &quot;airbase_control&quot;,
+            v1::OwnerChangeCause::Discovered =&gt; &quot;найдено при чтении DCS&quot;,
+            v1::OwnerChangeCause::Unspecified =&gt; &quot;?&quot;,
+        };
+        // previous() — Unspecified, если прежнего владельца движок не знал.
+        ctx.report().set(
+            &amp;name,
+            format!(
+                &quot;{:?} -&gt; {:?} ({why}), мир: {in_world:?}&quot;,
+                e.previous(),
+                e.owner()
+            ),
+        );
+    }
+    ctx.end_session(Outcome::Draw).await
+}
+</code></pre></div>
+<ul>
+<li>Поля: <code>airbase</code> — снимок базы после смены (<code>AirbaseSnap</code>, его <code>coalition</code> — новый
+владелец), <code>previous</code> — прежний владелец (<code>Unspecified</code>, если движок его не знал: база,
+которую мир впервые увидел в этом захвате), <code>owner</code> — новый, <code>cause</code> — кто сообщил:
+<code>Captured</code> (DCS подняла <code>S_EVENT_BASE_CAPTURED</code>; сначала приходит её <code>BaseCaptured</code>, сразу
+за ним это событие), <code>Control</code> (команда <code>airbase_control</code>; событие приходит раньше ответа
+команды), <code>Discovered</code> (чтение DCS нашло другого владельца без события: снимок мира после
+разрыва связи или потери событий, FARP, который <code>spawn_static</code> оставил с прежним именем).</li>
+<li>Ровно одно событие на смену. Если DCS сообщает о том, что мир уже знает (захват базы,
+которую только что передал <code>airbase_control</code>, повтор того же захвата, снимок, подтвердивший
+событие), второго события нет. Туда и обратно — две смены, два события. Захват, который DCS
+подняла раньше, чем <code>airbase_control</code> или запрос состояния прочитали базу, но который пришёл
+в движок после их ответа, ничего не меняет (только его <code>BaseCaptured</code>, см. выше).</li>
+<li>Первый снимок мира в сессии ничего не публикует: он лишь учит мир владельцам, которых DCS
+держит на старте (в манифесте владельцы из редактора).</li>
+<li>Чего движок не знает. Владельца, которого DCS сменила без события (другой скрипт вызвал
+<code>Airbase.setCoalition</code>, сырой вызов <code>ctx.dcs().airbase(..).set_coalition(..)</code>), мир узнаёт только со
+следующим снимком мира — после разрыва связи или потери событий — или при запросе состояния
+этой базы (<code>ctx.airbase(..).state()</code>, <a href="#%D1%81%D1%82%D0%BE%D1%8F%D0%BD%D0%BA%D0%B8-%D0%BF%D0%BE%D0%BB%D0%BE%D1%81%D1%8B-%D0%B8-%D1%81%D0%BE%D1%81%D1%82%D0%BE%D1%8F%D0%BD%D0%B8%D0%B5-%D0%B7%D0%B0%D0%BF%D1%80%D0%BE%D1%81%D1%8B">ниже</a>), а не сразу; регулярного
+обхода аэродромов нет, и логика, которой нужны такие смены, сама опрашивает
+<code>ctx.airbases_state(..)</code>. Смену туда и обратно между двумя чтениями без события не видно
+вовсе.
+Поднимает ли DCS <code>S_EVENT_BASE_CAPTURED</code> на <code>setCoalition</code>, ещё не измерено (<code>AWC-T21</code>).</li>
+</ul>
+<p>Фильтры потока: <code>.airbase(..)</code> — база (символ сценария, имя DCS, Eid базы или её FARP или
+корабля), <code>.cause(..)</code> — одна причина, <code>.coalition(..)</code> — новый владелец.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">// Только захваты Кутаиси самой DCS (наземными войсками).
+let mut kutaisi = ctx
+    .events()
+    .of::&lt;v1::AirbaseOwnerChanged&gt;()
+    .airbase(airbases::KUTAISI)
+    .cause(v1::OwnerChangeCause::Captured);
+// Всё, что перешло к красным: coalition() — новый владелец.
+let mut to_red = ctx
+    .events()
+    .of::&lt;v1::AirbaseOwnerChanged&gt;()
+    .coalition(Coalition::Red);
+if let Some(e) = kutaisi.next().await {
+    ctx.message(Coalition::Blue)
+        .text(format!(&quot;Кутаиси захвачен: {:?}&quot;, e.owner()))
+        .await?;
+}
+let _lost = to_red.next().await;
+</code></pre></div>
+<p>Логика, объявившая <code>event_rev</code> ниже 2, или движок, который ревизию 2 не знает (до 0.4.0), — и
+<code>of::&lt;v1::AirbaseOwnerChanged&gt;()</code> пишет в журнал предупреждение с причиной: событий не будет.
+Ревизия событий 2 — часть API ревизии 3: <code>#[sortie::mission(api_rev = 2, event_rev = 2)]</code> не
+компилируется, а логике старого SDK с таким объявлением движок отдаёт ревизию событий 1, как
+отдавал движок 0.3.0.
+То же событие идёт в HTTP-поток <code>GET /api/v1/events</code> как <code>airbase_owner_changed</code>
+(<a href="web-api.html">Web API</a>).</p>
+<h2 id="стоянки-полосы-и-состояние-запросы">Стоянки, полосы и состояние: запросы<a class="anchor" href="#стоянки-полосы-и-состояние-запросы" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Три чтения аэродромов, тоже API ревизии 3: стоянки (<code>Airbase.getParking</code>), полосы
+(<code>Airbase.getRunways</code>) и состояние — владелец, автозахват, радиомолчание. Это запросы: в DCS
+ничего не меняется, ключ не нужен. Одна база — <code>ctx.airbase(sel)</code> и <code>.parking()</code>,
+<code>.runways()</code>, <code>.state()</code>; много баз одним запросом — <code>ctx.airbases_parking(..)</code>,
+<code>ctx.airbases_runways(..)</code>, <code>ctx.airbases_state(..)</code>.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">#[sortie::mission(api_rev = 3)] // запросы аэродромов — API ревизии 3
+pub async fn place_aircraft(ctx: Ctx&lt;MyMission&gt;, _start: Start) -&gt; sortie::Result&lt;()&gt; {
+    // Свободные стоянки Кутаиси: только те, что DCS отдаёт как свободные.
+    let free = ctx
+        .airbase(airbases::KUTAISI)
+        .parking()
+        .available_only()
+        .await?;
+    // Тип стоянки — по имени; число, которого SDK не знает, — TerminalType::Unknown.
+    let open = free
+        .iter()
+        .filter(|s| {
+            matches!(
+                s.terminal,
+                Some(TerminalType::OpenAir | TerminalType::OpenOrShelter)
+            )
+        })
+        .count();
+    // Все стоянки: какие заняты и кем (Eid мира, если DCS назвала объект и мир его держит).
+    let all = ctx.airbase(airbases::KUTAISI).parking().await?;
+    let taken = all.iter().filter(|s| s.taken == Some(true)).count();
+    // Полосы: название, курс (радианы, как отдаёт DCS), длина и ширина в метрах, центр.
+    for rw in ctx.airbase(airbases::KUTAISI).runways().await? {
+        ctx.report().set(
+            &amp;format!(&quot;runway {}&quot;, rw.name),
+            format!(
+                &quot;{:?} deg, {:?} m&quot;,
+                rw.heading_deg().map(f64::round),
+                rw.length
+            ),
+        );
+    }
+    ctx.report().set(&quot;open&quot;, open);
+    ctx.report().set(&quot;taken&quot;, taken);
+    ctx.end_session(Outcome::Draw).await
+}
+</code></pre></div>
+<ul>
+<li><code>.parking()</code> — <code>Vec&lt;ParkingSpot&gt;</code> в порядке DCS: <code>term_index</code> (номер стоянки),
+<code>terminal</code> — тип по имени (<code>TerminalType::Runway</code> 16, <code>HelicopterOnly</code> 40, <code>Shelter</code> 68,
+<code>OpenOrShelter</code> 72, <code>SmallShelter</code> 100, <code>OpenAir</code> 104 — значения из документации DCS;
+число, которого SDK не знает, приходит как <code>TerminalType::Unknown("unknown(&lt;n&gt;)")</code>), <code>point</code>,
+<code>taken</code> (стоянки нет среди свободных, которые отдаёт <code>getParking(true)</code>; <code>None</code>, если DCS
+этого не ответила), <code>dist_to_runway</code> (<code>fDistToRW</code>, метры). <code>.available_only()</code> — только
+свободные (одно чтение DCS вместо двух), у каждой <code>taken == Some(false)</code>, <code>s.is_free()</code>.</li>
+<li>Кем занята стоянка: документация DCS описывает <code>TO_AC</code> как булево значение, оно приходит в
+<code>to_ac</code>. Если DCS всё же назовёт там объект, он будет в <code>taken_by</code> (Eid мира, если мир его
+держит) и <code>taken_by_name</code>. <code>term_index_0</code> — <code>Term_Index_0</code> как есть (не документировано).</li>
+<li><code>.runways()</code> — <code>Vec&lt;Runway&gt;</code>: <code>name</code> (DCS отдаёт число, «может не совпадать» с табличкой),
+<code>course</code> — <strong>в радианах, как отдаёт DCS</strong> (по документации это курс со знаком минус),
+<code>length</code> и <code>width</code> в метрах, <code>center</code>. <code>rw.heading_deg()</code> — истинный курс в градусах 0..360
+по этому прочтению документации (не измерено). У FARP и корабля полос нет.</li>
+<li><code>.state()</code> — <code>AirbaseState { owner, auto_capture, radio_silent }</code>, как читает её
+<code>airbase_control</code>. Если DCS прочитала другого владельца, чем знает мир, мир получает его сразу,
+а логика — одно <code>AirbaseOwnerChanged</code> с причиной <code>Discovered</code> (выше): так опрос владельцев
+находит смену, которую другой скрипт сделал без события. Если же DCS сообщила о захвате уже
+после чтения и движок получил его первым, мир оставляет этого, более нового владельца.</li>
+<li>Ошибка базы у запроса одной базы — ошибка запроса: базы нет в DCS или мир держит её мёртвой
+(снятый FARP, потопленный корабль), устаревший Eid — <code>Error::Gone</code>; чтение DCS упало —
+<code>Error::Lua</code>.</li>
+</ul>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">// Владелец, автозахват и радио многих баз — одним запросом (DCS читает 32 базы за кадр).
+let read = ctx
+    .airbases_state([airbases::KUTAISI, airbases::NALCHIK])
+    .await?;
+for base in &amp;read.bases {
+    match (base.value, base.error()) {
+        (Some(s), _) =&gt; ctx.report().set(&amp;base.name, format!(&quot;{:?}&quot;, s.owner)),
+        // У каждой базы своя ошибка: Error::Gone — базы нет в DCS или в мире она мертва.
+        (None, Some(e)) =&gt; ctx.report().set(&amp;base.name, e.code()),
+        (None, None) =&gt; {}
+    }
+}
+// Стоянки до 16 баз одним запросом; база, не поместившаяся в ответ, — Error::Rejected.
+let parking = ctx
+    .airbases_parking([AirbaseSel::name(&quot;Kutaisi&quot;), AirbaseSel::name(&quot;FARP North&quot;)])
+    .available_only()
+    .await?;
+ctx.report().set(&quot;bases_ok&quot;, parking.ok_count());
+</code></pre></div>
+<ul>
+<li>Много баз: до 16 для стоянок (на большом аэродроме их сотни), до 256 для полос и
+состояния. Каждая база — не больше одного раза. Результат — <code>AirbasesRead { bases }</code>, по
+одной <code>AirbaseRead { eid, name, value }</code> на базу в порядке списка: <code>value</code> — то, что ответила
+DCS, <code>None</code> при ошибке этой базы; <code>base.error()</code> — её ошибка (<code>Error::Gone</code>, <code>Error::Lua</code>,
+<code>Error::Rejected</code> — стоянки этой базы не поместились в ответ, спросите её отдельно).
+<code>read.ok_count()</code> — сколько баз ответили. Сам запрос при этом успешен.</li>
+<li>Имя, которого мир не знает, запрос всё равно отправляет (DCS ответит или скажет
+<code>Error::Gone</code>); мёртвую базу и устаревший Eid движок отвечает сам, до DCS они не доходят.
+Целиком запрос отвергается (<code>Error::Invalid</code>) только когда список пуст или длиннее предела,
+база в нём дважды, символа нет в сценарии или Eid — не аэродрома.</li>
+<li>Нагрузка на DCS: слой читает по частям, чтобы большой список не останавливал игру, —
+состояние и полосы по 32 базы за кадр (около 6 вызовов DCS на базу для состояния), стоянки
+около 300 за кадр; в ответе не больше 8000 стоянок. Ответ приходит из кадра, в котором
+прочитана последняя база. Полоса QUERY, по умолчанию 10 с на ответ.</li>
+</ul>
+<h2 id="ревизия-и-возможности">Ревизия и возможности<a class="anchor" href="#ревизия-и-возможности" aria-label="Ссылка на этот раздел">#</a></h2>
+<ul>
+<li>Логика объявляет <code>#[sortie::mission(api_rev = 3)]</code>; с меньшей ревизией команда —
+<code>Error::Revision</code>, против движка с ревизией API ниже 3 — <code>Error::EngineTooOld</code>, и ничего не
+отправляется.</li>
+<li>Возможность <code>caps::AIRBASE_CONTROL</code> (<code>"airbase_control"</code>): включена по умолчанию, как
+<code>spawn_static</code>; владелец движка выключает её в <code>engine.toml</code>
+(<code>[operations] disable = ["airbase_control"]</code>), тогда команда — <code>Error::Rejected</code>. Если в
+сборке DCS нет одной из её функций (<code>Airbase.setCoalition</code>, <code>Airbase.autoCapture</code>,
+<code>Airbase.setRadioSilentMode</code> и чтений к ним), её состояние — <code>MISSING_IN_DCS</code>. Требовать её
+заранее: <code>#[sortie::mission(api_rev = 3, requires = [caps::AIRBASE_CONTROL])]</code> —
+<a href="capabilities.html">возможности движка</a>.</li>
+<li>У запросов свои возможности, тоже включённые по умолчанию: <code>caps::AIRBASE_PARKING</code>
+(<code>"airbase_parking"</code>, нужна <code>Airbase.getParking</code>), <code>caps::AIRBASE_RUNWAYS</code>
+(<code>"airbase_runways"</code>, <code>Airbase.getRunways</code>), <code>caps::AIRBASE_STATE</code> (<code>"airbase_state"</code>,
+<code>Airbase.getCoalition</code>; автозахвата и радио, которых нет в сборке DCS, в ответе просто нет).
+Каждую можно выключить отдельно, и без одной функции DCS остальные работают. Сырые чтения
+каталога <code>ctx.dcs().airbase(..).parking(..)</code> и <code>.runways()</code> остаются и не устарели: они
+отдают таблицу DCS целиком.</li>
+<li>Сырые обёртки каталога <code>ctx.dcs().airbase(..).set_coalition(..)</code>, <code>.auto_capture(..)</code> и
+<code>.set_radio_silent_mode(..)</code> остаются, но помечены <code>#[deprecated]</code>: после них мир узнаёт
+владельца только со следующим снимком мира (после разрыва связи или потери событий) или при
+запросе состояния этой базы — регулярного обхода аэродромов нет, — и каждая обёртка —
+отдельная команда на одну базу.
+Чтения (<code>coalition()</code>, <code>auto_capture_is_on()</code>, <code>radio_silent_mode()</code>) не устарели.</li>
+</ul>
+<h2 id="что-не-измерено">Что не измерено<a class="anchor" href="#что-не-измерено" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>Что <code>Airbase.setCoalition</code> сразу меняет владельца, что после <code>autoCapture(false)</code> DCS не
+отдаёт базу сама и что радиомолчание слышно в игре, на реальной DCS ещё не измерено (живые
+проверки <code>AWC-T1</code>, <code>AWC-T20</code>, <code>AWC-T9</code>; проба <code>wide_probe</code>, шаг Foothold). Поднимает ли DCS
+<code>S_EVENT_BASE_CAPTURED</code> на <code>setCoalition</code> и что <code>airbase_control</code> даёт ровно одно
+<code>AirbaseOwnerChanged</code> на базу — тоже (<code>AWC-T21</code>, тот же шаг пробы). Что <code>getParking(true)</code>
+пропускает именно занятые стоянки, что значат <code>TO_AC</code> и <code>Term_Index_0</code>, сколько стоит
+<code>getParking</code> большого аэродрома, что <code>course</code> полосы — курс со знаком минус в радианах и что
+состояние многих баз читается так же, как сырыми вызовами, — тоже не измерено (<code>AWC-T22</code>,
+<code>AWC-T23</code>, <code>AWC-T24</code>; тот же шаг пробы на Кутаиси и FARP пробы). Сколько стоит в кадре одна
+база у <code>airbase_control</code> (около 11 вызовов DCS) и у запроса состояния (около 6), не измерено:
+отсюда пределы 32 базы на команду и 32 базы за кадр у запросов (<code>AWC-T20</code>, <code>AWC-T24</code>).</p>
+<h2 id="тестирование">Тестирование<a class="anchor" href="#тестирование" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>FakeDcs хранит у каждого аэродрома владельца, автозахват (включён в новой миссии) и
+радиомолчание (выключено): <code>dcs.airbase_coalition(имя)</code>, <code>dcs.airbase_auto_capture(имя)</code>,
+<code>dcs.airbase_radio_silent(имя)</code>. Сырые чтения и сеттеры каталога работают с тем же
+состоянием.</p>
+<p>Смена владельца в тестах: <code>dcs.capture_airbase(имя, Coalition::Red)</code> — захват, как его
+сообщает DCS (<code>S_EVENT_BASE_CAPTURED</code> со следующим кадром; логика получит <code>BaseCaptured</code> и одно
+<code>AirbaseOwnerChanged</code> с причиной <code>Captured</code>); <code>dcs.set_airbase_coalition_silently(имя, ..)</code> —
+владелец меняется без события, а <code>dcs.lose_events(1)</code> заставляет движок снять мир заново, и
+смена приходит с причиной <code>Discovered</code> (или её находит <code>ctx.airbase(..).state()</code>). Ни сырой
+<code>setCoalition</code>, ни <code>airbase_control</code> в FakeDcs <code>S_EVENT_BASE_CAPTURED</code> не поднимают.
+<code>dcs.hold_events()</code> держит события DCS в очереди моста, как когда у движка нет кредитов, а
+ответы команд уходят сразу; <code>dcs.release_events()</code> отправляет их. Так тест видит захват,
+который DCS подняла до <code>airbase_control</code>, а движок получил после её ответа.</p>
+<p>Стоянки и полосы в FakeDcs: у каждого аэродрома манифеста четыре стоянки (1 <code>OpenAir</code>,
+2 <code>OpenOrShelter</code>, 3 <code>Shelter</code>, 4 <code>HelicopterOnly</code>) и полоса «9» (курс −π/2, то есть 90°,
+2500 × 60 м, в точке аэродрома); у FARP четыре вертолётные стоянки, у одиночной площадки одна,
+полос нет. <code>dcs.take_parking_spot(имя, номер, Some("Юнит"))</code> занимает стоянку (запрос покажет
+<code>taken</code> и Eid юнита), <code>dcs.free_parking_spot(имя, номер)</code> освобождает. Сырые
+<code>Airbase.getParking</code> и <code>getRunways</code> отдают ту же раскладку в форме DCS.</p>
+</article>
+<nav class="pager" aria-label="Соседние страницы">
+<a class="pager-prev" rel="prev" href="objects.html"><span class="pager-dir">Назад</span><span class="pager-title">Объекты: статики, уничтожение, мусор</span></a>
+<a class="pager-next" rel="next" href="warehouses.html"><span class="pager-dir">Дальше</span><span class="pager-title">Склады: запас аэродромов и грузов</span></a>
+</nav>
+<p class="page-source"><a href="airbases.md">Эта страница в Markdown</a></p>
+</main>
+</div>
+<footer class="footer">
+<div class="footer-inner">
+<p>Sortie SDK 0.4.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
+</div>
+</footer>
+<script>
+(function () {
+  var d = document.documentElement;
+  var theme = document.querySelector('.theme-btn');
+  if (theme) theme.addEventListener('click', function () {
+    var set = d.getAttribute('data-theme');
+    var dark = set ? set === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    d.setAttribute('data-theme', next);
+    try { localStorage.setItem('sortie-theme', next); } catch (e) {}
+  });
+  var menu = document.querySelector('.menu-btn');
+  function show(open) {
+    d.classList.toggle('menu-open', open);
+    if (menu) menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (menu) menu.addEventListener('click', function () {
+    show(!d.classList.contains('menu-open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && d.classList.contains('menu-open')) {
+      show(false);
+      if (menu) menu.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

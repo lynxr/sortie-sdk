@@ -2,7 +2,7 @@
 
 use sortie::prelude::*;
 
-use super::my_mission::{MyMission, airbases, templates};
+use super::my_mission::{MyMission, airbases, groups, templates};
 
 pub async fn send_home(ctx: Ctx<MyMission>) -> sortie::Result<()> {
     let cap = ctx.spawn_group(templates::RED_CAP).key("red-cap").await?;
@@ -16,5 +16,22 @@ pub async fn send_home(ctx: Ctx<MyMission>) -> sortie::Result<()> {
         }
     }
     // snippet:end sdk-errors
+    Ok(())
+}
+
+pub async fn optional_option(ctx: Ctx<MyMission>) -> sortie::Result<()> {
+    // snippet:start sdk-errors-timeout
+    let sam = ctx.group(groups::SAM)?;
+    let go_red = || sam.set_option(Alarm::Red).key("sam-alarm-red");
+    let mut outcome = go_red().await;
+    if matches!(outcome, Err(sortie::Error::Timeout(_))) {
+        // С тем же ключом: команда, которая всё же дошла до DCS, второй раз не выполнится.
+        outcome = go_red().await;
+    }
+    if let Err(e) = outcome {
+        // Необязательная команда: записать и продолжать, не завершая функцию миссии.
+        eprintln!("{}", e.report());
+    }
+    // snippet:end sdk-errors-timeout
     Ok(())
 }

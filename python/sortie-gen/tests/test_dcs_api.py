@@ -72,9 +72,55 @@ class FakeCommands(commands_pb2_grpc.CommandsServicer):
             r.err.code = common_pb2.ERROR_CODE_REJECTED
             r.err.message = "`Airbase.setCoalition` is switched off"
             r.err.capability = "call:mission:Airbase.setCoalition"
+        elif call.path == "timer.getTime":
+            # 0.4.0: a read refused by the writer's read count, with its limit.
+            r.err.code = common_pb2.ERROR_CODE_REJECTED
+            r.err.message = "rate limit: `w` may make 200 read calls per second"
+            r.err.limit.CopyFrom(
+                common_pb2.Limit(
+                    kind=common_pb2.LIMIT_KIND_CALL_RATE,
+                    budget="call_rate.read",
+                    writer="w",
+                    capacity=200,
+                    per_second=200,
+                    needed=1,
+                    available=-56,
+                    retry_after_ms=285,
+                )
+            )
+        elif call.path == "timer.getAbsTime":
+            # A refusal of an engine before 0.4.0: no limit.
+            r.err.code = common_pb2.ERROR_CODE_REJECTED
+            r.err.message = "rate limit: the reads of `w` cost more than 20 ms of DCS time per second; slow down"
         elif call.path == "Unit.getAmmo":
             r.reply.call.values.append(commands_pb2.DcsValue(cut=3))
             r.reply.call.truncated = True
+        elif call.path == "land.findPathOnRoads":
+            # A path of two map points, or nil (no path) when the start is north of x = 50 km.
+            if call.args[1].value.number > 50000:
+                r.reply.call.values.append(commands_pb2.DcsValue(nil=common_pb2.LuaNil()))
+            else:
+                point = lambda n, e: table([(s("x"), num(n)), (s("y"), num(e))])  # noqa: E731
+                r.reply.call.values.append(table([(num(1), point(1000, 2000)), (num(2), point(3000, 6000))]))
+        elif call.path == "sortie.findPathOnRoads":
+            # The layer's summary of a road path: nil when the start is north of x = 50 km; the
+            # points when max_points (the fourth argument) was given.
+            if call.args[1].vec2.north > 50000:
+                r.reply.call.values.append(commands_pb2.DcsValue(nil=common_pb2.LuaNil()))
+            else:
+                point = lambda n, e: table([(s("x"), num(n)), (s("y"), num(e))])  # noqa: E731
+                points = [point(0, 0), point(100, 400), point(300, 700)] if len(call.args) > 3 else []
+                summary = [
+                    (s("count"), num(10)),
+                    (s("length"), num(941.5)),
+                    (s("first"), point(0, 0)),
+                    (s("last"), point(300, 700)),
+                    (s("start_gap"), num(10)),
+                    (s("end_gap"), num(20)),
+                    (s("points"), table([(num(i + 1), p) for i, p in enumerate(points)])),
+                    (s("thinned"), commands_pb2.DcsValue(boolean=True)),
+                ]
+                r.reply.call.values.append(table(summary))
         else:
             r.reply.call.SetInParent()
         return r
@@ -155,11 +201,66 @@ def test_arguments_of_every_kind(client):
         dcsmod.coalition("purple")
 
 
+def test_a_road_path_takes_five_plain_values_and_gives_map_points_or_none(client):
+    land = Dcs(client).land()
+    assert land.path_on_roads("roads", 1000, 2000, 3000, 6000) == [(1000.0, 2000.0), (3000.0, 6000.0)]
+    call = client.fake.commands[-1].dcs_call
+    assert call.path == "land.findPathOnRoads"
+    assert [a.value.WhichOneof("kind") for a in call.args] == ["string", "number", "number", "number", "number"]
+    assert call.args[0].value.string == "roads" and call.args[4].value.number == 6000
+    assert land.path_on_roads("railroads", 60000, 2000, 3000, 6000) is None
+
+
+def test_a_road_path_summary_comes_back_as_a_record(client):
+    """``land().road_path(..)``: the layer's ``sortie.findPathOnRoads`` takes the road type, two
+    map points, the cap and the way of thinning; its answer is a :class:`RoadPath`."""
+    land = Dcs(client).land()
+    p = land.road_path("roads", (-10, 0), (300, 720), 3, "even")
+    assert isinstance(p, dcsmod.RoadPath)
+    assert (p.count, p.length_m, p.thinned) == (10, 941.5, True)
+    assert (p.first, p.last) == ((0.0, 0.0), (300.0, 700.0))
+    assert (p.start_gap_m, p.end_gap_m) == (10.0, 20.0)
+    assert p.points == [(0.0, 0.0), (100.0, 400.0), (300.0, 700.0)]
+    call = client.fake.commands[-1].dcs_call
+    assert call.path == "sortie.findPathOnRoads"
+    assert [a.WhichOneof("kind") for a in call.args] == ["value", "vec2", "vec2", "value", "value"]
+    assert call.args[3].value.number == 3 and call.args[4].value.string == "even"
+    # The summary alone: no cap, no points; the trailing nils are left out.
+    p = land.road_path("roads", (-10, 0), (300, 720))
+    assert p.points == [] and p.count == 10
+    assert len(client.fake.commands[-1].dcs_call.args) == 3
+    assert land.road_path("roads", (60000, 0), (300, 720)) is None
+
+
 def test_a_refused_call_raises_with_its_capability(client):
     with pytest.raises(CommandFailed) as e:
         Dcs(client).airbase("Kutaisi").set_coalition("blue", key="k")
     assert e.value.code == "REJECTED"
     assert e.value.capability == "call:mission:Airbase.setCoalition"
+
+
+def test_a_limit_refusal_names_its_limit_and_when_to_retry(client):
+    """Engine 0.4.0 says which limit refused a call and when the same call may go again:
+    ``CommandFailed.limit`` and ``retry_after`` (seconds); a forbid has neither and is
+    ``forbidden``; a refusal of an older engine has no limit and is no forbid."""
+    with pytest.raises(CommandFailed) as e:
+        Dcs(client).timer().time()
+    assert e.value.code == "REJECTED"
+    assert e.value.capability == ""
+    limit = e.value.limit
+    assert limit is not None
+    assert (limit.kind, limit.budget, limit.writer) == ("CALL_RATE", "call_rate.read", "w")
+    assert (limit.capacity, limit.per_second, limit.needed, limit.available) == (200, 200, 1, -56)
+    assert e.value.retry_after == pytest.approx(0.285)
+    assert not e.value.forbidden
+    assert "(limit call_rate.read)" in str(e.value)
+    with pytest.raises(CommandFailed) as e:
+        Dcs(client).airbase("Kutaisi").set_coalition("blue", key="k")
+    assert e.value.limit is None and e.value.retry_after is None
+    assert e.value.forbidden
+    with pytest.raises(CommandFailed) as e:
+        Dcs(client).timer().abs_time()
+    assert e.value.limit is None and not e.value.forbidden
 
 
 def test_a_keyed_repeat_without_its_values_is_a_distinct_error(client):

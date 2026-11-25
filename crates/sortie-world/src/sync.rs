@@ -341,8 +341,9 @@ impl World {
 
     /// Applies an event to the world: participants are upserted from their snaps, Dead /
     /// UnitLost / Kill (target) / UnitGone mark the entity dead (a `Dead` from
-    /// `S_EVENT_PILOT_DEAD` does not: `Event.dcs_event`), BaseCaptured changes the airbase
-    /// owner, PlayerEnteredUnit records the player and an `Unknown` from
+    /// `S_EVENT_PILOT_DEAD` does not: `Event.dcs_event`), BaseCaptured and
+    /// AirbaseOwnerChanged change the airbase owner, PlayerEnteredUnit records the player and
+    /// an `Unknown` from
     /// `S_EVENT_PLAYER_LEAVE_UNIT` forgets it (its `ctx.initiator`). Weapons and nameless objects
     /// the world does not hold (ejected crew) are never added. On a replica this never
     /// changes the revision (the engine's next delta carries the same facts); on the mirror it bumps
@@ -427,18 +428,14 @@ impl World {
             }
             Some(Kind::BaseCaptured(b)) => {
                 upsert(self, &b.initiator);
-                if let Some(a) = &b.place
-                    && let Some(eid) = Eid::from_u64(a.eid)
-                {
-                    self.ensure_airbase(a, rev, &mut changed);
-                    let owner = Coalition::from_i32(b.coalition);
-                    if let Some(x) = self.airbases.get_mut(&eid)
-                        && x.coalition != owner
-                    {
-                        x.coalition = owner;
-                        x.rev = rev;
-                        changed = true;
-                    }
+                if let Some(a) = &b.place {
+                    self.set_owner_of(a, Coalition::from_i32(b.coalition), rev, &mut changed);
+                }
+            }
+            // Wave 2 (event revision 2): the owner the engine's world holds now.
+            Some(Kind::AirbaseOwnerChanged(c)) => {
+                if let (Some(a), Some(owner)) = (&c.airbase, Coalition::from_i32(c.owner)) {
+                    self.set_owner_of(a, Some(owner), rev, &mut changed);
                 }
             }
             _ => {}
@@ -466,6 +463,28 @@ impl World {
             }
         }
         self.commit(rev, changed);
+    }
+
+    /// Gives the airbase of an event's snap (inserted if the world does not know its Eid) the
+    /// owner `owner`.
+    fn set_owner_of(
+        &mut self,
+        a: &v1::AirbaseSnap,
+        owner: Option<Coalition>,
+        rev: u64,
+        changed: &mut bool,
+    ) {
+        let Some(eid) = Eid::from_u64(a.eid) else {
+            return;
+        };
+        self.ensure_airbase(a, rev, changed);
+        if let Some(x) = self.airbases.get_mut(&eid)
+            && x.coalition != owner
+        {
+            x.coalition = owner;
+            x.rev = rev;
+            *changed = true;
+        }
     }
 
     /// Inserts an airbase carried by an event if the world does not know its Eid yet.

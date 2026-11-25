@@ -19,6 +19,8 @@ per session.
 - **One thread.** `Ctx` is cheap to clone and not `Send`; background work is `ctx.spawn`.
 - **Typed scenario.** `groups::X`, `zones::X`, `templates::X`, `flags::X`, `airbases::X`,
   `menus::X` come from the scenario lock; a symbol of another scenario does not compile.
+- **All game logic is here.** The `.miz` holds the map side only; what happens in the
+  mission is this Rust code, never a DO SCRIPT in the `.miz` (rule 1).
 
 ## Project layout
 
@@ -46,11 +48,11 @@ edition = "2024"
 rust-version = "1.89"
 
 [dependencies]
-sortie = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.3.0" }
+sortie = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.4.0" }
 serde = { version = "1", features = ["derive"] }   # only for state documents
 
 [build-dependencies]
-sortie-build = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.3.0" }
+sortie-build = { git = "https://github.com/lynxr/sortie-sdk", tag = "v0.4.0" }
 
 [lints.clippy]
 await_holding_refcell_ref = "deny"   # catches a world borrow held across .await
@@ -118,13 +120,30 @@ site; the session goes on.
 2. **Write the step replay-safe** (rules below), then `cargo build` and `cargo clippy`.
    Done when both pass and every `spawn_group` and `destroy` in the diff carries `.key(..)`.
 3. **Run it in DCS** with `sortied --dev` and the logic's `--dev` (see the
-   sortie-live-debugging skill). SDK 0.3.0 has no tests without DCS: FakeDcs
-   arrives in SDK 0.2, and `#[sortie::test]` is a compile error until then. Put pure decisions
-   (which wave, which target) in plain functions and test them with ordinary `#[test]`.
+   sortie-live-debugging skill). The public SDK has no tests without DCS: FakeDcs carries
+   the engine and is not part of it yet, so `#[sortie::test]` is a compile error. Put pure
+   decisions (which wave, which target) in plain functions and test them with ordinary
+   `#[test]`.
 
 ## Rules
 
-1. **Key every command whose repetition matters.** `spawn_group` and `destroy` always: they
+1. **Game logic lives in the Rust logic, never in the `.miz`.** The `.miz` that
+   `scenario.py` builds holds the map side only (groups, units, statics, zones, weather,
+   briefing, the warehouses' starting stock) and Sortie's bootstrap. What happens when,
+   spawns, tasks, scoring, menus, marks and stock changes are all Rust. When the SDK lacks
+   something, in this order:
+   - a typed command or query (the API map below);
+   - a catalog call: its generated wrapper (`ctx.dcs().land().height(p)`); with the cargo
+     feature `dcs-raw` also by path (`ctx.dcs().call("land.getHeight")..`) and a batch of
+     many calls in one frame (`ctx.dcs().batch()`);
+   - a raw DCS task table, `group.set_task(Task::raw(table))`: any group takes it, for what
+     the typed tasks lack (a stop, tasks at waypoints, a ship's route: references/api.md);
+   - tell the Sortie team what is missing.
+   A DO SCRIPT added through a `@sc.pydcs` hook is only for a third-party script the
+   mission must keep (Sortie does not check it), never for the mission's own logic. The
+   build warns about every such script (also an init script or a LUA PREDICATE), and the
+   template's `scenario.py` sets `do_scripts="deny"`, which fails the build.
+2. **Key every command whose repetition matters.** `spawn_group` and `destroy` always: they
    are refused without a key when `sortied` runs with `--dev` and when the logic runs with
    `--dev`. Key messages, smoke, flags and menu commands that a replay must not repeat. Key
    semantics:
@@ -138,21 +157,21 @@ site; the session goes on.
    - a keyed command that timed out after reaching DCS is not sent again on retry with the
      same key: the retry waits for the late result;
    - a mission restart is a new session: keys start empty again.
-2. **Wait on states, not events,** when the condition is visible in the world:
+3. **Wait on states, not events,** when the condition is visible in the world:
    `ctx.wait_until(|w| w.group(&sam).alive_count() == 0)`. A replay sees the state; it never
    sees an event that happened before it subscribed.
-3. **Delays that must survive a logic restart are named timers:**
+4. **Delays that must survive a logic restart are named timers:**
    `ctx.timer("cap-delay", mins(10))`. `ctx.sleep` starts over after a restart.
-4. **Campaign changes go inside `ctx.once_per_turn`.** After a mission restart the turn is
+5. **Campaign changes go inside `ctx.once_per_turn`.** After a mission restart the turn is
    played again in a new session; `once_per_turn` keeps a kill from being counted twice in one
    turn. `ctx.once` is per session.
-5. **Short borrows.** Take `ctx.world()` and `StateDoc::get()` in a statement or a block that
+6. **Short borrows.** Take `ctx.world()` and `StateDoc::get()` in a statement or a block that
    ends before the next `.await`. A borrow held across `.await` stops the replica from updating
    (the runtime records "the world replica is borrowed across an `.await`").
-6. **Never block the thread.** No `std::thread::sleep`, blocking I/O or long CPU loops: ticks
+7. **Never block the thread.** No `std::thread::sleep`, blocking I/O or long CPU loops: ticks
    stop, and after 4096 unread messages the engine detaches the logic (it exits with code 0).
    Wait with `ctx.sleep`, `ctx.timer`, `ctx.wait_until`.
-7. **Background work is `ctx.spawn`.** Its tasks end with the session; an `Err` or a panic in
+8. **Background work is `ctx.spawn`.** Its tasks end with the session; an `Err` or a panic in
    one is recorded with its call site and the other tasks keep running. No `std::thread`, no
    runtime of your own.
 
@@ -192,8 +211,8 @@ A replay-safe mission needs no branch on `Start` except for player-facing extras
 
 | Need | Use |
 | --- | --- |
-| a scenario group | `ctx.group(groups::X)?` → `Group<Ground/Air/Helo/Ship>`; `set_option(Alarm::Red / Roe::..)`, `destroy()`, `push_task`/`set_task` (air and helicopters) |
-| spawn | `ctx.spawn_group(templates::X)` or `templates::X.named("..")`, then `.from_airbase(airbases::Y, StartType::..)` or `.at(Vec3, heading_rad)`, `.key(..)` → `Group<K>` |
+| a scenario group | `ctx.group(groups::X)?` → `Group<Ground/Air/Helo/Ship>`; `set_option(Alarm::Red / Roe::..)`, `destroy()`, `push_task`/`set_task` (`Task::cap/orbit/rtb` for air and helicopters; `Task::ground_route(..)` for ground groups, API revision 3; a raw DCS task table, `Task::raw(..)`, for any group) |
+| spawn | `ctx.spawn_group(templates::X)` or `templates::X.named("..")`, then `.from_airbase(airbases::Y, StartType::..)`, `.at(Vec3, heading_rad)` (every unit faces `heading_rad`, the formation is not turned) or `.at_formation(Vec3, heading_rad)` (API revision 3: the formation turns as one body, each unit keeps its heading offset), `.key(..)` → `Group<K>` |
 | tell players | `ctx.message(Coalition::Blue / &group / press.group / sortie::MessageTarget::All).text(..).secs(..)` |
 | read the world | `ctx.world()`, `w.units().coalition(..).air().in_zone(zones::X).count()`, `w.players()`, `w.group(&g).alive_count()` |
 | wait | `ctx.wait_until(pred)`, `ctx.timer(name, dur)`, `ctx.sleep(dur)`, `ctx.until_session_end()` |
@@ -203,7 +222,18 @@ A replay-safe mission needs no branch on `Start` except for player-facing extras
 | flags | `ctx.flag(flags::X).set(true)`, `.get()` → `i32` |
 | remember | `ctx.state::<T>("name")` (campaign), `ctx.state_in::<T>(v1::StateScope::Turn, ..)`, `ctx.once`, `ctx.once_per_turn` |
 | results | `ctx.report().set("key", value)`, `ctx.end_session(Outcome::BlueWin).text(..)` |
-| a DCS function with no typed operation | `ctx.dcs().land().surface_type(p)`, `ctx.dcs().airbase(airbases::X).set_coalition(..)`, `ctx.dcs().warehouse(..).add_item(..)`; needs `#[sortie::mission(api_rev = 1)]` |
+| data for a web site (live map, campaign page) | `ctx.publish("front", &value).await?` (any `Serialize`; the engine serves it at `GET /api/v1/docs/<logic>/front`), `ctx.unpublish(name)`; needs `#[sortie::mission(api_rev = 3)]` |
+| a web site asks the logic to do something | `let mut reqs = ctx.api().action("send_cap")?;` then `while let Some(req) = reqs.next().await { .. req.reply(&value)? / req.fail(422, why)? }` (called as `POST /api/v1/actions/<logic>/send_cap` with an `operator` token; answer within 10 s; a dropped request is 500); needs `#[sortie::mission(api_rev = 3)]` |
+| airbase owner, auto capture, radio silence | `ctx.airbase_control([airbases::X, airbases::Y]).owner(Coalition::Red).auto_capture(false).radio_silent(true).key(..)` (1..=32 bases, one frame) → per-base `before` / `after` / `error()`; the world has the owner at once; needs `#[sortie::mission(api_rev = 3)]` |
+| airbase owner changed (any cause) | `ctx.events().of::<v1::AirbaseOwnerChanged>()`, `.airbase(..)`, `.cause(v1::OwnerChangeCause::Captured)`; one per change (DCS capture, `airbase_control`, a read of DCS); an owner another script changed without an event comes only from a read: poll `ctx.airbases_state(..)`; needs `#[sortie::mission(api_rev = 3, event_rev = 2)]` |
+| airbase parking, runways, control state | `ctx.airbase(airbases::X).parking().available_only()` → `Vec<ParkingSpot>`, `.runways()` → `Vec<Runway>`, `.state()` → `AirbaseState`; many: `ctx.airbases_parking([..])` / `airbases_runways` / `airbases_state` → per-base `value` / `error()`; reads, no key, API revision 3 |
+| warehouse stock | `ctx.warehouse(airbases::X).stock()` → `WarehouseStock { aircraft, weapons, liquids }` (`StockClass::Unlimited` or `Limited(name -> n)`); `.items([..])` / `.liquids()` count only those; many: `ctx.warehouses_stock([..])` → per-warehouse `value` / `error()`; a read, no key, API revision 3 |
+| change warehouse stock, move it between warehouses | `ctx.warehouse_op().transfer(airbases::X, airbases::Y, "weapons.missiles.AIM_120C", 6.0).add(airbases::Y, Liquid::JetFuel, 5000.0).key(..)` (also `.set`, `.remove`; 1..=16 changes, one frame, all or nothing) → `StockChanges { applied, changes }` (per change `outcome`: `Done`, `NotEnough`, `Unlimited`, `Aliased`, ...); every warehouse_op needs a key in dev, sets too; name an item in one form per command; API revision 3 |
+| the names DCS gives warehouse items, name <-> wsType (check a campaign's items before stocking; no `Warehouse.getResourceMap` catalog entry) | `ctx.item_names()` → `ItemNames` (`.ws_type_of("weapons.missiles.AIM_120C")`, `.names_of([4, 4, 7, 106])`, `.knows(..)`); `.items([..])` looks up only those (`unknown` for the rest); read from the running DCS once per DCS process (`cached` after); a read that takes no key (`.key(..)` is `Error::Invalid`), API revision 3 |
+| a DCS function with no typed operation | `ctx.dcs().land().surface_type(p)`, `ctx.dcs().airbase(airbases::X).callsign()`, `ctx.dcs().sounds().out_sound(..)`; needs `#[sortie::mission(api_rev = 1)]` |
+| a ground group drives somewhere (a convoy, a route along roads) | `convoy.set_task(Task::ground_route([RoutePoint::on_road(p), ..]))` (API revision 3); a stop or what the route lacks: `Task::raw(..)`; references/api.md, "A ground group's route" |
+| the road between two map points (a convoy's distance, a stop on the way) | `ctx.dcs().land().path_on_roads("roads", from.north, from.east, to.north, to.east)` → `Option<Vec<MapPoint>>`, start to end; class heavy (one at a time, 2 per second, its own DCS-time budget, ends at most 300 km apart, never in a batch); needs `#[sortie::mission(api_rev = 3)]`: references/api.md, "A road path" |
+| the length and ends of a road path without its points; a few of its turning points for a route | `ctx.dcs().land().road_path("roads", from, to, Some(8.0), None)` → `Option<RoadPath>` (`count`, `length_m`, `first`/`last`, `start_gap_m`/`end_gap_m`, `points` capped with both ends, `thinned`), summarised by the Lua layer inside DCS; class heavy; needs `#[sortie::mission(api_rev = 3)]`: references/api.md, "The summary of a road path" |
 
 Signatures, defaults and an example for each: [references/api.md](references/api.md).
 

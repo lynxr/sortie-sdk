@@ -63,8 +63,8 @@ pub fn mission(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// * Other attributes (`#[should_panic]`, `#[ignore]`, docs) are kept; `#[test]` and
 ///   `#[tokio::test]` are rejected because the macro already adds `#[test]`.
 ///
-/// Only with the feature `fake-dcs` (enabled by `sortie-fake`): FakeDcs is not part of Sortie
-/// SDK 0.1, so without the feature the attribute is a compile error that says so.
+/// Only with the feature `fake-dcs` (enabled by `sortie-fake`): FakeDcs is not part of the
+/// public Sortie SDK, so without the feature the attribute is a compile error that says so.
 #[proc_macro_attribute]
 pub fn test(attr: TokenStream, item: TokenStream) -> TokenStream {
     if !cfg!(feature = "fake-dcs") {

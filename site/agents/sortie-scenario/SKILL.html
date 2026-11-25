@@ -24,7 +24,7 @@
 <a class="skip" href="#content">Перейти к содержанию</a>
 <header class="topbar">
 <div class="topbar-inner">
-<a class="brand" href="../../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.3.0</span></a>
+<a class="brand" href="../../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.4.0</span></a>
 <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
 <nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="../../docs/quickstart.html">Быстрый старт</a><a href="../../docs/index.html">Документация</a><a href="../../agents.html" aria-current="true">Для агентов</a><a href="../../downloads.html">Загрузки</a><a href="../../changelog.html">Изменения</a></nav>
 <div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
@@ -77,8 +77,19 @@ contract between the two sides: commit it, never edit it.</li>
 <p>An <code>ident=</code> makes a symbol: <code>groups::SAM_NORTH</code>, <code>zones::FRONT</code>, <code>templates::RED_CAP</code>,
 <code>airbases::MAYKOP</code>, <code>flags::SAM_DOWN</code>, <code>menus::SITREP</code> in Rust. Without an ident a zone is
 only in the <code>.miz</code>, and a group is in the <code>.miz</code> and the manifest but has no Rust symbol.</p>
+<p><strong>The <code>.miz</code> holds the map side only.</strong> Groups, units, statics, zones, weather, briefing, the
+warehouses' starting stock and Sortie's own bootstrap. Every piece of game logic (what happens
+when, spawns, tasks, scoring, menus, marks, stock changes) lives in the Rust logic (the
+sortie-mission-logic skill), never in a DO SCRIPT of the <code>.miz</code>. When the SDK lacks something:
+a typed command or query (a ground group's route is <code>Task::ground_route(..)</code>), a catalog call
+(<code>ctx.dcs()</code>), a raw DCS task table with <code>Task::raw(..)</code> (any group), then ask the Sortie
+team. The
+build lists all Lua a hook added: the mission's init script, every DO SCRIPT, DO SCRIPT FILE
+and LUA PREDICATE (<code>Scenario(do_scripts=..)</code>: <code>warn</code> by default, <code>deny</code> fails the build,
+<code>allow</code> is silent; the mission template sets <code>deny</code>). Lua in a group's waypoint tasks is not
+checked.</p>
 <h2 id="setup">Setup<a class="anchor" href="#setup" aria-label="Ссылка на этот раздел">#</a></h2>
-<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">uv add &quot;sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.3.0#subdirectory=python/sortie-gen&quot;
+<div class="code" data-lang="powershell"><pre tabindex="0"><code class="language-powershell">uv add &quot;sortie-gen @ git+https://github.com/lynxr/sortie-sdk@v0.4.0#subdirectory=python/sortie-gen&quot;
 </code></pre></div>
 <p>Or install the <code>sortie_gen</code> wheel from the GitHub release. Python 3.11+.</p>
 <h2 id="a-scenario-step-by-step">A scenario, step by step<a class="anchor" href="#a-scenario-step-by-step" aria-label="Ссылка на этот раздел">#</a></h2>
@@ -98,6 +109,11 @@ sc = Scenario(
 )
 </code></pre></div>
 <p>Zones: a circle (<code>at</code> + <code>radius</code>, metres) or a quad (<code>points=[4 points]</code>).</p>
+<p>Zones are also where spawn sites are chosen: DCS gives scripts no forest or tree data and no
+collision volume of rocks or map objects, so the logic cannot ask whether a site is clear.
+Declare the sites you checked yourself (in the Mission Editor or in the game) and forbidden
+zones around forests as zones with idents, and let the logic pick among them
+(sdk/docs/objects.md, "Что DCS знает о местности").</p>
 <div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">obj = sc.zone(&quot;Objective&quot;, ident=&quot;OBJECTIVE&quot;, at=sc.latlon(44.62, 40.10), radius=500)
 ring = sc.zone(&quot;SAM Ring&quot;, ident=&quot;SAM_RING&quot;, at=obj.center, radius=60_000)
 front = sc.zone(&quot;Front&quot;, ident=&quot;FRONT&quot;, at=sc.latlon(44.95, 38.60), radius=20_000)
@@ -157,22 +173,18 @@ sc.player_flight(
 sc.menu(&quot;SMOKE_OBJECTIVE&quot;, &quot;Smoke the objective&quot;, path=[&quot;Support&quot;])
 sc.menu(&quot;SITREP&quot;, &quot;Situation report&quot;)
 </code></pre></div>
-<p>Everything Sortie does not wrap (statics, air groups placed in the <code>.miz</code>, weather, briefing,
-your own triggers) goes in a <code>@sc.pydcs</code> hook. It runs on every build after the declarations.
-Groups it adds are in the manifest without an ident; reach them by DCS name.</p>
-<div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">from dcs.triggers import TriggerStart
-
-from sortie_gen.miz import InlineDoScript
-
-
-@sc.pydcs
+<p>Everything Sortie does not wrap on the map side (statics, air groups placed in the <code>.miz</code>,
+weather, briefing) goes in a <code>@sc.pydcs</code> hook. It runs on every build after the declarations.
+Groups it adds are in the manifest without an ident; reach them by DCS name. Game logic does
+not go in a hook: it is Rust.</p>
+<div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">@sc.pydcs
 def extras(m):
-    # What Sortie does not wrap: statics, weather, briefing, your own triggers.
+    # What Sortie does not wrap: statics, weather, briefing. Never game logic: messages,
+    # spawns, tasks and scoring belong in the Rust logic, not in a DO SCRIPT here.
     hq = sc.latlon(44.61, 40.08)
     m.static_group(m.country(&quot;Russia&quot;), &quot;Red HQ&quot;, statics.Fortification._Command_Center, hq)
-    t = TriggerStart(comment=&quot;welcome&quot;)
-    t.add_action(InlineDoScript(&#39;trigger.action.outText(&quot;Frontline is live&quot;, 15)&#39;))
-    m.triggerrules.triggers.append(t)
+    m.weather.clouds_density = 4
+    m.set_description_bluetask_text(&quot;Take down SAM North, then hold the front.&quot;)
 </code></pre></div>
 <div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">if __name__ == &quot;__main__&quot;:
     sc.cli()  # lock | build | validate | register | launch | restart | watch | results
@@ -235,17 +247,26 @@ mission, the server is paused, an older engine) they warn and register anyway.
 </ul>
 <h2 id="the-mission-editor-and-do-script">The Mission Editor and DO SCRIPT<a class="anchor" href="#the-mission-editor-and-do-script" aria-label="Ссылка на этот раздел">#</a></h2>
 <ul>
+<li>A DO SCRIPT is only for a third-party script the mission must keep (Sortie does not check
+it), never for the mission's logic. After the hooks, <code>build</code> and <code>register</code> list all Lua
+that is not Sortie's: the mission's init script and init script file (<code>mission init: ...</code>),
+then every LUA PREDICATE condition, DO SCRIPT and DO SCRIPT FILE of the triggers (by
+trigger number, comment and type; any pydcs class with that predicate): a warning by
+default, a failed build with <code>Scenario(do_scripts="deny")</code>, silence with <code>"allow"</code> (also
+<code>sc.do_scripts = "allow"</code>). Sortie's own bootstrap and flags trigger are never listed. Lua
+in a group's waypoint tasks (<code>WrappedAction</code> <code>Script</code>) is not looked for.</li>
 <li>A built <code>.miz</code> can be opened, re-saved and flown from the Mission Editor: the bootstrap is
 stored the way the editor writes DO SCRIPT (code inline in the action), so the mission still
 attaches.</li>
 <li>Change groups, units and zones in <code>scenario.py</code>, not in the editor: the manifest describes
 the build, and an edited <code>.miz</code> no longer matches it.</li>
-<li>A DO SCRIPT added in a <code>@sc.pydcs</code> hook uses <code>sortie_gen.miz.InlineDoScript</code>, not pydcs's
-<code>DoScript</code> (the editor would run its dictionary key as Lua).</li>
+<li>A third-party DO SCRIPT added in a <code>@sc.pydcs</code> hook uses <code>sortie_gen.miz.InlineDoScript</code>,
+not pydcs's <code>DoScript</code> (the editor would run its dictionary key as Lua).</li>
 <li>Do not load and save a built <code>.miz</code> with pydcs: it rewrites every DO SCRIPT into the
 dictionary form.</li>
 <li><code>uv run sortie-gen adopt my.miz [--json]</code> lists the coalitions, groups, units and zones of an
-editor mission with proposed idents: the start for porting it to <code>scenario.py</code>.</li>
+editor mission with proposed idents, and its DO SCRIPTs, whose logic moves to Rust: the
+start for porting it to <code>scenario.py</code> and the logic.</li>
 </ul>
 <h2 id="more">More<a class="anchor" href="#more" aria-label="Ссылка на этот раздел">#</a></h2>
 <ul>
@@ -260,7 +281,7 @@ skill. Docs (Russian): https://lynxr.github.io/sortie-sdk/.</li>
 </div>
 <footer class="footer">
 <div class="footer-inner">
-<p>Sortie SDK 0.3.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p>Sortie SDK 0.4.0. Лицензия SDK: MIT OR Apache-2.0.</p>
 <p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
 </div>
 </footer>

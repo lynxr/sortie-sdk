@@ -24,7 +24,7 @@
 <a class="skip" href="#content">Перейти к содержанию</a>
 <header class="topbar">
 <div class="topbar-inner">
-<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.3.0</span></a>
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.4.0</span></a>
 <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
 <nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
 <div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
@@ -41,6 +41,8 @@
 <li><a href="dependency.html">Подключение SDK</a></li>
 <li><a href="sdk.html">Логика на Rust</a><ul>
 <li><a href="objects.html">Объекты: статики, уничтожение, мусор</a></li>
+<li><a href="airbases.html">Аэродромы: владелец, автозахват, радио, стоянки и полосы</a></li>
+<li><a href="warehouses.html">Склады: запас аэродромов и грузов</a></li>
 <li><a href="map.html">Рисование на карте</a></li>
 <li><a href="menus.html">Деревья меню F10</a></li>
 <li><a href="dcs.html">Вызовы DCS</a></li>
@@ -50,7 +52,10 @@
 </li>
 <li><a href="generator.html">Сценарий на Python</a></li>
 <li><a href="testing.html">Тестирование</a></li>
-<li><a href="operations.html">Эксплуатация</a></li>
+<li><a href="operations.html">Эксплуатация</a><ul>
+<li><a href="web-api.html">Web API</a></li>
+</ul>
+</li>
 <li><a href="troubleshooting.html" aria-current="page">Диагностика</a></li>
 <li><a href="faq.html">Вопросы и ограничения</a></li>
 <li><a href="changelog.html">Что нового</a></li>
@@ -109,8 +114,23 @@
 её уже уничтожили, или у неё отложенная активация.</li>
 <li><code>Error::Gone</code> — объект погиб раньше, чем дошла команда. Обрабатывайте его, если цель может
 исчезнуть (см. <a href="sdk.html#%D0%BE%D1%88%D0%B8%D0%B1%D0%BA%D0%B8">Ошибки</a>).</li>
-<li><code>Error::Timeout</code> — DCS не ответила вовремя. Увеличьте <code>.timeout(..)</code>; <code>sortie top</code> покажет
-очереди движка.</li>
+<li><code>Error::Timeout</code> с «the deadline passed before the command could start (...)» — команда не
+дошла до DCS: в скобках (и в <code>e.limit()</code>) сказано, чего она ждала. Повтор безопасен. Частый
+случай — <code>set_task</code> или <code>set_option</code> сразу после спавна (задержка в 2 кадра и 0,5 с
+модельного времени); в 0.3.0 метка F10 останавливала часы, по которым считается задержка,
+и команда ждала до конца срока — это исправлено в 0.4.0.</li>
+<li><code>Error::Timeout</code> с «<code>op</code> was sent to DCS but no result arrived before the deadline» — команда
+ушла в DCS, а ответа не было; она может ещё выполниться. Повторяйте её только с тем же
+<code>.key(..)</code>. Увеличьте <code>.timeout(..)</code>; <code>sortie top</code> покажет очереди движка.</li>
+<li>Функция миссии остановилась на одной ошибке — её вернул <code>?</code>. Необязательные команды
+(опции ИИ, сообщения) повторите один раз и запишите ошибку, не возвращая её
+(<a href="sdk.html#timeout-%D0%BD%D0%B5-%D0%B4%D0%BE%D1%88%D0%BB%D0%B0-%D0%B8%D0%BB%D0%B8-%D0%BD%D0%B5-%D0%BE%D1%82%D0%B2%D0%B5%D1%82%D0%B8%D0%BB%D0%B0">Timeout</a>).</li>
+<li><code>Error::Rejected</code> с «rate limit: ...» — лимит вызовов DCS: <code>e.limit()</code> называет бюджет,
+<code>e.retry_after()</code> — сколько ждать (<a href="dcs.html#%D0%BE%D1%82%D0%BA%D0%B0%D0%B7-%D0%BF%D0%BE-%D0%BB%D0%B8%D0%BC%D0%B8%D1%82%D1%83">отказ по лимиту</a>). С «the
+previous heavy call of ... has not come back yet» — тяжёлый вызов отправлен, пока предыдущий
+не вернулся: отправляйте тяжёлые вызовы по одному (<a href="dcs.html#%D0%B2%D1%80%D0%B5%D0%BC%D1%8F-dcs">время DCS</a>).</li>
+<li><code>Error::Invalid</code> с «key <code>k</code> was already used for a different command» — под этим ключом в
+сессии уже была другая команда. Изменённой команде дайте новый ключ.</li>
 <li><code>Error::Invalid</code> с «without <code>.key(..)</code> in dev mode» — <code>sortied --dev</code> требует ключ у спавна и
 уничтожения. Добавьте <code>.key("...")</code>.</li>
 <li><code>e.report()</code> печатает место в коде, Lua traceback и подсказку.</li>
@@ -118,8 +138,8 @@
 <h2 id="мир-пустой-события-не-приходят">Мир пустой, события не приходят<a class="anchor" href="#мир-пустой-события-не-приходят" aria-label="Ссылка на этот раздел">#</a></h2>
 <p>Связь есть, сессия есть, а <code>ctx.world()</code> пустой. В DCS 2.9.31 <code>Unit:getID()</code> возвращает строку,
 а не число, и мост старых сборок из-за этого не мог передать ни одного юнита. Рантайм
-0.3.0 понимает оба вида. Если вы видите пустой мир, проверьте, что установлен
-рантайм 0.3.0 (<code>sortie status</code> показывает версию моста в строке <code>bridge</code>), и
+0.4.0 понимает оба вида. Если вы видите пустой мир, проверьте, что установлен
+рантайм 0.4.0 (<code>sortie status</code> показывает версию моста в строке <code>bridge</code>), и
 перезапустите DCS.</p>
 <h2 id="игроки-не-могут-занять-слоты-в-сетевой-игре">Игроки не могут занять слоты в сетевой игре<a class="anchor" href="#игроки-не-могут-занять-слоты-в-сетевой-игре" aria-label="Ссылка на этот раздел">#</a></h2>
 <p>В сетевой игре DCS даёт место на стоянке только коалиции, которой принадлежит аэродром. Игрок,
@@ -135,7 +155,12 @@
 <ul>
 <li>Собранную <code>.miz</code> можно открыть в редакторе, пересохранить и запустить оттуда. Правки групп,
 юнитов и зон в редакторе ломают соответствие manifest: делайте их в сценарии.</li>
-<li>Свой DO SCRIPT в хуке пишите через <code>sortie_gen.miz.InlineDoScript</code>. С <code>DoScript</code> из pydcs
+<li>Логике миссии в DO SCRIPT не место: она пишется на Rust
+(<a href="generator.html#%D0%BB%D0%BE%D0%B3%D0%B8%D0%BA%D0%B0-%D0%BC%D0%B8%D1%81%D1%81%D0%B8%D0%B8-%D0%B8-do-script">Логика миссии и DO SCRIPT</a>). Предупреждение
+сборки «the .miz runs N scripts that Sortie did not put there» перечисляет такие триггеры
+(и скрипт инициализации миссии, строкой <code>mission init: ...</code>);
+с <code>do_scripts="deny"</code> (шаблон) это ошибка сборки.</li>
+<li>Сторонний DO SCRIPT в хуке пишите через <code>sortie_gen.miz.InlineDoScript</code>. С <code>DoScript</code> из pydcs
 миссия после редактора падает с ошибкой вида
 <code>[string "DictKey_Translation_5"]:1: '=' expected near '&lt;eof&gt;'</code>.</li>
 <li>Не загружайте и не сохраняйте готовую <code>.miz</code> через pydcs.</li>
@@ -159,8 +184,11 @@ lobby) и повторите, если проверка нужна.</li>
 <p>Замеры DCS под нагрузкой ещё не сделаны: команда <code>sortie probe</code> пока отвечает «lands in M0» и
 выходит с кодом 2. Сколько юнитов и команд в секунду выдерживает связка DCS и Sortie, пока не
 измерено. Мост ограничивает свою работу бюджетом кадра, но сам бюджет ещё не подобран по
-замерам. Если с Sortie проседает FPS, пришлите вывод <code>sortie top</code>, логи и число юнитов в
-миссии.</p>
+замерам. Если с Sortie проседает FPS, пришлите вывод <code>sortie top</code>, <code>sortie status</code>, логи и
+число юнитов в миссии. С 0.4.0 <code>sortie status</code> показывает у связи миссии, во что обходятся
+копии внутри DCS: события, которые скопировал слой Lua (вне бюджета кадра моста), и снимки
+мира — с вызовами DCS и временем; <code>sortie top</code> — самое долгое копирование событий между двумя
+pump (<code>ev&lt;N&gt;us</code>).</p>
 <h2 id="что-прислать-в-отчёт-об-ошибке">Что прислать в отчёт об ошибке<a class="anchor" href="#что-прислать-в-отчёт-об-ошибке" aria-label="Ссылка на этот раздел">#</a></h2>
 <ul>
 <li>версии: вывод <code>sortie status</code> и <code>sortie doctor</code>;</li>
@@ -170,7 +198,7 @@ lobby) и повторите, если проверка нужна.</li>
 </ul>
 </article>
 <nav class="pager" aria-label="Соседние страницы">
-<a class="pager-prev" rel="prev" href="operations.html"><span class="pager-dir">Назад</span><span class="pager-title">Эксплуатация</span></a>
+<a class="pager-prev" rel="prev" href="web-api.html"><span class="pager-dir">Назад</span><span class="pager-title">Web API</span></a>
 <a class="pager-next" rel="next" href="faq.html"><span class="pager-dir">Дальше</span><span class="pager-title">Вопросы и ограничения</span></a>
 </nav>
 <p class="page-source"><a href="troubleshooting.md">Эта страница в Markdown</a></p>
@@ -178,7 +206,7 @@ lobby) и повторите, если проверка нужна.</li>
 </div>
 <footer class="footer">
 <div class="footer-inner">
-<p>Sortie SDK 0.3.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p>Sortie SDK 0.4.0. Лицензия SDK: MIT OR Apache-2.0.</p>
 <p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
 </div>
 </footer>

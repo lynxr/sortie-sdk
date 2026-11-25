@@ -18,7 +18,7 @@ Values the wrappers take:
 Results: numbers, strings and booleans as Python values, tables as ``dict`` (``list`` for
 arrays 1..n), objects as :class:`DcsObject`, enum numbers as their key (``"ROAD"``), points as
 tuples, coalitions as ``"red"`` / ``"blue"`` / ``"neutral"``, a table cut by a limit as
-:class:`Cut`.
+:class:`Cut`, the summary of a road path (``road_path``) as :class:`RoadPath`.
 """
 
 from __future__ import annotations
@@ -96,6 +96,43 @@ class DcsObject:
         if self.object_class == "unit":
             return commands_pb2.DcsRef(object=common_pb2.ObjSel(unit_name=self.name))
         return commands_pb2.DcsRef(object=common_pb2.ObjSel(static_name=self.name))
+
+
+@dataclass(frozen=True)
+class RoadPath:
+    """The summary of a road path the Sortie Lua layer computes inside DCS
+    (``Dcs(client).land().road_path(..)``, catalog entry ``sortie.findPathOnRoads``).
+
+    ``count``, ``length_m`` and the ends are of the whole path; ``points`` holds at most the cap
+    the call asked for, both ends included, as ``(north, east)`` (none without a cap);
+    ``thinned`` says it holds fewer points than the path has."""
+
+    count: int
+    length_m: float
+    first: tuple[float, float] | None
+    last: tuple[float, float] | None
+    start_gap_m: float | None
+    end_gap_m: float | None
+    points: list[tuple[float, float]]
+    thinned: bool
+
+
+def _road_path(v: dict) -> RoadPath:
+    def point(p: Any) -> tuple[float, float] | None:
+        return (p.get("x"), p.get("y")) if isinstance(p, dict) else None
+
+    raw = v.get("points")
+    points = [point(p) for p in raw] if isinstance(raw, list) else []
+    return RoadPath(
+        count=int(v.get("count", 0)),
+        length_m=float(v.get("length", 0.0)),
+        first=point(v.get("first")),
+        last=point(v.get("last")),
+        start_gap_m=v.get("start_gap"),
+        end_gap_m=v.get("end_gap"),
+        points=[p for p in points if p is not None],
+        thinned=bool(v.get("thinned", False)),
+    )
 
 
 # ----- arguments ------------------------------------------------------------------------------
@@ -319,6 +356,8 @@ def _shape(v: Any, notation: str) -> Any:
             return [_shape(x, ty[5:]) for x in v]
     if ty.startswith("handle:") and isinstance(v, DcsObject):
         return v.handle
+    if ty == "road_path" and isinstance(v, dict):
+        return _road_path(v)
     return v
 
 

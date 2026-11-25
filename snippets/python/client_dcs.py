@@ -15,7 +15,7 @@ def resupply(engine: str, token: str) -> None:
         units = dcs.group("SAM").units()                           # [DcsObject, ...]
         print([(u.name, u.eid) for u in units])
         try:
-            dcs.warehouse("Kutaisi").add_item("weapons.missiles.AIM_120C", 8, key="resupply-1")
+            dcs.sounds().out_sound("l10n/DEFAULT/alarm.ogg", key="alarm-1")
         except CommandFailed as e:
-            print(e.code, e.capability)   # REJECTED call:mission:Warehouse.addItem
+            print(e.code, e.capability)   # REJECTED call:mission:trigger.action.outSound
 # snippet:end gen-dcs-client

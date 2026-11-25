@@ -8,6 +8,7 @@
 sortie::include_scenario!(my_mission);
 
 pub mod quickstart;
+pub mod sdk_airbases;
 pub mod sdk_caps;
 pub mod sdk_commands;
 pub mod sdk_crate;
@@ -20,4 +21,6 @@ pub mod sdk_menus;
 pub mod sdk_objects;
 pub mod sdk_state;
 pub mod sdk_wait;
+pub mod sdk_warehouses;
 pub mod testing;
+pub mod web_api;

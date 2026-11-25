@@ -2,7 +2,7 @@
   "scenario": "op_north",
   "schema": 3,
   "schema_sha256": "066934cb939700310641d6371b1f6140cfc86c2c3e04757d5a10f8a4664f270b",
-  "build_id": "01M6AWSXJ0JECERFANJ3PF8KVJ",
+  "build_id": "01M6AWSXJ0BBFKPCHYT2RKWQH0",
   "theatre": "Caucasus",
   "start_time": "2026-11-01T06:30:00Z",
   "time_limit_s": 10800,
@@ -182,7 +182,8 @@
         }
       ],
       "task": "CAP",
-      "dcs_group_json": "{\"communication\":true,\"frequency\":251,\"hidden\":false,\"hiddenOnMFD\":false,\"hiddenOnPlanner\":false,\"modulation\":0,\"name\":\"Red CAP\",\"radioSet\":false,\"route\":{\"points\":[{\"ETA\":0,\"ETA_locked\":true,\"action\":\"Turning Point\",\"alt\":6000.0,\"alt_type\":\"BARO\",\"formation_template\":\"\",\"name\":\"\",\"properties\":{\"angle\":0,\"scale\":0,\"steer\":2,\"vangle\":0,\"vnav\":0},\"speed\":166.6666666666667,\"speed_locked\":true,\"task\":{\"id\":\"ComboTask\",\"params\":{\"tasks\":[{\"auto\":true,\"enabled\":true,\"id\":\"EngageTargets\",\"key\":\"CAP\",\"number\":1,\"params\":{\"priority\":0,\"targetTypes\":[\"Air\"]}}]}},\"type\":\"Turning Point\",\"x\":-26437.275391,\"y\":458048.84375}]},\"start_time\":0,\"task\":\"CAP\",\"taskSelected\":true,\"tasks\":{},\"uncontrolled\":false,\"units\":[{\"alt\":6000.0,\"alt_type\":\"BARO\",\"hardpoint_racks\":true,\"heading\":0.0,\"name\":\"Red CAP-1\",\"onboard_num\":\"010\",\"payload\":{\"chaff\":96,\"flare\":96,\"fuel\":8460,\"gun\":100,\"pylons\":{}},\"psi\":0,\"skill\":\"High\",\"speed\":166.6666666666667,\"type\":\"Su-27\",\"x\":-26437.275391,\"y\":458048.84375},{\"alt\":6000.0,\"alt_type\":\"BARO\",\"hardpoint_racks\":true,\"heading\":0.0,\"name\":\"Red CAP-2\",\"onboard_num\":\"011\",\"payload\":{\"chaff\":96,\"flare\":96,\"fuel\":8460,\"gun\":100,\"pylons\":{}},\"psi\":0,\"skill\":\"High\",\"speed\":166.6666666666667,\"type\":\"Su-27\",\"x\":-26427.275391,\"y\":458048.84375}],\"x\":-26437.275391,\"y\":458048.84375}"
+      "dcs_group_json": "{\"communication\":true,\"frequency\":251,\"hidden\":false,\"hiddenOnMFD\":false,\"hiddenOnPlanner\":false,\"modulation\":0,\"name\":\"Red CAP\",\"radioSet\":false,\"route\":{\"points\":[{\"ETA\":0,\"ETA_locked\":true,\"action\":\"Turning Point\",\"alt\":6000.0,\"alt_type\":\"BARO\",\"formation_template\":\"\",\"name\":\"\",\"properties\":{\"angle\":0,\"scale\":0,\"steer\":2,\"vangle\":0,\"vnav\":0},\"speed\":166.6666666666667,\"speed_locked\":true,\"task\":{\"id\":\"ComboTask\",\"params\":{\"tasks\":[{\"auto\":true,\"enabled\":true,\"id\":\"EngageTargets\",\"key\":\"CAP\",\"number\":1,\"params\":{\"priority\":0,\"targetTypes\":[\"Air\"]}}]}},\"type\":\"Turning Point\",\"x\":-26437.275391,\"y\":458048.84375}]},\"start_time\":0,\"task\":\"CAP\",\"taskSelected\":true,\"tasks\":{},\"uncontrolled\":false,\"units\":[{\"alt\":6000.0,\"alt_type\":\"BARO\",\"hardpoint_racks\":true,\"heading\":0.0,\"name\":\"Red CAP-1\",\"onboard_num\":\"010\",\"payload\":{\"chaff\":96,\"flare\":96,\"fuel\":8460,\"gun\":100,\"pylons\":{}},\"psi\":0,\"skill\":\"High\",\"speed\":166.6666666666667,\"type\":\"Su-27\",\"x\":-26437.275391,\"y\":458048.84375},{\"alt\":6000.0,\"alt_type\":\"BARO\",\"hardpoint_racks\":true,\"heading\":0.0,\"name\":\"Red CAP-2\",\"onboard_num\":\"011\",\"payload\":{\"chaff\":96,\"flare\":96,\"fuel\":8460,\"gun\":100,\"pylons\":{}},\"psi\":0,\"skill\":\"High\",\"speed\":166.6666666666667,\"type\":\"Su-27\",\"x\":-26427.275391,\"y\":458048.84375}],\"x\":-26437.275391,\"y\":458048.84375}",
+      "heading_rad": 0.0
     }
   ],
   "flags": [
@@ -257,7 +258,7 @@
     "unit_id": 9
   },
   "tools": {
-    "generator": "sortie-gen 0.3.0",
+    "generator": "sortie-gen 0.4.0",
     "pydcs": "1.0.0",
     "python": "3.13",
     "extra": {

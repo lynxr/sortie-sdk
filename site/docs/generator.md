@@ -127,7 +127,30 @@ sc.air_template("Red CAP", mig, ident="RED_CAP", country="Russia", size=2, airba
 Шаблон авиагруппы в `.miz` не попадает. Он хранится в manifest, и логика спавнит его
 (`ctx.spawn_group(templates::RED_CAP)`). Параметры: тип самолёта или вертолёта, `ident`
 (обязателен), страна, `size`, `task`, `skill`, место по умолчанию (`at` или `airbase`),
-`altitude`, `speed`, `payload`.
+`altitude`, `speed`, `payload`. В manifest шаблон несёт и опорный курс `heading_rad` — курс
+ведущего, под который нарисован строй: от него `.at_formation(..)` поворачивает строй
+([группа из шаблона в точке](objects.md#группа-из-шаблона-в-точке)). В манифесте, который вы
+пишете сами, задайте `heading_rad` шаблона сами (без него опорный — курс первой машины).
+
+Наземный шаблон (0.4.0) — `sc.ground_template(..)`: тоже только в manifest, логика спавнит его
+так же (`ctx.spawn_group(templates::BATTERY)`), обычно с `.at(..)` или `.at_formation(..)`.
+
+```python
+launcher = vehicles.AirDefence.S_300PS_5P85C_ln
+# Две пусковые под опорным курсом 90°: одна смотрит на 75°, другая на 105°.
+sc.ground_template("Battery", ident="BATTERY", country="Russia",
+                   at=sc.latlon(42.27, 42.90), units=[launcher, launcher],
+                   heading=90, unit_headings=[-15, 15], spacing=40)
+```
+
+Строй рисуется, как у `ground_group`: `formation` (`line`, `star`, `rectangle`, `vee`) с
+`spacing` метров между машинами, первая машина в `at` (без `at` — у первого объявленного
+аэродрома, иначе у bullseye коалиции). `heading` — опорный курс в градусах, под который
+нарисован строй; manifest хранит его в `heading_rad` шаблона. `unit_headings` — курс каждой
+машины относительно опорного, по одному на машину (по умолчанию все 0): в примере пусковые
+смотрят на 75° и 105°, и `.at_formation(точка, курс)` сохранит эти −15° и +15° от нового
+курса. Параметры: `ident` (обязателен), страна, `units` (типы pydcs из `dcs.vehicles`),
+`skill`, `roles`.
 
 Подвеска. По умолчанию генератор работает герметично: только с данными, встроенными в pydcs, без
 установленной DCS. Поэтому один и тот же сценарий собирается одинаково на любой машине. Подвесок
@@ -150,7 +173,8 @@ sc.player_flight("Blue 1", planes.Su_25T, country="Georgia",
 * `munitions={wsType: количество}` ограничивает боезапас склада аэродрома и задаёт начальный
   запас. По умолчанию склад каждого аэродрома безлимитный (самолёты, боеприпасы, топливо), а
   безлимитный запас DCS, по сообщениям, не считает: `add_item`, `remove_item` и `set_item`
-  его не меняют (не измерено).
+  его не меняют (не измерено), а [`ctx.warehouse_op()`](warehouses.md#изменить-запас) отвергает
+  замену на нём (`Unlimited`).
   Оружие названо своим wsType, четырьмя числами из `Scripts/Database/wsTypes.lua` игры:
   `sc.airbase("Nalchik", ident="NALCHIK", munitions={(4, 4, 7, 106): 20})` — 20 AIM-120C
   (`weapons.missiles.AIM_120C`) и больше ничего. Количество — целое от 0 до 1 000 000. Назвать
@@ -187,8 +211,8 @@ sc.menu("TARGET_INFO", "Где цель?", path=["Цель"])
 
 ## Статика, погода и брифинг
 
-Чего нет в API сценария, делается через pydcs напрямую. Функция с `@sc.pydcs` получает миссию
-pydcs при каждой сборке, после объявлений Sortie:
+Чего нет в API сценария на стороне карты, делается через pydcs напрямую. Функция с `@sc.pydcs`
+получает миссию pydcs при каждой сборке, после объявлений Sortie:
 
 ```python
 @sc.pydcs
@@ -206,14 +230,64 @@ def extras(m: dcs.Mission) -> None:
   логика находит их по имени через мир и события.
 * Генератор проверяет уникальность всех имён и после хуков.
 
-Свой DO SCRIPT в хуке пишите через `sortie_gen.miz.InlineDoScript`, а не через `DoScript` из
-pydcs:
+## Логика миссии и DO SCRIPT
+
+`.miz`, который собирает сценарий, — только карта: группы, юниты, статика, зоны, погода,
+брифинг, начальный запас складов и bootstrap самого Sortie. Вся игровая логика — что и когда
+происходит, спавн, задачи, счёт, меню, метки, изменения запаса складов — пишется в логике на
+Rust. Если чего-то не хватает в SDK, по порядку: типизированная команда или запрос; вызов
+функции DCS из каталога (`ctx.dcs()`, [Вызовы DCS](dcs.md)); сырая таблица задачи DCS
+`Task::raw(..)` для любой группы ([задачи наземных групп](sdk.md#задачи-наземных-и-морских-групп):
+маршрут колонны — типизированный `Task::ground_route(..)`); и сообщить команде Sortie, чего не
+хватает.
+
+DO SCRIPT в хуке — только для стороннего скрипта, который миссия обязана сохранить. Sortie его не
+проверяет. После хуков `build` (и `register`, который тоже собирает) перечисляет весь Lua миссии,
+кроме триггеров самого Sortie (bootstrap и начальные значения флагов):
+
+* скрипт инициализации миссии (`mission.init_script`) и его файл (`mission.init_script_file`):
+  DCS выполняет их при старте миссии; в списке это строки `mission init: ...`;
+* условие LUA PREDICATE в триггере: DCS выполняет его при каждой проверке триггера;
+* действия DO SCRIPT и DO SCRIPT FILE в триггерах, любого класса pydcs, в том числе свой класс
+  хука.
+
+Для триггера в строке — его номер, комментарий и тип, для каждого скрипта — начало кода или имя
+файла. Что дальше, решает параметр сценария `do_scripts`:
+
+| `do_scripts` | Сборка |
+| --- | --- |
+| `"warn"` (по умолчанию) | предупреждает и собирает |
+| `"deny"` | падает с тем же списком; так настроен шаблон проекта |
+| `"allow"` | молчит |
+
+```text
+warning: the .miz runs 1 script that Sortie did not put there:
+  trigger 2 'convoy' (ONCE): DO SCRIPT local route = mist.getGroupRoute("Armor")...
+The .miz holds the map side only (...) See docs/generator.md#логика-миссии-и-do-script in the Sortie SDK.
+Scenario(do_scripts="allow") silences this warning; "deny" fails the build.
+```
+
+`Scenario(..., do_scripts="deny")` задаёт его при создании, `sc.do_scripts = "allow"` — позже.
+`sortie-gen adopt` показывает скрипты миссии из редактора так же: их логику переносят в Rust.
+
+Чего проверка не видит: Lua в задачах точек маршрута группы (действие `Script` внутри
+`WrappedAction` в `ComboTask` точки). Такой скрипт сборка не перечисляет, и `"deny"` его не
+остановит; логике миссии там так же не место.
+
+Сторонний DO SCRIPT в хуке пишите через `sortie_gen.miz.InlineDoScript`, а не через `DoScript`
+из pydcs:
 
 ```python
+# Сторонний скрипт, который миссия обязана сохранить (не логика миссии: она — в Rust).
+STATS_CONFIG = 'SERVER_STATS = { enabled = true, interval = 60 }'
+
+sc.do_scripts = "allow"  # иначе сборка предупредит о DO SCRIPT (с "deny" — откажет)
+
+
 @sc.pydcs
-def hello(m: dcs.Mission) -> None:
-    trig = TriggerStart(comment="hello")
-    trig.add_action(InlineDoScript('trigger.action.outText("Миссия загружена", 10)'))
+def server_stats(m: dcs.Mission) -> None:
+    trig = TriggerStart(comment="server stats")
+    trig.add_action(InlineDoScript(STATS_CONFIG))
     m.triggerrules.triggers.append(trig)
 ```
 
@@ -287,7 +361,7 @@ pydcs знает типы из своей базы, а DCS на сервере �
 
 | Файл | Что это |
 | --- | --- |
-| `<build_id>.miz` | миссия pydcs и один триггер MISSION START с bootstrap Sortie |
+| `<build_id>.miz` | миссия pydcs и один триггер MISSION START с bootstrap Sortie (плюс триггер начальных значений флагов, если они есть) |
 | `<build_id>.manifest.pb` | manifest: группы, юниты, зоны, шаблоны, флаги, аэродромы, меню, слоты |
 | `<build_id>.manifest.json` | то же для людей |
 | `scenario.lock.json` | символы сценария и геометрия зон для логики |
@@ -334,7 +408,9 @@ sortie-gen lock|build|validate|register|launch|restart|watch|results <scenario.p
 * `lobby` — миссия-заглушка для списка миссий dedicated server: без юнитов, с одним сообщением о
   том, загружен ли мост.
 * `adopt` — разбор миссии, сделанной в редакторе: коалиции, группы, юниты, зоны, предложенные
-  `ident`, конфликтующие и занятые имена. Помогает перенести миссию в сценарий.
+  `ident`, конфликтующие и занятые имена, её скрипты: скрипт инициализации, LUA PREDICATE,
+  DO SCRIPT и DO SCRIPT FILE триггеров (кроме bootstrap Sortie). Помогает перенести миссию в
+  сценарий, а её скрипты — в логику на Rust.
 * Команды сценария можно запускать и так: `uv run sortie-gen build scenario.py`.
 
 `sortie-gen worker` (цикл кампании) в этой версии не работает и выходит с кодом 2.

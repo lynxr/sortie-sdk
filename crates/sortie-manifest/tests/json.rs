@@ -164,12 +164,28 @@ fn edge() -> Manifest {
                 shape: None,
             },
         ],
-        templates: vec![pb::Template {
-            ident: "T".into(),
-            name: "Tmpl".into(),
-            dcs_group_json: r#"{"units": [{"name": "x"}], "task": "CAP"}"#.into(),
-            ..Default::default()
-        }],
+        templates: vec![
+            pb::Template {
+                ident: "T".into(),
+                name: "Tmpl".into(),
+                dcs_group_json: r#"{"units": [{"name": "x"}], "task": "CAP"}"#.into(),
+                ..Default::default()
+            },
+            // A reference heading set to 0.0 is present (proto3 `optional`), unlike an absent
+            // one (template T); a negative one keeps its sign.
+            pb::Template {
+                ident: "H0".into(),
+                name: "Heading zero".into(),
+                heading_rad: Some(0.0),
+                ..Default::default()
+            },
+            pb::Template {
+                ident: "HN".into(),
+                name: "Heading negative".into(),
+                heading_rad: Some(-0.2617993877991494),
+                ..Default::default()
+            },
+        ],
         flags: vec![pb::Flag {
             ident: "F".into(),
             name: "flag".into(),
@@ -192,6 +208,32 @@ fn edge() -> Manifest {
                 .collect(),
         }),
     }
+}
+
+/// A template's reference heading (0.4.0, `optional double`) keeps its presence through the
+/// JSON: absent stays absent, a 0.0 that was set stays set (and is written), camelCase reads.
+#[test]
+fn a_template_reference_heading_keeps_its_presence() {
+    let m = manifest_from_json(
+        r#"{"templates": [{"ident": "A"}, {"ident": "B", "heading_rad": 0.0},
+            {"ident": "C", "headingRad": 1.5}, {"ident": "D", "heading_rad": null}]}"#,
+    )
+    .unwrap();
+    let headings = |m: &Manifest| {
+        m.templates
+            .iter()
+            .map(|t| t.heading_rad)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(headings(&m), [None, Some(0.0), Some(1.5), None]);
+    let json = manifest_to_json(&m);
+    assert_eq!(json.matches("\"heading_rad\"").count(), 2, "{json}");
+    assert!(json.contains("\"heading_rad\": 0.0"), "{json}");
+    assert_eq!(headings(&manifest_from_json(&json).unwrap()), headings(&m));
+    assert_eq!(
+        headings(&decode_manifest(&encode_manifest(&m)).unwrap()),
+        headings(&m)
+    );
 }
 
 #[test]

@@ -10,13 +10,13 @@
 
 ## 2. Шаблон миссии
 
-На странице выпуска [v0.3.0](https://github.com/lynxr/sortie-sdk/releases/tag/v0.3.0)
+На странице выпуска [v0.4.0](https://github.com/lynxr/sortie-sdk/releases/tag/v0.4.0)
 скачайте исходники SDK («Source code (zip)») и распакуйте. Скопируйте из них папку `template`
 туда, где будет жить ваша миссия, например в `C:\Missions\my_mission`. Или возьмите шаблон через
 Git:
 
 ```powershell
-git clone --branch v0.3.0 https://github.com/lynxr/sortie-sdk sortie-sdk
+git clone --branch v0.4.0 https://github.com/lynxr/sortie-sdk sortie-sdk
 Copy-Item -Recurse sortie-sdk\template C:\Missions\my_mission
 ```
 
@@ -44,8 +44,9 @@ from dcs import planes, vehicles
 from dcs.terrain import caucasus
 from sortie_gen import Scenario, StartType
 
+# do_scripts="deny": сборка падает, если в .miz попал свой DO SCRIPT. Логика миссии — в Rust.
 sc = Scenario("my_mission", schema=1, theatre=caucasus.Caucasus(),
-              start="2026-06-01T08:00:00Z", time_limit="2h")
+              start="2026-06-01T08:00:00Z", time_limit="2h", do_scripts="deny")
 
 # Зона цели: круг радиусом 3 км. ident делает её символом zones::TARGET в Rust.
 target = sc.zone("Target", ident="TARGET", at=sc.latlon(42.27, 42.90), radius=3_000)

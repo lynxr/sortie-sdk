@@ -93,6 +93,12 @@ message Command {
     ServerControl server = 32;
     // W1. Many SpawnGroup and SpawnStatic in one command, spread by the spawn gate.
     SpawnBatch spawn_batch = 35;
+    // W2. Owner, DCS's auto capture and radio silence of a list of airbases, applied in one
+    // DCS frame (API revision 3: send min_api_rev = 3).
+    AirbaseControl airbase_control = 36;
+    // W2. Changes of warehouse stock (set, add, remove, transfer) applied in one DCS frame, all
+    // or nothing (API revision 3: send min_api_rev = 3).
+    WarehouseOp warehouse_op = 37;
     DevEval dev_eval = 99;
   }
   // W1. API revision whose behaviour the caller expects for this command (the gates of
@@ -151,7 +157,21 @@ message Reply {
   repeated SpawnResult spawns = 8;
   // Query.search_objects (API revision 2).
   FoundObjects found = 10;
-  // 11..39 are assigned to waves 2..6 (spec, section 8.2).
+  // AirbaseControl (API revision 3): one entry per requested airbase, in request order
+  // (`airbases` then holds the snaps of those bases the mirror holds, in the same order).
+  AirbasesControlled airbase_control = 11;
+  // Query.airbase_parking, airbase_runways, airbase_state (API revision 3): one entry per
+  // requested airbase, in request order (`airbases` then holds the snaps of those bases the
+  // mirror holds, in the same order).
+  AirbasesRead airbase_read = 12;
+  // Query.warehouse_stock (API revision 3): one entry per requested warehouse, in request
+  // order.
+  WarehousesStock warehouse_stock = 13;
+  // WarehouseOp (API revision 3): one entry per requested change, in request order.
+  StockChanges warehouse_op = 14;
+  // Query.item_names (API revision 3).
+  ItemNameList item_names = 15;
+  // 16..39 are assigned to waves 2..6 (spec, section 8.2).
 }
 
 // GroupSel and UnitSel moved to common.proto in 0.2.0 (same package, same numbers).
@@ -176,9 +196,25 @@ message FromAirbase {
   StartType start = 2;
 }
 
+// Every mode puts the first unit of the template at `position` and gives the group one route
+// point there (the template's route is not carried over).
 message SpawnAt {
   Vec3 position = 1;
   double heading_rad = 2;
+  // How the units face and stand (0.4.0, API revision 3: a command that sets FORMATION sends
+  // min_api_rev = 3). UNSPECIFIED is the behaviour of 0.1.0 to 0.3.0, byte for byte.
+  SpawnHeadingMode heading_mode = 3;
+}
+
+enum SpawnHeadingMode {
+  // Every unit faces heading_rad; the units keep the template's offsets from the first unit,
+  // not turned (0.1.0 to 0.3.0).
+  SPAWN_HEADING_MODE_UNSPECIFIED = 0;
+  // The formation turns as one body about the first unit by d = heading_rad - the template's
+  // reference heading (manifest Template.heading_rad, else the first unit's heading): each
+  // unit's offset from the first unit is turned by d, and each unit faces its template
+  // heading + d.
+  SPAWN_HEADING_MODE_FORMATION = 1;
 }
 
 // ---- W1: SpawnStatic ----
@@ -333,9 +369,51 @@ message SetTask {
     CapTask cap = 10;
     OrbitTask orbit = 11;
     RtbTask rtb = 12;
+    // W2 (ground wave). The route of a ground group (API revision 3: send min_api_rev = 3). An
+    // aircraft or naval group is INVALID.
+    GroundRoute ground_route = 13;
     // A raw DCS task table, passed through unchanged.
     LuaValue raw = 99;
   }
+}
+
+// W2 (ground wave, API revision 3). The route of a ground group. The engine builds a DCS
+// `Mission` task: a first point where the group's first live unit stands when DCS takes the
+// task (the layer reads it then), with the formation and speed of `points[0]`, then `points` in
+// order. A point's formation and speed are those of the leg that ends at it.
+message GroundRoute {
+  // 1..=256 points.
+  repeated GroundRoutePoint points = 1;
+  // m/s, > 0: the speed of every point that sets none. Unset = 20 km/h.
+  optional double speed_mps = 2;
+}
+
+message GroundRoutePoint {
+  // Map metres (x north, y east in DCS).
+  MapPoint point = 1;
+  // How the group drives to this point. UNSPECIFIED = OFF_ROAD.
+  GroundFormation formation = 2;
+  // m/s, > 0. Unset = the route's speed.
+  optional double speed_mps = 3;
+}
+
+// How a ground group drives a leg of its route (the waypoint actions of DCS's Mission Editor;
+// the engine maps each to DCS's name).
+enum GroundFormation {
+  GROUND_FORMATION_UNSPECIFIED = 0;
+  // Straight across the ground, in column.
+  GROUND_FORMATION_OFF_ROAD = 1;
+  // Along the roads.
+  GROUND_FORMATION_ON_ROAD = 2;
+  // Along the railways (trains).
+  GROUND_FORMATION_ON_RAILROADS = 3;
+  // Off road, in line abreast.
+  GROUND_FORMATION_RANK = 4;
+  GROUND_FORMATION_CONE = 5;
+  GROUND_FORMATION_VEE = 6;
+  GROUND_FORMATION_DIAMOND = 7;
+  GROUND_FORMATION_ECHELON_LEFT = 8;
+  GROUND_FORMATION_ECHELON_RIGHT = 9;
 }
 
 message CapTask {
@@ -461,6 +539,15 @@ message Query {
     FlagValue flag_value = 3;
     // API revision 2 (send min_api_rev = 2).
     SearchObjects search_objects = 4;
+    // W2. The airbase queries (API revision 3: send min_api_rev = 3); reply.airbase_read.
+    AirbaseParking airbase_parking = 5;
+    AirbaseRunways airbase_runways = 6;
+    AirbaseStates airbase_state = 7;
+    // W2. The stock of warehouses (API revision 3: send min_api_rev = 3); reply.warehouse_stock.
+    WarehouseStocks warehouse_stock = 8;
+    // W2. The names DCS gives the items it knows, with their wsTypes (API revision 3: send
+    // min_api_rev = 3); reply.item_names.
+    ItemNames item_names = 9;
   }
 }
 
@@ -504,7 +591,8 @@ enum ObjectCategory {
   OBJECT_CATEGORY_WEAPON = 2;
   OBJECT_CATEGORY_STATIC = 3;
   OBJECT_CATEGORY_BASE = 4;
-  // Map objects: buildings, bridges, trees of the terrain.
+  // Map objects: buildings, bridges and other objects of the map. Trees and forests are not
+  // listed (forum reports, not measured: OBJ-T32); DCS gives scripts no forest data at all.
   OBJECT_CATEGORY_SCENERY = 5;
   OBJECT_CATEGORY_CARGO = 6;
 }
@@ -534,6 +622,443 @@ message FoundObject {
   Coalition coalition = 8;
   // The object's `id_` in DCS (a scenery object's map id).
   uint64 dcs_id = 9;
+}
+
+// ---- W2: AirbaseControl (API revision 3) ----
+// Airbase.autoCapture, Airbase.setCoalition and Airbase.setRadioSilentMode for every listed
+// airbase in one DCS frame (one exec op, one pump), each base read before and after
+// (getCoalition, autoCaptureIsOn, getRadioSilentMode). Session-bound and keyed like any
+// mutating command (a repeat with the key returns the stored answer); lane REALTIME.
+// Every selector is resolved against the mirror before anything is sent: an airbase the
+// mirror does not hold (an unknown name or ident), a dead one, a base listed twice, no
+// setting, or more than 256 bases is ERROR_CODE_INVALID (ERROR_CODE_GONE for a dead base or
+// a stale Eid), naming it, and nothing reaches DCS. A failure DCS raises for one base is
+// that base's `err`; the others still run, and the command is ok.
+// Result: reply.airbase_control, reply.airbases (the bases as the mirror knows them after
+// the command: a new owner DCS read back is in the mirror at once), ok = the number of bases
+// without an error.
+message AirbaseControl {
+  // 1..=256 airbases (by Eid, DCS name or manifest ident), each at most once.
+  repeated AirbaseSel airbases = 1;
+  // The new owner; unset = unchanged. COALITION_UNSPECIFIED is ERROR_CODE_INVALID.
+  optional Coalition coalition = 2;
+  // DCS's own capture of the base by ground units; unset = unchanged. It is applied before
+  // the owner, so a base given to a coalition with `auto_capture = false` stays its own.
+  optional bool auto_capture = 3;
+  // The base's ATC silent (true) or talking (false); unset = unchanged.
+  optional bool radio_silent = 4;
+}
+
+message AirbasesControlled {
+  // One per requested airbase, in request order.
+  repeated AirbaseControlResult bases = 1;
+}
+
+message AirbaseControlResult {
+  // The mirror's Eid of the airbase (0 when the mirror no longer holds it by that name).
+  uint64 eid = 1;
+  // The DCS name the command addressed.
+  string name = 2;
+  // What DCS answered before and after the change; unset when the base was not found when the
+  // op ran (then `err` is GONE).
+  AirbaseControlState before = 3;
+  AirbaseControlState after = 4;
+  // Unset = every requested setting was applied; else what DCS raised for this base (GONE:
+  // DCS has no such airbase now; LUA_ERROR: a setter raised).
+  CommandError err = 5;
+}
+
+// The control state of an airbase as DCS answers it. A value DCS did not answer stays unset
+// (COALITION_UNSPECIFIED for the owner).
+message AirbaseControlState {
+  // getCoalition().
+  Coalition coalition = 1;
+  // autoCaptureIsOn().
+  optional bool auto_capture = 2;
+  // getRadioSilentMode().
+  optional bool radio_silent = 3;
+}
+
+// ---- W2: airbase queries (API revision 3) ----
+// Reads of airbases: nothing changes in DCS (lane QUERY, no key needed). Each query takes a
+// list of airbases (by Eid, DCS name or manifest ident; each at most once) and answers every
+// one in request order, or with that base's own `err`: GONE for a base the mirror holds as
+// dead or a stale Eid (not sent), or one DCS does not have; LUA_ERROR for a DCS read that
+// raised; REJECTED for parking that no longer fits into the answer. A list outside its limit,
+// an unset selector, an Eid of another class, an ident the manifest lacks or a base listed
+// twice is ERROR_CODE_INVALID for the whole query and nothing reaches DCS.
+// Result: reply.airbase_read, reply.airbases; ok = the number of bases without an error.
+
+// Airbase.getParking of 1..=16 airbases. The layer reads at most about 300 spots per pump
+// (at least one base) and at most 8000 spots per answer.
+message AirbaseParking {
+  repeated AirbaseSel airbases = 1;
+  // Only the free spots (Airbase.getParking(true)); every listed spot then has taken = false.
+  bool available_only = 2;
+}
+
+// Airbase.getRunways of 1..=256 airbases (32 bases per pump).
+message AirbaseRunways {
+  repeated AirbaseSel airbases = 1;
+}
+
+// Owner (getCoalition), auto capture (autoCaptureIsOn) and radio silence
+// (getRadioSilentMode) of 1..=256 airbases, all read in one DCS frame. An owner DCS reads that
+// differs from the mirror's goes into the mirror at once and is one AirbaseOwnerChanged
+// (cause DISCOVERED), as a resync snapshot that finds it.
+message AirbaseStates {
+  repeated AirbaseSel airbases = 1;
+}
+
+message AirbasesRead {
+  // One per requested airbase, in request order.
+  repeated AirbaseRead bases = 1;
+}
+
+// One airbase as a query read it. The part of the query is filled; the others stay empty.
+message AirbaseRead {
+  // The mirror's Eid of the airbase (0 when the mirror does not hold one of that name).
+  uint64 eid = 1;
+  // Its DCS name (empty for a stale Eid, whose name the mirror no longer knows).
+  string name = 2;
+  // Unset = DCS answered this base.
+  CommandError err = 3;
+  // AirbaseStates.
+  AirbaseControlState state = 4;
+  // AirbaseParking: the spots in the order DCS listed them.
+  repeated ParkingSpot parking = 5;
+  // AirbaseRunways: the runways in the order DCS listed them (none for a FARP or a ship).
+  repeated Runway runways = 6;
+}
+
+// Term_Type of a parking spot, by the values the DCS scripting documentation (Hoggit,
+// Airbase.getParking) lists; the layer maps DCS's numbers to these names.
+enum TerminalType {
+  // DCS answered no Term_Type.
+  TERMINAL_TYPE_UNSPECIFIED = 0;
+  // 16: a spawn point on the runway.
+  TERMINAL_TYPE_RUNWAY = 1;
+  // 40: helicopters only.
+  TERMINAL_TYPE_HELICOPTER_ONLY = 2;
+  // 68: a hardened aircraft shelter.
+  TERMINAL_TYPE_SHELTER = 3;
+  // 72: open or shelter, airplanes only.
+  TERMINAL_TYPE_OPEN_OR_SHELTER = 4;
+  // 100: a small shelter (Syria and Sinai maps).
+  TERMINAL_TYPE_SMALL_SHELTER = 5;
+  // 104: open air (generally the larger spots).
+  TERMINAL_TYPE_OPEN_AIR = 6;
+  // A number this build has no name for; ParkingSpot.terminal_unknown keeps it.
+  TERMINAL_TYPE_UNKNOWN = 7;
+}
+
+// One parking spot as Airbase.getParking answered. A field DCS did not answer stays unset.
+message ParkingSpot {
+  // Term_Index: the spot's number at its airbase.
+  int32 term_index = 1;
+  TerminalType terminal = 2;
+  // TERMINAL_TYPE_UNKNOWN: the layer's text for DCS's number, "unknown(<n>)".
+  string terminal_unknown = 3;
+  // vTerminalPos.
+  Vec3 point = 4;
+  // Not among the free spots DCS lists (getParking(true)); unset when that read failed.
+  optional bool taken = 5;
+  // The object DCS named in TO_AC (documented as a boolean; when DCS answers an object it is
+  // named here): the mirror's Eid when it holds it, and its DCS name.
+  uint64 taken_by = 6;
+  string taken_by_name = 7;
+  // fDistToRW: to the take-off position of the active runway, metres.
+  optional double dist_to_runway = 8;
+  // TO_AC as DCS answered it when a boolean (not documented).
+  optional bool to_ac = 9;
+  // Term_Index_0 as DCS answered it (not documented; -1 in the documentation's example).
+  optional int32 term_index_0 = 10;
+}
+
+// One runway as Airbase.getRunways answered. A field DCS did not answer stays unset.
+message Runway {
+  // Name, as text (DCS gives a number such as 8, documented as "can be off").
+  string name = 1;
+  // course, as DCS gives it: radians, and per the documentation the negative of the true
+  // heading ("multiply by -1"; not measured, AWC-T23).
+  optional double course = 2;
+  // length and width, metres.
+  optional double length = 3;
+  optional double width = 4;
+  // position: the centre of the runway.
+  Vec3 center = 5;
+}
+
+// ---- W2: warehouse stock (API revision 3) ----
+// The stock of 1..=64 warehouses (of an airbase, of a cargo static, or by DCS name; each at
+// most once, by its DCS name whatever the selector). A read: nothing changes in DCS or in the
+// mirror (lane QUERY, no key needed). Without `items` and `liquids` the whole inventory of each
+// warehouse is read (Warehouse.getInventory, a heavy call: one warehouse a pump); with either,
+// only those are read (Warehouse.getItemCount of each item, Warehouse.getLiquidAmount of the
+// four liquids; 64 such reads a pump), which is cheaper. Every warehouse is answered in request
+// order, or with its own `err`: GONE for an airbase or static the mirror holds as dead or a
+// stale Eid (not sent), or a warehouse DCS does not have; LUA_ERROR for a DCS read that
+// raised; REJECTED for an inventory that no longer fits into the answer (at most 20000 entries
+// in all). A list outside its limit, an unset selector, an Eid of another class, an ident the
+// manifest lacks, a warehouse listed twice, more than 64 items, an item listed twice or an
+// invalid item is ERROR_CODE_INVALID for the whole query and nothing reaches DCS.
+// Result: reply.warehouse_stock; ok = the number of warehouses without an error.
+message WarehouseStocks {
+  repeated WarehouseSel warehouses = 1;
+  // Count only these items (getItemCount of each), answered in this order.
+  repeated WarehouseItem items = 2;
+  // Read the four liquids (getLiquidAmount of each).
+  bool liquids = 3;
+}
+
+message WarehousesStock {
+  // One per requested warehouse, in request order.
+  repeated WarehouseStock warehouses = 1;
+}
+
+// One warehouse as the query read it. The whole inventory fills `aircraft`, `weapons` and
+// `liquids`; `items` and `liquids` of the query fill those; the rest stays unset.
+message WarehouseStock {
+  // The warehouse as the engine resolved it: an airbase or a static by the mirror's Eid when
+  // the mirror holds it alive, else as requested.
+  WarehouseSel warehouse = 1;
+  // The DCS name of its airbase or static, or the name requested (empty for a stale Eid).
+  string name = 2;
+  // The mirror's Eid of that airbase or static (0 when the mirror holds none of that name).
+  uint64 eid = 3;
+  // Unset = DCS answered this warehouse.
+  CommandError err = 4;
+  StockClass aircraft = 5;
+  StockClass weapons = 6;
+  LiquidStock liquids = 7;
+  // The requested items, in request order.
+  repeated ItemCount items = 8;
+}
+
+// One class of a warehouse's stock as Warehouse.getInventory listed it.
+message StockClass {
+  // DCS listed the class as an empty table, which it is reported to do for a class the mission
+  // makes unlimited (not measured, AWC-T25; whether a limited class that holds nothing reads
+  // the same is not known). `entries` is then empty.
+  bool unlimited = 1;
+  // What DCS listed, by name.
+  repeated StockEntry entries = 2;
+}
+
+message StockEntry {
+  // The item as DCS names it (the key of getInventory's table, as text).
+  string name = 1;
+  double count = 2;
+}
+
+message LiquidStock {
+  // The whole inventory listed the liquids as an empty table (see StockClass.unlimited). Never
+  // set by the getLiquidAmount reads of `liquids`, which do not tell.
+  bool unlimited = 1;
+  // By liquid, in DCS's order (0..3).
+  repeated LiquidAmount amounts = 2;
+}
+
+message LiquidAmount {
+  Liquid liquid = 1;
+  // LIQUID_UNKNOWN: the layer's text for DCS's key, "unknown(<key>)".
+  string unknown = 2;
+  // As DCS answered it. DCS documents no unit; kilograms are assumed (the mission editor gives
+  // the initial amounts in tons; not measured, AWC-T25).
+  double amount = 3;
+  // The amount is above 2^29 (see ItemCount.unlimited).
+  bool unlimited = 4;
+}
+
+message ItemCount {
+  // As requested.
+  WarehouseItem item = 1;
+  // Warehouse.getItemCount as DCS answered it; unset when DCS answered no number.
+  optional double count = 2;
+  // The count is above 2^29: DCS is reported to answer an unlimited stock with a huge count
+  // (2^29 is the mark MOOSE uses; not measured, AWC-T25). This read alone cannot tell an
+  // unlimited class that DCS answers with a small number: the whole inventory types the class.
+  bool unlimited = 3;
+}
+
+// ---- W2: WarehouseOp (API revision 3) ----
+// Changes of the stock of warehouses (of an airbase, of a cargo static, or by DCS name): set an
+// item or a liquid to an amount, add to it, remove from it, or move an amount from one warehouse
+// to another; 1..=16 changes, in request order, all in one DCS frame (one exec op, one pump).
+// Session-bound and mutating; lane REALTIME. Add, remove and transfer are not idempotent: an
+// engine that requires keys (sortied --dev, --require-keys) refuses a WarehouseOp holding one
+// of them without a key (a WarehouseOp of `set` changes only needs none); a repeat with the key
+// returns the stored answer, whether or not the changes were applied.
+// All or nothing. In that frame the layer first finds every warehouse and reads every count the
+// changes touch, and checks each change in order against the counts the changes before it
+// leave: a warehouse DCS has, a stock that is not unlimited, enough stock for a remove or a
+// transfer. If any change fails its check, nothing is changed. Else it applies the changes in
+// order and reads each count back; a DCS function that raises, or a count that does not move as
+// asked, stops there, and the changes already made are undone (each count set back to what it
+// was before them) as far as DCS lets the layer.
+// Every selector is resolved against the mirror before anything is sent: a warehouse the mirror
+// does not hold (an unknown name or ident), an unset selector, item, liquid or change, an amount
+// outside its range, a transfer to its own warehouse, no change or more than 16 is
+// ERROR_CODE_INVALID (ERROR_CODE_GONE for an airbase or static the mirror holds as dead, or a
+// stale Eid), naming the change, and nothing reaches DCS.
+// Result: reply.warehouse_op; ok = the number of changes applied (0 when `applied` is false).
+// The command is ok whenever the layer ran it, whether or not the changes were applied.
+message WarehouseOp {
+  repeated StockChange changes = 1;
+}
+
+// One change of one item or liquid of one warehouse.
+message StockChange {
+  // The warehouse changed; for a transfer, the one the stock leaves.
+  WarehouseSel warehouse = 1;
+  // An item (Warehouse.setItem, addItem, removeItem) or a liquid (setLiquidAmount, addLiquid,
+  // removeLiquid; LIQUID_UNSPECIFIED and LIQUID_UNKNOWN are ERROR_CODE_INVALID).
+  oneof stock {
+    WarehouseItem item = 2;
+    Liquid liquid = 3;
+  }
+  // An item is counted in whole numbers up to 1000000, a liquid in amounts up to 100000000
+  // (kilograms assumed); `set` takes 0 too, add, remove and transfer more than 0.
+  oneof change {
+    // Set the count or amount to this.
+    double set = 4;
+    double add = 5;
+    // More than the warehouse holds is refused (NOT_ENOUGH), never clamped at zero.
+    double remove = 6;
+    StockTransfer transfer = 7;
+  }
+}
+
+// Move `amount` from StockChange.warehouse to `to`: removed there and added here in the same
+// frame, or not at all.
+message StockTransfer {
+  // Another warehouse than StockChange.warehouse.
+  WarehouseSel to = 1;
+  double amount = 2;
+}
+
+message StockChanges {
+  // Every change was applied. False: none is (each change's `outcome` says why), unless
+  // `undo_failed`.
+  bool applied = 1;
+  // A change failed while the changes were applied, and the undo did not bring every count
+  // back: the stock is as the `after` of each side says.
+  bool undo_failed = 2;
+  // One per requested change, in request order.
+  repeated StockChanged changes = 3;
+}
+
+// What WarehouseOp did with one change.
+message StockChanged {
+  StockOutcome outcome = 1;
+  // Why, for every outcome but DONE: the DCS function that raised and what it raised, the
+  // count that was short, the change that failed.
+  string message = 2;
+  // The warehouse changed; for a transfer, the one the stock left.
+  StockSide warehouse = 3;
+  // A transfer: the warehouse the stock went to.
+  StockSide to = 4;
+}
+
+// One warehouse of a change: which one, and its counts of the item or liquid.
+message StockSide {
+  // As the engine resolved it: an airbase or a static by the mirror's Eid when the mirror holds
+  // it alive, else as requested.
+  WarehouseSel warehouse = 1;
+  // The DCS name of its airbase or static, or the name requested.
+  string name = 2;
+  // The mirror's Eid of that airbase or static (0 when the mirror holds none of that name).
+  uint64 eid = 3;
+  // The count this change starts from: what DCS read before the command, moved by the changes
+  // before this one. Unset when the warehouse was not found or the read failed.
+  optional double before = 4;
+  // What DCS read after this change (after the undo for UNDONE and UNDO_FAILED, and for the
+  // change that failed while applying); unset when the change, or this side of it, did not run
+  // (an ALIASED side).
+  optional double after = 5;
+  // DCS answered a count above 2^29, which it is reported to answer for an unlimited stock
+  // (not measured, AWC-T26).
+  bool unlimited = 6;
+}
+
+enum StockOutcome {
+  STOCK_OUTCOME_UNSPECIFIED = 0;
+  // Applied: `after` is what DCS read back.
+  STOCK_OUTCOME_DONE = 1;
+  // This change passed its check, but another change of the command did not: nothing was
+  // changed.
+  STOCK_OUTCOME_NOT_APPLIED = 2;
+  // Applied and undone again, because a later change failed while the changes were applied.
+  STOCK_OUTCOME_UNDONE = 3;
+  // Applied, and the undo after a later failure did not bring its count back (DCS raised, or
+  // read back another count): the stock stays as `after` says.
+  STOCK_OUTCOME_UNDO_FAILED = 4;
+  // The stock is unlimited: DCS answered a count above 2^29 (on either side of a transfer). DCS
+  // is reported to change nothing on an unlimited stock (AWC-T6, not measured), so the change is
+  // refused before anything is changed.
+  STOCK_OUTCOME_UNLIMITED = 5;
+  // A remove or a transfer of more than the warehouse holds (after the changes before it).
+  STOCK_OUTCOME_NOT_ENOUGH = 6;
+  // DCS has no such warehouse now.
+  STOCK_OUTCOME_GONE = 7;
+  // A DCS read or change raised (`message` names the function).
+  STOCK_OUTCOME_DCS_ERROR = 8;
+  // DCS did not change the count as asked (the count read back is not what the change gives),
+  // as an unlimited stock that DCS answers with a small count would do (not measured, AWC-T26).
+  // The changes made before it were undone.
+  STOCK_OUTCOME_UNCHANGED = 9;
+  // When its turn came the count was not what the check left for it: an earlier change of the
+  // command moved it under another form of the item (its name and its wsType, or two names DCS
+  // counts as one stock), which the check counted apart. This change did not run; the changes
+  // made before it were undone. Name an item in one form per command.
+  STOCK_OUTCOME_ALIASED = 10;
+}
+
+// ---- W2: item names (API revision 3) ----
+// The names DCS gives the objects it knows and the wsType of each, as DCS answers
+// Warehouse.getResourceMap() at runtime (documented since DCS 2.8.8: "the wsType of every object
+// that exists in DCS", by name, e.g. ["weapons.missiles.P_24T"] = {4, 4, 7, 26}; aircraft and
+// other units by their type name). A weapon's name there is the name the Warehouse functions and
+// getInventory use (not measured, AWC-T27). A read: nothing changes in DCS or in the mirror
+// (lane QUERY, no key needed). The engine asks DCS once per DCS process and DCS version and
+// answers later queries from what it keeps in memory (`cached`); nothing is written to disk.
+// Reading the map is heavy: DCS builds it in one call, the layer copies it over several pumps,
+// and no other heavy job runs meanwhile. Without `items` every name is answered; with them, only
+// the matching ones. More than 64 items, an unset or invalid item, or an item listed twice is
+// ERROR_CODE_INVALID and nothing reaches DCS; a DCS without Warehouse.getResourceMap is
+// ERROR_CODE_UNAVAILABLE (capability `item_names` MISSING_IN_DCS).
+// Result: reply.item_names; ok = the number of names answered.
+message ItemNames {
+  // Look up only these: a name gives its entry, a wsType every entry that has it (several names
+  // may share one). Unmatched ones are answered in ItemNameList.unknown.
+  repeated WarehouseItem items = 1;
+}
+
+message ItemNameList {
+  // The names answered, sorted by name, each once.
+  repeated ItemName names = 1;
+  // The requested items DCS has no entry for, in request order.
+  repeated WarehouseItem unknown = 2;
+  // How many names DCS's map holds (whatever `items` asked).
+  uint32 total = 3;
+  // Entries of DCS's map the layer left out: a key that is no name, or a value that is not four
+  // whole numbers.
+  uint32 skipped = 4;
+  // The DCS version of the mission link that read the map.
+  string dcs_version = 5;
+  // Answered from what the engine kept of an earlier read in the same DCS process.
+  bool cached = 6;
+  // How the layer called DCS: "Warehouse.getResourceMap()", or
+  // "Warehouse.getResourceMap(<warehouse>)" when only the call with a warehouse answered.
+  string source = 7;
+}
+
+message ItemName {
+  // As DCS names it: "weapons.missiles.AIM_120C", an aircraft type such as "F-16C_50".
+  string name = 1;
+  // Unset when DCS gives {0, 0, 0, 0}, which it gives shells, statics and turrets alike (no item
+  // type: a warehouse cannot be asked for it).
+  WsType ws_type = 2;
 }
 
 // Hooks-environment server control (LANE_CONTROL).
@@ -673,7 +1198,8 @@ message DcsCall {
 // Several calls executed in order in one simulation frame (one pump of one environment).
 // All calls must belong to the same environment. The engine validates the whole batch
 // before it sends anything: an unlisted or disabled path, a bad argument, a guard or a
-// rate limit fails the command and no call runs. Result: reply.batch.
+// rate limit fails the command and no call runs (a limit sets CommandError.limit, 0.4.0).
+// Result: reply.batch.
 message DcsBatch {
   repeated DcsCall calls = 1;
   // true: the first failing call stops the batch; the rest are reported `skipped`.

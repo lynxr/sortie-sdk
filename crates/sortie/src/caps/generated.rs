@@ -22,6 +22,10 @@ pub mod call {
         /// `land.getClosestPointOnRoads`: The closest point on a road (road_type "roads" or "railroads") to map coordinates x (north), y (east).
         pub const LAND_GET_CLOSEST_POINT_ON_ROADS: &str =
             "call:mission:land.getClosestPointOnRoads";
+        /// `land.findPathOnRoads`: A path along roads from map coordinates from_x (north), from_y (east) to to_x, to_y: map points from start to end, or nil.
+        pub const LAND_FIND_PATH_ON_ROADS: &str = "call:mission:land.findPathOnRoads";
+        /// `sortie.findPathOnRoads`: The road path from start to end that land.findPathOnRoads finds, summarised by the Sortie Lua layer inside DCS in the same frame: point count, length along the points, first and last point and how far each lies from the end asked, and at most max_points of the points with both ends kept; nil when DCS finds no path.
+        pub const SORTIE_FIND_PATH_ON_ROADS: &str = "call:mission:sortie.findPathOnRoads";
         /// `atmosphere.getWind`: Wind vector (m/s, runtime axes) at a point, without turbulence.
         pub const ATMOSPHERE_GET_WIND: &str = "call:mission:atmosphere.getWind";
         /// `atmosphere.getWindWithTurbulence`: Wind vector (m/s, runtime axes) at a point, with turbulence.
@@ -306,5 +310,13 @@ pub mod call {
         pub const DCS_GET_PAUSE: &str = "call:hooks:DCS.getPause";
         /// `DCS.isMultiplayer`: Whether the mission runs in multiplayer.
         pub const DCS_IS_MULTIPLAYER: &str = "call:hooks:DCS.isMultiplayer";
+        /// `DCS.getFarpsAndCarriersMissionData`: The FARPs and carriers the slot screen lists: {farps = {[unit id] = {name, x, y, coalition, ...}}, carriers = {...}}.
+        pub const DCS_GET_FARPS_AND_CARRIERS_MISSION_DATA: &str =
+            "call:hooks:DCS.getFarpsAndCarriersMissionData";
+        /// `DCS.getDynamicSpawnSettings`: Dynamic-slot settings of an airfield (its id, is_airdrome true) or of a FARP or carrier (its unit id, false): {dynamicSpawnAvailable, allowHotSpawn, ...}.
+        pub const DCS_GET_DYNAMIC_SPAWN_SETTINGS: &str = "call:hooks:DCS.getDynamicSpawnSettings";
+        /// `DCS.getAircraftAmountInAirportWarehouse`: How many aircraft of a type the slot screen offers at an airfield (its id, false) or a FARP or carrier (its unit id, true).
+        pub const DCS_GET_AIRCRAFT_AMOUNT_IN_AIRPORT_WAREHOUSE: &str =
+            "call:hooks:DCS.getAircraftAmountInAirportWarehouse";
     }
 }

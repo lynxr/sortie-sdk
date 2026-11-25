@@ -24,7 +24,7 @@
 <a class="skip" href="#content">Перейти к содержанию</a>
 <header class="topbar">
 <div class="topbar-inner">
-<a class="brand" href="../../../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.3.0</span></a>
+<a class="brand" href="../../../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.4.0</span></a>
 <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
 <nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="../../../docs/quickstart.html">Быстрый старт</a><a href="../../../docs/index.html">Документация</a><a href="../../../agents.html" aria-current="true">Для агентов</a><a href="../../../downloads.html">Загрузки</a><a href="../../../changelog.html">Изменения</a></nav>
 <div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
@@ -92,19 +92,79 @@ match sam.set_option(Alarm::Red).key(&quot;sam-hot&quot;).await {
 </code></pre></div>
 <p>An <code>Err</code> that leaves the mission function or a task spawned with <code>ctx.spawn</code> is recorded as a
 logic error (stderr of the logic, with its call site) and ends that task only. <code>SessionEnded</code>
-is never recorded. A panic is recorded the same way, with its location.</p>
+is never recorded. A panic is recorded the same way, with its location. Nothing runs the
+mission function again until the next session or a restart of the logic, so the work after
+the failed command never happens: do not end the mission function on one optional command (an
+AI option, a message, smoke). Give it a key, retry it once on <code>Timeout</code>, log the rest:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let alarm = || sam.set_option(Alarm::Red).key(&quot;sam-north-red&quot;);
+let mut done = alarm().await;
+if let Err(sortie::Error::Timeout(_)) = &amp;done {
+    // The same key: a first try that reached DCS after all does not run twice.
+    done = alarm().await;
+}
+if let Err(e) = done {
+    // Optional: note it and go on instead of ending the mission function.
+    eprintln!(&quot;SAM North stays as it was: {}&quot;, e.report());
+}
+</code></pre></div>
+<h2 id="limits-engine-040">Limits (engine 0.4.0)<a class="anchor" href="#limits-engine-040" aria-label="Ссылка на этот раздел">#</a></h2>
+<p>A refusal by one of the engine's limits is told by data, never by its text: <code>e.limit()</code> -&gt;
+<code>Option&lt;&amp;sortie::Limit&gt;</code> (<code>kind: LimitKind</code>, <code>budget</code>, <code>writer</code>, <code>capacity</code>, <code>per_second</code>,
+<code>needed</code>, <code>available</code>), <code>e.retry_after()</code> -&gt; <code>Option&lt;Duration&gt;</code>, <code>e.is_limit()</code>. The code
+and <code>e.capability()</code> are what 0.3.0 gave; against a 0.3.0 engine both are <code>None</code>. The SDK
+never retries by itself.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let mut tries = 0;
+let fuel = loop {
+    match ctx.dcs().unit(UnitSel::name(&quot;SAM North-1&quot;)).fuel().await {
+        Ok(f) =&gt; break Some(f),
+        // A rate or DCS-time budget: the engine names the wait of this same read.
+        Err(e) if tries &lt; 3 &amp;&amp; e.retry_after().is_some() =&gt; {
+            tries += 1;
+            ctx.sleep(e.retry_after().unwrap_or_default()).await;
+        }
+        // A forbid (not in the catalog, switched off): waiting never helps.
+        Err(e) if e.is_forbidden() =&gt; break None,
+        Err(e) =&gt; return Err(e),
+    }
+};
+</code></pre></div>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th><code>LimitKind</code></th><th><code>budget</code></th><th>Error</th><th>What helps</th></tr></thead><tbody>
+<tr><td><code>CallRate</code></td><td><code>call_rate.read</code> (200/s), <code>.mutate</code> (50/s), <code>.heavy</code> (2/s), <code>.admin</code> (1/s)</td><td><code>Rejected</code></td><td>wait <code>retry_after()</code></td></tr>
+<tr><td><code>DcsTime</code></td><td><code>dcs_time.read</code> (reads and batches; a single read sees the debt floored at -20 ms, a batch the whole debt), <code>dcs_time.heavy</code> (heavy calls): 20 ms of DCS time a second each</td><td><code>Rejected</code></td><td>wait <code>retry_after()</code>; <code>None</code> for a heavy call sent while the logic's previous one is not back: send it after that one answered</td></tr>
+<tr><td><code>BatchSize</code>, <code>RequestSize</code></td><td><code>batch.calls</code> (64, 256 reads), <code>request.bytes</code> (64 KiB)</td><td><code>Invalid</code></td><td>split the batch or request</td></tr>
+<tr><td><code>CreatedHandles</code></td><td><code>handles.created</code> (256 alive)</td><td><code>Rejected</code> (capability kept)</td><td>destroy one first</td></tr>
+<tr><td><code>ReadHandles</code></td><td><code>handles.read</code> (1024, least recently used dropped)</td><td><code>Gone</code></td><td>read the object again</td></tr>
+<tr><td><code>SlowCalls</code></td><td><code>bridge.slow_calls</code> (3 calls over 1 s in 10 min)</td><td><code>Quarantined</code></td><td>nothing until DCS restarts</td></tr>
+<tr><td>waits: <code>TaskingDelay</code>, <code>HeavySlot</code>, <code>LinkCredits</code>, <code>LinkDown</code>, <code>After</code>, <code>Queue</code>, <code>BridgeDeadline</code>, <code>SpawnGate</code>, <code>SpawnWindow</code></td><td><code>delay.tasking</code>, <code>slot.heavy</code>, ...</td><td><code>Timeout</code></td><td>it never ran in DCS: a retry is safe</td></tr>
+<tr><td><code>After</code> when the <code>.after(..)</code> command failed</td><td><code>wait.after</code></td><td>that command's code and capability (<code>Rejected</code>, <code>Invalid</code>, ...)</td><td>it never ran; sent again it fails the same way at once: send the failed one again, then this one <code>.after(..)</code> the new one</td></tr>
+</tbody></table>
+</div>
+<ul>
+<li><code>retry_after()</code> is the wait of <strong>the same command sent again unchanged</strong>, from the refusal,
+if the logic sends nothing else meanwhile: after a 256-read batch from a full bucket (200 -
+256 = -56) another 256-read batch waits 1.28 s, a single read 0.285 s. When several budgets
+refuse, the limit is the one with the longest wait. <code>None</code> for sizes, caps and waits, and for
+a heavy call refused while the logic's previous heavy call is not back (one heavy call of a
+writer at a time: do not <code>join!</code> two).</li>
+<li>A batch refused at the limit check ran no call (the engine checks it whole before sending).</li>
+<li><code>e.is_forbidden()</code>: <code>Rejected</code> with a capability and no limit (a path not in the catalog, off
+by default or switched off by the owner, an operation disabled in <code>engine.toml</code>).</li>
+<li><code>ctx.sleep</code> follows the ticks, so a wait can end a little early: the next refusal names the
+rest, which the loop above survives.</li>
+</ul>
 <h2 id="command-errors">Command errors<a class="anchor" href="#command-errors" aria-label="Ссылка на этот раздел">#</a></h2>
 <div class="table-wrap" tabindex="0">
 <table><thead><tr><th>Code</th><th>Meaning</th><th>Usual cause → fix</th></tr></thead><tbody>
 <tr><td><code>sortie::gone</code></td><td>the target no longer exists in DCS</td><td>it died or was despawned before the command ran → match <code>Error::Gone</code> where a target can die (always in a live mission)</td></tr>
-<tr><td><code>sortie::timeout</code></td><td>DCS did not answer in time (10 s, 30 s for spawns and destroys)</td><td>a big spawn wave queued behind the spawn pacing, or a busy server → <code>.timeout(..)</code>, spawn in smaller steps, check <code>sortie status</code> / <code>sortie top</code></td></tr>
+<tr><td><code>sortie::timeout</code></td><td>the deadline passed (10 s, 30 s for spawns and destroys). Two kinds: "the deadline passed before the command could start (why)" never reached DCS (<code>e.limit()</code> names what it waited for: <code>TaskingDelay</code>, <code>HeavySlot</code>, <code>LinkCredits</code>, <code>LinkDown</code>, <code>After</code>, <code>BridgeDeadline</code>, <code>Queue</code>); "<code>op</code> was sent to DCS but no result arrived before the deadline" may still run (<code>e.limit()</code> is <code>None</code>)</td><td>never reached DCS: retry (safe); sent: retry only with the same <code>.key(..)</code>, which waits for the late result instead of running it twice. A task or AI option right after a spawn waits 2 frames and 0.5 s of model time (<code>set_task</code>, <code>push_task</code>, <code>set_option</code>; held without its deadline running while the spawn is still queued or in DCS since 0.4.0); a busy server → <code>.timeout(..)</code>, check <code>sortie status</code> / <code>sortie top</code></td></tr>
 <tr><td><code>sortie::lua_error</code></td><td>the Lua layer raised an error</td><td>a bad <code>Task::raw</code> table, a wrong option for the unit type → read <code>e.lua_traceback()</code></td></tr>
-<tr><td><code>sortie::invalid</code></td><td>the command does not fit</td><td>a spawn or destroy without <code>.key(..)</code> under <code>--dev</code>; a key reused for another command ("key <code>k</code> was already used for a different command in session ..."); a manifest without the template</td></tr>
+<tr><td><code>sortie::invalid</code></td><td>the command does not fit</td><td>a spawn or destroy without <code>.key(..)</code> under <code>--dev</code>; a key reused for another command ("key <code>k</code> was already used for a different command in session ...", also after a logic restart: a changed command needs a new key such as <code>sam-red-v2</code>); a batch or request over its size (<code>e.limit()</code>: <code>BatchSize</code>, <code>RequestSize</code>); a manifest without the template; <code>Task::rtb</code> (or a <code>Task</code> converted from a CAP or orbit) for a ground group ("group <code>X</code> is not an aircraft group; only a ground route or a raw task applies to it": give it <code>Task::ground_route(..)</code>, or <code>Task::raw</code> for what the route lacks, such as a stop) or for a naval group ("...; only raw tasks apply to it": give it <code>Task::raw</code>); a ground route that does not fit: through <code>Task::from(..)</code> for a group that is no ground group ("a ground route is for ground groups"), with no point, with more than 256 points ("a ground route takes at most 256 points, got N": give the places where it turns or stops, not every point of a road path), a speed not above 0</td></tr>
 <tr><td><code>sortie::name_conflict</code></td><td>a live group already has this name</td><td><code>.named("..")</code> twice → drop <code>.named</code> (default names are unique) or add a counter</td></tr>
 <tr><td><code>sortie::session_ended</code></td><td>the session ended before the command completed</td><td>normal at the end of a turn → return <code>Ok(())</code></td></tr>
 <tr><td><code>sortie::unavailable</code></td><td>the engine cannot run it now</td><td>no mission session is running; or a keyed command was in flight when the DCS link dropped ("whether it ran is not known": check the world, then use a new key)</td></tr>
 <tr><td><code>sortie::paused</code></td><td>the simulation is paused</td><td>the command was sent with <code>.on_pause(v1::PausePolicy::Fail)</code></td></tr>
-<tr><td><code>sortie::rejected</code></td><td>the engine refused the command</td><td>read the message; capability <code>dev_eval</code> = a raw table (<code>Task::raw</code>, <code>.raw(..)</code> of a static, a <code>ctx.dcs()</code> argument) holds Lua code or a file name at the path the message names (<code>Script</code> / <code>ScriptFile</code> actions, <code>condition</code>, <code>command</code>, <code>file</code> strings) → use the typed operation; raw tables carry data only; another capability (<code>e.capability()</code>) = the engine owner switched that operation off (<code>engine.toml [operations]</code>)</td></tr>
+<tr><td><code>sortie::rejected</code></td><td>the engine refused the command</td><td>a limit (<code>e.limit()</code> is <code>Some</code>: a rate, the DCS time, the created handles) → wait <code>e.retry_after()</code> and send it again (section "Limits"); a forbid (<code>e.is_forbidden()</code>) → no retry helps; read the message; capability <code>dev_eval</code> = a raw table (<code>Task::raw</code>, <code>.raw(..)</code> of a static, a <code>ctx.dcs()</code> argument) holds Lua code or a file name at the path the message names (<code>Script</code> / <code>ScriptFile</code> actions, <code>condition</code>, <code>command</code>, <code>file</code> strings) → use the typed operation; raw tables carry data only; another capability (<code>e.capability()</code>) = the engine owner switched that operation off (<code>engine.toml [operations]</code>)</td></tr>
 <tr><td><code>sortie::quarantined</code></td><td>this command kind (for a universal call: this catalog function) is quarantined: DCS crashed while one ran, or it faulted the bridge 3 times</td><td><code>e.capability()</code> names it (<code>"call:mission:land.getHeight"</code>: one catalog function); the engine owner releases it with <code>sortie caps --release &lt;name&gt;</code>; report it with <code>Logs/sortie-bridge.log</code></td></tr>
 <tr><td><code>sortie::bridge_fault</code></td><td>the bridge caught a fault</td><td>report it with <code>Logs/sortie-bridge.log</code></td></tr>
 <tr><td><code>sortie::conflict</code></td><td>a state write lost against another writer</td><td><code>StateDoc::update</code> retries by itself; seen only after 8 conflicts in a row</td></tr>
@@ -132,7 +192,8 @@ is never recorded. A panic is recorded the same way, with its location.</p>
 <tr><td><code>include_scenario!</code></td><td><code>no generated module for scenario `x` (...); build.rs generated: ...</code></td><td>use the same name in <code>include_scenario!</code> and <code>sortie_build::scenario</code></td></tr>
 <tr><td><code>#[sortie::mission]</code></td><td><code>a mission must be an `async fn` ...</code>, <code>the arguments are swapped ...</code>, <code>a mission must return `sortie::Result&lt;()&gt;` ...</code></td><td>the signature is <code>async fn run(ctx: Ctx&lt;M&gt;, start: Start) -&gt; sortie::Result&lt;()&gt;</code></td></tr>
 <tr><td><code>#[sortie::mission]</code></td><td><code>`X` is not a scenario marker</code></td><td><code>Ctx&lt;M&gt;</code> takes the marker from the generated module, e.g. <code>Ctx&lt;frontline::Frontline&gt;</code></td></tr>
-<tr><td><code>#[sortie::test]</code></td><td>a compile error: tests without DCS arrive in SDK 0.2</td><td>test decisions in plain functions with <code>#[test]</code>; test the mission in DCS</td></tr>
+<tr><td><code>#[sortie::test]</code></td><td>a compile error: FakeDcs carries the engine and is not part of the public SDK yet</td><td>test decisions in plain functions with <code>#[test]</code>; test the mission in DCS</td></tr>
+<tr><td><code>set_task</code> / <code>push_task</code></td><td><code>error[E0277]: `Ground` groups do not fly: CAP and orbit are tasks for aircraft and helicopters</code></td><td>a ground group takes a route, <code>Task::ground_route(..)</code>, or a raw DCS task table, <code>Task::raw(..)</code>; a naval group a raw table (references/api.md, "A ground group's route")</td></tr>
 <tr><td>any <code>.await</code> on a borrow</td><td>clippy <code>await_holding_refcell_ref</code></td><td>end the <code>ctx.world()</code> / <code>StateDoc::get()</code> borrow before the <code>.await</code></td></tr>
 </tbody></table>
 </div>
@@ -157,7 +218,7 @@ is never recorded. A panic is recorded the same way, with its location.</p>
 </div>
 <footer class="footer">
 <div class="footer-inner">
-<p>Sortie SDK 0.3.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p>Sortie SDK 0.4.0. Лицензия SDK: MIT OR Apache-2.0.</p>
 <p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
 </div>
 </footer>

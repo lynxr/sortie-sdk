@@ -53,6 +53,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build_transport(grpc)
         .generate_default_stubs(grpc)
         .emit_rerun_if_changed(false)
+        // `CommandError` is the error of many `Result`s: its limit (0.4.0) is boxed so the
+        // error stays small (`Option<Box<Limit>>`).
+        .boxed(".sortie.v1.CommandError.limit")
         .compile_fds(fds)?;
     Ok(())
 }

@@ -578,6 +578,19 @@ impl World {
         self.commit(rev, true);
         true
     }
+
+    /// Marks an airbase changed without changing it, so the next delta carries it as the
+    /// mirror holds it: a replica that took an owner the mirror did not (a `BaseCaptured` the
+    /// engine found older than the owner it holds) gets the mirror's back. `false` if unknown.
+    pub fn touch_airbase(&mut self, eid: Eid) -> bool {
+        let rev = self.change_rev();
+        let Some(a) = self.airbases.get_mut(&eid) else {
+            return false;
+        };
+        a.rev = rev;
+        self.commit(rev, true);
+        true
+    }
 }
 
 fn identity_matches(e: &Entity, obs: &Observation) -> bool {

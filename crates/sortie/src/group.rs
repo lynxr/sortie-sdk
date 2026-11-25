@@ -5,12 +5,12 @@ use std::panic::Location;
 use std::rc::Rc;
 
 use sortie_proto::v1;
-use sortie_types::{Alarm, Eid, Kind, Roe, kind::Flying};
+use sortie_types::{Alarm, Eid, Kind, Roe};
 use sortie_world::{AsGroupKey, GroupKey};
 
 use crate::cmd::{self, Cmd};
 use crate::runtime::Session;
-use crate::task::Task;
+use crate::task::TaskFor;
 
 /// An AI option for [`Group::set_option`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -141,12 +141,13 @@ impl<K: Kind> Group<K> {
             Location::caller(),
         )
     }
-}
 
-impl<K: Flying> Group<K> {
-    /// Pushes `task` on top of the group's task stack (`Controller.pushTask`).
+    /// Pushes `task` on top of the group's task stack (`Controller.pushTask`). Aircraft and
+    /// helicopters take CAP, orbit and RTB; a ground group a route,
+    /// [`Task::ground_route`](crate::Task::ground_route) (API revision 3); any group a raw DCS
+    /// task table, [`Task::raw`](crate::Task::raw) ([`TaskFor`]).
     #[track_caller]
-    pub fn push_task(&self, task: impl Into<Task>) -> Cmd<cmd::SetTask> {
+    pub fn push_task(&self, task: impl TaskFor<K>) -> Cmd<cmd::SetTask> {
         let body = cmd::SetTask {
             group: self.selector(),
             group_name: self.name.clone(),
@@ -156,9 +157,9 @@ impl<K: Flying> Group<K> {
         Cmd::new(self.session.clone(), body, Location::caller())
     }
 
-    /// Replaces the group's task (`Controller.setTask`).
+    /// Replaces the group's task (`Controller.setTask`); what it takes: [`Self::push_task`].
     #[track_caller]
-    pub fn set_task(&self, task: impl Into<Task>) -> Cmd<cmd::SetTask> {
+    pub fn set_task(&self, task: impl TaskFor<K>) -> Cmd<cmd::SetTask> {
         let body = cmd::SetTask {
             group: self.selector(),
             group_name: self.name.clone(),

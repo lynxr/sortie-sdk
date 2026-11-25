@@ -23,6 +23,11 @@ uv run sortie-gen adopt my.miz                   # разобрать мисси
 Пример сценария — `examples/op_north/scenario.py`. Полное руководство по генератору — в
 документации Sortie.
 
+`.miz` — только карта и bootstrap Sortie; логика миссии пишется на Rust. Сборка перечисляет
+весь Lua, который добавил хук `@sc.pydcs` (скрипт инициализации, DO SCRIPT, DO SCRIPT FILE,
+LUA PREDICATE): `Scenario(do_scripts=..)` — `"warn"` (по умолчанию), `"deny"` (ошибка сборки)
+или `"allow"`. Lua в задачах точек маршрута группы сборка не проверяет.
+
 Переменные окружения: `SORTIE_ENGINE` (адрес движка, по умолчанию `127.0.0.1:50777`),
 `SORTIE_TOKEN` (токен роли `generator`), `SORTIE_GEN_DCS_DATA=installed` (брать подвески и
 раскраски из установленной DCS вместо встроенных в pydcs; сборка перестаёт быть одинаковой на

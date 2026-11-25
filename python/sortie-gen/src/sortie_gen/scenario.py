@@ -57,6 +57,10 @@ GENERATOR_NAME = "sortie-gen"
 MAX_NAME_BYTES = 128
 RUNTIME_SEPARATOR = "#"
 FLAGS_TRIGGER_COMMENT = "sortie flags"
+#: What a build does with Lua in the ``.miz`` that is not Sortie's own (``miz.mission_scripts``:
+#: the init script, a DO SCRIPT, DO SCRIPT FILE or LUA PREDICATE of a trigger;
+#: ``Scenario(do_scripts=...)``): the default warns, ``deny`` fails the build, ``allow`` is silent.
+DO_SCRIPTS_POLICIES = ("warn", "deny", "allow")
 
 
 def _version() -> str:
@@ -350,6 +354,19 @@ class _Template:
 
 
 @dataclass
+class _GroundTemplate:
+    handle: TemplateHandle
+    unit_types: list[Any]
+    at: tuple[float, float] | None
+    heading: float
+    #: Each unit's heading relative to ``heading``, degrees.
+    unit_headings: tuple[float, ...]
+    formation: str
+    spacing: float
+    skill: Skill
+
+
+@dataclass
 class _Airbase:
     handle: AirbaseHandle
     coalition: Coalition | None
@@ -449,6 +466,7 @@ class Scenario:
         time_limit: Any = None,
         description: str | None = None,
         source: str | Path | None = None,
+        do_scripts: str = "warn",
     ) -> None:
         self.name = lockmod.check_scenario_name(name)
         if isinstance(schema, bool) or not isinstance(schema, int) or schema < 1:
@@ -460,13 +478,14 @@ class Scenario:
         self.start = parse_start(start, theatre.utc_offset)
         self._time_limit_s = parse_duration(time_limit)
         self.description = description or f"Sortie scenario {name}"
+        self.do_scripts = do_scripts
         if source is None:
             source = inspect.stack()[1].frame.f_globals.get("__file__")
         self.source: Path | None = Path(source).resolve() if source else None
 
         self._decls: list[Any] = []
         self._zones: dict[str, _Zone] = {}
-        self._templates: dict[str, _Template] = {}
+        self._templates: dict[str, _Template | _GroundTemplate] = {}
         self._airbases: dict[str, _Airbase] = {}
         self._flags: dict[str, FlagHandle] = {}
         self._menus: dict[str, MenuHandle] = {}
@@ -724,6 +743,80 @@ class Scenario:
         self._decls.append(decl)
         return handle
 
+    def ground_template(
+        self,
+        name: str,
+        *,
+        ident: str,
+        country: Any,
+        units: Sequence[Any],
+        at: Any = None,
+        heading: float = 0.0,
+        unit_headings: Sequence[float] | None = None,
+        formation: str = "line",
+        spacing: float = 40.0,
+        skill: Skill | str = "Excellent",
+        roles: Iterable[str] | None = None,
+    ) -> TemplateHandle:
+        """A ground group kept out of the ``.miz`` and written to the manifest for spawning.
+
+        The logic spawns it with ``ctx.spawn_group(templates::IDENT)``, usually with ``.at`` or
+        ``.at_formation``. The formation is drawn as for :meth:`ground_group` (a pydcs
+        ``formation`` with ``spacing`` metres between units, the first unit at ``at``) for the
+        facing ``heading`` (degrees), which the manifest keeps as the template's reference
+        heading (``Template.heading_rad``: what ``.at_formation`` turns from). Each unit faces
+        ``heading`` plus its entry of ``unit_headings`` (degrees, one per unit; all 0 by
+        default), so launchers drawn at -15 and +15 keep their spread when the group is turned.
+        Without ``at`` the formation stands at the first airbase declared in the scenario, else
+        at the coalition's bullseye (where a spawn without ``.at`` puts it).
+        """
+        check_dcs_name("template", name, group=True)
+        if name in self._templates:
+            raise NameConflict(f"template {name!r} is declared twice")
+        if name in self._group_names:
+            raise NameConflict(f"{name!r} is already the name of a group; groups and templates share one namespace")
+        ident_ = self._ident("template", ident, required=True)
+        country = self._country(country, f"template {name!r}")
+        types = list(units)
+        if not types:
+            raise ScenarioError(f"template {name!r} needs at least one unit")
+        for t in types:
+            if not _pydcs.is_vehicle_type(t):
+                raise ScenarioError(f"template {name!r}: {t!r} is not a pydcs vehicle type (dcs.vehicles.*)")
+        if formation not in _FORMATIONS:
+            raise ScenarioError(f"template {name!r}: formation must be one of {', '.join(_FORMATIONS)}")
+        spacing_ = float(spacing)
+        if not (math.isfinite(spacing_) and spacing_ > 0):
+            raise ScenarioError(f"template {name!r}: spacing must be > 0 metres")
+        heading_ = float(heading)
+        if not math.isfinite(heading_):
+            raise ScenarioError(f"template {name!r}: heading must be a finite number of degrees")
+        offsets = tuple(float(h) for h in unit_headings) if unit_headings is not None else (0.0,) * len(types)
+        if len(offsets) != len(types):
+            raise ScenarioError(
+                f"template {name!r}: unit_headings has {len(offsets)} entries for {len(types)} units (one per unit)"
+            )
+        if not all(math.isfinite(h) for h in offsets):
+            raise ScenarioError(f"template {name!r}: unit_headings must be finite numbers of degrees")
+        at_xy = self._xy(at, f"template {name!r}") if at is not None else None
+        roles_ = tuple(lockmod.canonical_roles(roles))
+        assert ident_ is not None
+        handle = TemplateHandle(name, ident_, "ground", roles_, country, str(types[0].id), len(types))
+        decl = _GroundTemplate(
+            handle=handle,
+            unit_types=types,
+            at=at_xy,
+            heading=heading_,
+            unit_headings=offsets,
+            formation=formation,
+            spacing=spacing_,
+            skill=_skill(skill),
+        )
+        self._claim_ident("template", ident_)
+        self._templates[name] = decl
+        self._decls.append(decl)
+        return handle
+
     def airbase(
         self,
         name: Any,
@@ -852,10 +945,28 @@ class Scenario:
     def time_limit(self, value: Any) -> None:
         self._time_limit_s = parse_duration(value)
 
+    @property
+    def do_scripts(self) -> str:
+        """What a build does with Lua a hook added (the mission's init script, a DO SCRIPT, DO
+        SCRIPT FILE or LUA PREDICATE of a trigger: ``miz.mission_scripts``; Lua in a group's
+        waypoint tasks is not looked for): ``"warn"`` (the default), ``"deny"`` (the build fails) or
+        ``"allow"``. The mission's game logic belongs in the Rust logic; a DO SCRIPT is for a
+        third-party script the mission must keep (``sortie_gen.miz.SCRIPTS_RULE``)."""
+        return self._do_scripts
+
+    @do_scripts.setter
+    def do_scripts(self, value: str) -> None:
+        if not isinstance(value, str) or value not in DO_SCRIPTS_POLICIES:
+            allowed = ", ".join(repr(p) for p in DO_SCRIPTS_POLICIES)
+            raise ScenarioError(f"do_scripts must be one of {allowed}, not {value!r}")
+        self._do_scripts = value
+
     def pydcs(self, fn: Callable[[dcs.Mission], Any]) -> Callable[[dcs.Mission], Any]:
         """Decorator: ``fn(mission)`` runs on every build after Sortie's declarations, for what
         Sortie does not wrap (statics, waypoints, weather). Groups it adds appear in the
-        manifest without an ident; all names are checked for uniqueness afterwards."""
+        manifest without an ident; all names are checked for uniqueness afterwards, and the Lua
+        it adds (init script, trigger scripts and LUA PREDICATE conditions) meets
+        :attr:`do_scripts`."""
         self._hooks.append(fn)
         return fn
 
@@ -868,7 +979,7 @@ class Scenario:
                 s.zones.append(d.handle.ident)
             elif isinstance(d, _Ground) and d.handle.ident:
                 s.groups.append(lockmod.KindSymbol(d.handle.ident, d.handle.kind, d.handle.roles))
-            elif isinstance(d, _Template):
+            elif isinstance(d, (_Template, _GroundTemplate)):
                 s.templates.append(lockmod.KindSymbol(d.handle.ident, d.handle.kind, d.handle.roles))
             elif isinstance(d, _Airbase):
                 s.airbases.append(d.handle.ident)
@@ -990,7 +1101,7 @@ class _MissionBuilder:
         self.mission = dcs.Mission(self.terrain)
         # Templates live in their own mission so that they take no group/unit ids of the .miz.
         self.scratch = dcs.Mission(self.terrain)
-        self.templates: list[tuple[_Template, Any]] = []
+        self.templates: list[tuple[_Template | _GroundTemplate, Any]] = []
         self.airbases: list[_Airbase] = []
         self.flights: dict[str, _Flight] = {}
         self.grounds: dict[str, _Ground] = {}
@@ -1016,6 +1127,8 @@ class _MissionBuilder:
         for d in sc._decls:
             if isinstance(d, _Template):
                 self.templates.append((d, self._template(d)))
+            elif isinstance(d, _GroundTemplate):
+                self.templates.append((d, self._ground_template(d)))
         initial = [f for f in sc._flags.values() if f.initial != 0]
         if initial:
             trig = TriggerStart(comment=FLAGS_TRIGGER_COMMENT)
@@ -1024,9 +1137,21 @@ class _MissionBuilder:
             m.triggerrules.triggers.append(trig)
         for hook in sc._hooks:
             hook(m)
+        self._check_scripts()
         self._warn_unowned_player_airfields()
         self._check_names()
         return m
+
+    def _check_scripts(self) -> None:
+        """After the hooks, before the bootstrap: all Lua of the mission is Lua Sortie did not add
+        (its flags trigger sets flags only, and it sets no init script), so the scenario's
+        ``do_scripts`` policy applies."""
+        scripts = mizmod.mission_scripts(self.mission)
+        if not scripts or self.sc.do_scripts == "allow":
+            return
+        if self.sc.do_scripts == "deny":
+            raise ScenarioError(mizmod.scripts_report(scripts, deny=True))
+        warnings.warn(mizmod.scripts_report(scripts), SortieWarning, stacklevel=2)
 
     def _warn_unowned_player_airfields(self) -> None:
         """After the hooks: player groups starting on the ground at an airfield their coalition
@@ -1163,10 +1288,10 @@ class _MissionBuilder:
         self._payload(fg, d.payload, f"player flight {h.name!r}")
         self.flights[h.name] = d
 
-    def _template_position(self, d: _Template) -> tuple[float, float]:
+    def _template_position(self, d: _Template | _GroundTemplate) -> tuple[float, float]:
         if d.at is not None:
             return d.at
-        if d.airbase is not None:
+        if isinstance(d, _Template) and d.airbase is not None:
             p = self.terrain.airports[d.airbase].position
             return (p.x, p.y)
         if self.airbases:
@@ -1175,6 +1300,22 @@ class _MissionBuilder:
         coalition = self._coalition_of_country(d.handle.country)
         bull = self.terrain.bullseye_red if coalition is Coalition.Red else self.terrain.bullseye_blue
         return (float(bull["x"]), float(bull["y"]))
+
+    def _ground_template(self, d: _GroundTemplate) -> Any:
+        """The vehicle group of a ground template, in the scratch mission: drawn as a placed
+        ground group is, then each unit turned by its own entry of ``unit_headings``."""
+        h = d.handle
+        country = self.scratch.country(h.country)
+        pos = _pydcs.point(self.terrain, *self._template_position(d))
+        vg = self.scratch.vehicle_group_platoon(country, h.name, d.unit_types, pos, heading=d.heading)
+        for k, u in enumerate(vg.units, start=1):
+            u.name = unit_name(h.name, k)
+        if len(vg.units) > 1:
+            getattr(vg, f"formation_{d.formation}")(d.heading, d.spacing)
+        for u, offset in zip(vg.units, d.unit_headings, strict=True):
+            u.heading = (d.heading + offset) % 360.0
+            u.skill = d.skill
+        return vg
 
     def _template(self, d: _Template) -> Any:
         h = d.handle
@@ -1380,20 +1521,29 @@ class _MissionBuilder:
         f.units.extend(self._unit_pb(u, unit_id=int(u.id)) for u in g.units)
         return f
 
-    def _template_pb(self, d: _Template, g: Any) -> mpb.Template:
+    def _template_pb(self, d: _Template | _GroundTemplate, g: Any) -> mpb.Template:
         h = d.handle
         country = self.scratch.country(h.country)
+        category = {"helo": cpb.CATEGORY_HELICOPTER, "ground": cpb.CATEGORY_GROUND_UNIT}.get(h.kind, cpb.CATEGORY_AIRPLANE)
         t = mpb.Template(
             ident=h.ident,
             name=h.name,
-            category=cpb.CATEGORY_HELICOPTER if h.kind == "helo" else cpb.CATEGORY_AIRPLANE,
+            category=category,
             coalition=self._coalition_of_country(h.country).proto,
             country=h.country,
             country_id=int(country.id),
             roles=list(h.roles),
-            task=str(getattr(d.task, "name", "")),
+            task=str(getattr(d.task, "name", "")) if isinstance(d, _Template) else "",
         )
         t.units.extend(self._unit_pb(u, unit_id=0) for u in g.units)
+        # The reference heading (0.4.0): the facing the formation was drawn for, which
+        # SpawnGroup.at_formation turns from. pydcs draws an aircraft group around its leader,
+        # so the leader's heading is the group's; a ground template's is its declared heading
+        # (its units may face apart from it: `unit_headings`).
+        if isinstance(d, _GroundTemplate):
+            t.heading_rad = _clean(math.radians(d.heading % 360.0))
+        else:
+            t.heading_rad = t.units[0].heading_rad
         try:
             group_json = _pydcs.template_group_json(g)
         except _pydcs.LuaShapeError as e:

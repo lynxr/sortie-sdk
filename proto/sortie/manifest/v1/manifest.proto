@@ -110,6 +110,10 @@ message Template {
   // The full DCS group table produced by pydcs (Group.dict()) as JSON; the engine uses it
   // as the base of coalition.addGroup (payloads, liveries, callsigns) when present.
   string dcs_group_json = 10;
+  // The reference heading (radians, clockwise from north): the facing the formation was drawn
+  // for. SpawnGroup.at with SPAWN_HEADING_MODE_FORMATION turns the formation by the spawn's
+  // heading minus this one. Absent: the first unit's heading is the reference (0.4.0).
+  optional double heading_rad = 11;
 }
 
 message Flag {

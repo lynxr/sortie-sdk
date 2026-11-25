@@ -1,19 +1,20 @@
 # Тестирование
 
-## Что есть в 0.3.0
+## Что есть в 0.4.0
 
-В этой версии SDK нет тестов без DCS: фальшивая DCS (FakeDcs) содержит движок, а движок в SDK
-не входит. Атрибут `#[sortie::test]` в SDK 0.3.0 не компилируется и говорит об этом
-прямо:
+В публичном SDK пока нет тестов без DCS: фальшивая DCS (FakeDcs) содержит движок, а движок в
+SDK не входит. Атрибут `#[sortie::test]` в SDK 0.4.0 не компилируется и говорит об
+этом прямо:
 
 ```text
-error: #[sortie::test] runs the logic against FakeDcs, which is not part of Sortie SDK 0.1; tests without DCS arrive in SDK 0.2. Test against a live DCS with `sortied --dev` for now.
+error: #[sortie::test] runs the logic against FakeDcs, which is not part of the public Sortie SDK yet: it carries the engine. Test the mission against a live DCS with `sortied --dev`, and its plain functions with `#[test]`.
 ```
 
 Что можно проверить уже сейчас:
 
-* **Компиляция.** Символы сценария типизированы: опечатка в имени группы, приказ авиации
-  наземной группе, символ другого сценария — это ошибки `cargo build`, а не сюрпризы в игре.
+* **Компиляция.** Символы сценария типизированы: опечатка в имени группы, патруль (CAP или
+  orbit) наземной группе, символ другого сценария — это ошибки `cargo build`, а не сюрпризы в
+  игре.
   `#[sortie::mission]` проверяет сигнатуру функции миссии.
 * **Обычные тесты Rust.** Свои функции и геометрию зон можно проверять `cargo test`: константы
   зон несут координаты из `scenario.lock.json`.
@@ -59,9 +60,10 @@ fn the_target_lies_on_the_front_line() {
 * перезапуск процесса логики в середине миссии ничего не повторяет;
 * в сетевой игре игроки занимают все слоты.
 
-## Что будет в 0.2
+## FakeDcs вне публичного SDK
 
-В SDK 0.2 появятся тесты без DCS:
+Сам Sortie тестирует движок и SDK без DCS: фальшивой DCS (FakeDcs). Её нет в публичном SDK,
+потому что она содержит движок, и срока, когда она туда попадёт, пока нет. Вот что она умеет:
 
 * `#[sortie::test(manifest = "...")]` запускает настоящий движок в процессе теста и фальшивую
   DCS, которая говорит с ним по настоящему протоколу;

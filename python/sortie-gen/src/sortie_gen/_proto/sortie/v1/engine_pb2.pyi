@@ -46,7 +46,7 @@ class HealthRequest(_message.Message):
     def __init__(self) -> None: ...
 
 class LinkHealth(_message.Message):
-    __slots__ = ("env", "connected", "credits", "events_dropped", "heartbeat_age_s", "fps", "pump_p99_us")
+    __slots__ = ("env", "connected", "credits", "events_dropped", "heartbeat_age_s", "fps", "pump_p99_us", "event_times_ignored", "event_copies", "event_copy_calls", "event_copy_us", "event_copy_max_us", "snapshot_objects", "snapshot_calls", "snapshot_us")
     ENV_FIELD_NUMBER: _ClassVar[int]
     CONNECTED_FIELD_NUMBER: _ClassVar[int]
     CREDITS_FIELD_NUMBER: _ClassVar[int]
@@ -54,6 +54,14 @@ class LinkHealth(_message.Message):
     HEARTBEAT_AGE_S_FIELD_NUMBER: _ClassVar[int]
     FPS_FIELD_NUMBER: _ClassVar[int]
     PUMP_P99_US_FIELD_NUMBER: _ClassVar[int]
+    EVENT_TIMES_IGNORED_FIELD_NUMBER: _ClassVar[int]
+    EVENT_COPIES_FIELD_NUMBER: _ClassVar[int]
+    EVENT_COPY_CALLS_FIELD_NUMBER: _ClassVar[int]
+    EVENT_COPY_US_FIELD_NUMBER: _ClassVar[int]
+    EVENT_COPY_MAX_US_FIELD_NUMBER: _ClassVar[int]
+    SNAPSHOT_OBJECTS_FIELD_NUMBER: _ClassVar[int]
+    SNAPSHOT_CALLS_FIELD_NUMBER: _ClassVar[int]
+    SNAPSHOT_US_FIELD_NUMBER: _ClassVar[int]
     env: str
     connected: bool
     credits: int
@@ -61,7 +69,15 @@ class LinkHealth(_message.Message):
     heartbeat_age_s: float
     fps: float
     pump_p99_us: int
-    def __init__(self, env: _Optional[str] = ..., connected: _Optional[bool] = ..., credits: _Optional[int] = ..., events_dropped: _Optional[int] = ..., heartbeat_age_s: _Optional[float] = ..., fps: _Optional[float] = ..., pump_p99_us: _Optional[int] = ...) -> None: ...
+    event_times_ignored: int
+    event_copies: int
+    event_copy_calls: int
+    event_copy_us: int
+    event_copy_max_us: int
+    snapshot_objects: int
+    snapshot_calls: int
+    snapshot_us: int
+    def __init__(self, env: _Optional[str] = ..., connected: _Optional[bool] = ..., credits: _Optional[int] = ..., events_dropped: _Optional[int] = ..., heartbeat_age_s: _Optional[float] = ..., fps: _Optional[float] = ..., pump_p99_us: _Optional[int] = ..., event_times_ignored: _Optional[int] = ..., event_copies: _Optional[int] = ..., event_copy_calls: _Optional[int] = ..., event_copy_us: _Optional[int] = ..., event_copy_max_us: _Optional[int] = ..., snapshot_objects: _Optional[int] = ..., snapshot_calls: _Optional[int] = ..., snapshot_us: _Optional[int] = ...) -> None: ...
 
 class HealthResponse(_message.Message):
     __slots__ = ("status", "links", "session", "scenario", "model_time", "paused", "logic_clients", "notes", "carried_over_quarantines")

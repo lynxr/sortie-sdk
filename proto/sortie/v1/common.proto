@@ -106,13 +106,16 @@ enum ErrorCode {
   ERROR_CODE_UNSPECIFIED = 0;
   // The target object no longer exists in DCS (or its Eid generation is stale).
   ERROR_CODE_GONE = 1;
-  // The deadline (timeout_ms) passed before the command ran or finished.
+  // The deadline (timeout_ms) passed before the command ran or finished. With
+  // CommandError.limit (0.4.0) the command waited and never ran in DCS; without it, it was
+  // sent to DCS and no result came in time (it may still run).
   ERROR_CODE_TIMEOUT = 2;
   // The Lua layer raised an error; see lua_traceback.
   ERROR_CODE_LUA_ERROR = 3;
   // The bridge caught a panic or the op kind is disabled after repeated faults.
   ERROR_CODE_BRIDGE_FAULT = 4;
-  // The engine refused the command (policy, mode, quota, missing --dev-eval, ...).
+  // The engine refused the command (policy, mode, quota, missing --dev-eval, ...). A quota
+  // (a rate, DCS time, a cap) sets CommandError.limit; a forbid sets `capability` only.
   ERROR_CODE_REJECTED = 5;
   // The session the command belongs to has ended.
   ERROR_CODE_SESSION_ENDED = 6;
@@ -139,6 +142,94 @@ message CommandError {
   // W1. For ERROR_CODE_UNAVAILABLE, REJECTED (gating) and QUARANTINED: the name of the
   // capability or operation that is missing, switched off or quarantined (see Capability.name).
   string capability = 4;
+  // API revision 3 (0.4.0). Set when one of the engine's limits refused the command, or when
+  // the command waited in the engine or the bridge for something until its deadline passed
+  // (ERROR_CODE_TIMEOUT with `limit`: the command never ran in DCS; a TIMEOUT without it was
+  // sent to DCS and may still run). Unset for every other error, a forbid included: a path
+  // that is not in the catalog or is switched off, an operation the owner disabled
+  // (ERROR_CODE_REJECTED with `capability` and no `limit`), which no retry helps. The code and
+  // `capability` stay what they were before 0.4.0; this field is extra and filled for every
+  // client, whatever revision it declares.
+  Limit limit = 5;
+}
+
+// Which limit refused a command, or what it waited for (CommandError.limit; 0.4.0).
+message Limit {
+  LimitKind kind = 1;
+  // The budget's stable name: "call_rate.read", "call_rate.mutate", "call_rate.heavy",
+  // "call_rate.admin", "dcs_time.read", "dcs_time.heavy", "batch.calls", "request.bytes",
+  // "handles.created", "handles.read", "bridge.slow_calls", "gate.spawn", "gate.warmup",
+  // "window.spawns", "delay.tasking", "slot.heavy", "link.credits", "link.down",
+  // "wait.after", "wait.queue", "bridge.deadline".
+  string budget = 2;
+  // Whose budget: the writer (the API token's name, else the logic's name) for the budgets of
+  // a writer (call_rate.*, dcs_time.*); empty for limits of the session or of DCS.
+  string writer = 3;
+  // The budget's numbers, whole, in its unit (calls for call_rate.* and batch.calls,
+  // microseconds of DCS time for dcs_time.*, bytes for request.bytes, handles for handles.*,
+  // slow calls in 10 minutes for bridge.slow_calls): what it holds at most, what it refills a
+  // second (0: it does not refill), what this command needed from it, and what it held when
+  // the command was refused (below 0: a debt; rounded down). 0 where a number does not apply
+  // (the waits).
+  int64 capacity = 4;
+  int64 per_second = 5;
+  int64 needed = 6;
+  int64 available = 7;
+  // Milliseconds after the refusal at which this same command, sent again unchanged, passes
+  // every rate budget it needs, if the writer sends nothing else meanwhile and no earlier
+  // command's DCS time is charged meanwhile (a command in flight is charged when its result
+  // comes back). Computed from the token buckets' refill (call_rate.*, dcs_time.*); 0 where no
+  // refill can tell: a size or a cap (change the command), a wait (the deadline passed), a
+  // heavy call refused while the writer's previous heavy call has not come back (dcs_time.heavy:
+  // its cost is not known yet; send it again once that one answered).
+  uint32 retry_after_ms = 8;
+}
+
+// The kind of a Limit. Refusals at submit (nothing was queued and no call ran): CALL_RATE and
+// DCS_TIME (ERROR_CODE_REJECTED), BATCH_SIZE and REQUEST_SIZE (ERROR_CODE_INVALID),
+// CREATED_HANDLES (ERROR_CODE_REJECTED; also from the Lua layer for one call of a batch).
+// Refusals later: READ_HANDLES (ERROR_CODE_GONE: the layer dropped the handle), SLOW_CALLS
+// (ERROR_CODE_QUARANTINED: the bridge refuses the path until DCS restarts). Waits (the command
+// never ran in DCS): the rest, which end at the deadline (ERROR_CODE_TIMEOUT), and AFTER also
+// when the `after` command failed (that command's code).
+enum LimitKind {
+  LIMIT_KIND_UNSPECIFIED = 0;
+  // Calls per second of one class per writer (call_rate.read 200, mutate 50, heavy 2, admin 1).
+  LIMIT_KIND_CALL_RATE = 1;
+  // DCS time per second per writer (dcs_time.read, dcs_time.heavy: 20 ms a second each; a
+  // batch is checked against the whole debt of dcs_time.read, a single read against that debt
+  // floored at -20 ms). Also a writer's heavy call while its previous heavy call has not been
+  // charged (dcs_time.heavy, retry_after_ms 0).
+  LIMIT_KIND_DCS_TIME = 2;
+  // Calls of one batch (batch.calls: 64, 256 reads).
+  LIMIT_KIND_BATCH_SIZE = 3;
+  // Bytes of one DcsCall or DcsBatch (request.bytes: 64 KiB).
+  LIMIT_KIND_REQUEST_SIZE = 4;
+  // Objects made by calls alive in the session and environment (handles.created: 256).
+  LIMIT_KIND_CREATED_HANDLES = 5;
+  // Handles of objects reads returned (handles.read: 1024, the least recently used dropped).
+  LIMIT_KIND_READ_HANDLES = 6;
+  // A catalog path three calls of which were slower than the bridge's 1 s watchdog in 10
+  // minutes (bridge.slow_calls): refused until DCS restarts.
+  LIMIT_KIND_SLOW_CALLS = 7;
+  // The spawn gate (gate.spawn, gate.warmup) and the window of spawns in DCS (window.spawns).
+  LIMIT_KIND_SPAWN_GATE = 8;
+  LIMIT_KIND_SPAWN_WINDOW = 9;
+  // The tasking delay after a spawn (delay.tasking: 2 frames and 0.5 s of model time).
+  LIMIT_KIND_TASKING_DELAY = 10;
+  // One heavy call at a time (slot.heavy).
+  LIMIT_KIND_HEAVY_SLOT = 11;
+  // Credits of the link to DCS (link.credits), or the link was down (link.down).
+  LIMIT_KIND_LINK_CREDITS = 12;
+  LIMIT_KIND_LINK_DOWN = 13;
+  // The command named in `after` had not finished (ERROR_CODE_TIMEOUT), or failed: then the
+  // error's code and capability are that command's (wait.after), and the same command sent
+  // again fails the same way at once.
+  LIMIT_KIND_AFTER = 14;
+  // The deadline passed before the engine could look at the command (wait.queue).
+  LIMIT_KIND_QUEUE = 15;
+  // The bridge did not start the command before its deadline (bridge.deadline).
+  LIMIT_KIND_BRIDGE_DEADLINE = 16;
 }
 
 // A Lua value as it crosses the bridge. An unset `kind` is nil as well.
@@ -248,6 +339,42 @@ message WarehouseSel {
     ObjSel cargo = 2;
     string dcs_name = 3;
   }
+}
+
+// W2. A warehouse item as DCS's Warehouse functions take it: its name as DCS gives it (a
+// weapon such as "weapons.missiles.AIM_120C", an aircraft type) or its wsType. An unset
+// `item`, an empty name or a wsType level above 2^31 - 1 is ERROR_CODE_INVALID. That the two
+// forms of one item count the same stock is reported, not measured (live check AWC-T6).
+message WarehouseItem {
+  oneof item {
+    string name = 1;
+    WsType ws_type = 2;
+  }
+}
+
+// The four levels of a DCS wsType ({level1, level2, level3, level4}, e.g. {4, 4, 7, 106}; the
+// numbers of the game's Scripts/Database/wsTypes.lua).
+message WsType {
+  uint32 level1 = 1;
+  uint32 level2 = 2;
+  uint32 level3 = 3;
+  uint32 level4 = 4;
+}
+
+// W2. A liquid of a warehouse. DCS numbers them 0..3; the Lua layer maps the numbers to these
+// names and back.
+enum Liquid {
+  LIQUID_UNSPECIFIED = 0;
+  // DCS 0.
+  LIQUID_JET_FUEL = 1;
+  // DCS 1.
+  LIQUID_AVIATION_GASOLINE = 2;
+  // DCS 2: the water-methanol mixture.
+  LIQUID_MW50 = 3;
+  // DCS 3.
+  LIQUID_DIESEL = 4;
+  // A number this build has no name for; the answer keeps it as text.
+  LIQUID_UNKNOWN = 5;
 }
 
 // Selects a trigger zone: manifest symbol or mission-editor zone name.

@@ -6,7 +6,7 @@ The typed wrappers of the DCS API catalog over :meth:`EngineClient.dcs_call
     from sortie_gen.dcs_api import Dcs
     dcs = Dcs(client)
     dcs.land().surface_type((north, east))      # "ROAD"
-    dcs.airbase("Kutaisi").set_coalition("blue", key="kutaisi-blue")
+    dcs.sounds().out_sound("l10n/DEFAULT/alarm.wav", key="alarm")
 """
 
 from __future__ import annotations
@@ -261,7 +261,7 @@ class EnvCalls:
 
 
 class LandCalls:
-    """`dcs.land()`: 7 wrappers of `land`."""
+    """`dcs.land()`: 9 wrappers of `land`, `sortie`."""
 
     def __init__(self, client: Any) -> None:
         self._client = client
@@ -316,6 +316,7 @@ class LandCalls:
         """Terrain profile between two points as a list of points on the ground.
 
         ``mission:land.profile(origin: vec3, destination: vec3) -> [list:vec3]``; class read, live check ENV-LC6.
+        Guard ``span_300km``: the end points ``origin`` and ``destination`` lie at most 300 km apart on the map; farther is INVALID and nothing reaches DCS.
         """
         return self._client.dcs_call(
             "land.profile", "mission", self._recv, [arg_vec3(origin), arg_vec3(destination)], ["list:vec3"], key=key, timeout=timeout
@@ -328,6 +329,28 @@ class LandCalls:
         """
         return self._client.dcs_call(
             "land.getClosestPointOnRoads", "mission", self._recv, [arg_string(road_type), arg_number(x), arg_number(y)], ["number", "number"], key=key, timeout=timeout
+        )
+
+    def path_on_roads(self, road_type: str, from_x: float, from_y: float, to_x: float, to_y: float, *, key: str = "", timeout: float | None = None) -> Any:
+        """A path along roads from map coordinates from_x (north), from_y (east) to to_x, to_y: map points from start to end, or nil.
+
+        ``mission:land.findPathOnRoads(road_type: string, from_x: number, from_y: number, to_x: number, to_y: number) -> [list:vec2?]``; class heavy, live check ENV-LC7.
+        API revision 3: an engine of an older revision does not list it.
+        Guard ``span_300km``: the end points (``from_x``, ``from_y``) and (``to_x``, ``to_y``) lie at most 300 km apart on the map; farther is INVALID and nothing reaches DCS.
+        """
+        return self._client.dcs_call(
+            "land.findPathOnRoads", "mission", self._recv, [arg_string(road_type), arg_number(from_x), arg_number(from_y), arg_number(to_x), arg_number(to_y)], ["list:vec2?"], key=key, timeout=timeout
+        )
+
+    def road_path(self, road_type: str, start: Point2, end: Point2, max_points: float | None = None, keep: str | None = None, *, key: str = "", timeout: float | None = None) -> Any:
+        """The road path from start to end that land.findPathOnRoads finds, summarised by the Sortie Lua layer inside DCS in the same frame: point count, length along the points, first and last point and how far each lies from the end asked, and at most max_points of the points with both ends kept; nil when DCS finds no path.
+
+        ``mission:sortie.findPathOnRoads(road_type: string, start: vec2, end: vec2, max_points: number?, keep: string?) -> [road_path?]``; class heavy, live check ENV-LC7.
+        API revision 3: an engine of an older revision does not list it.
+        Guard ``span_300km``: the end points ``start`` and ``end`` lie at most 300 km apart on the map; farther is INVALID and nothing reaches DCS.
+        """
+        return self._client.dcs_call(
+            "sortie.findPathOnRoads", "mission", self._recv, [arg_string(road_type), arg_vec2(start), arg_vec2(end), arg_nil() if max_points is None else arg_number(max_points), arg_nil() if keep is None else arg_string(keep)], ["road_path?"], key=key, timeout=timeout
         )
 
 
@@ -591,7 +614,7 @@ class NetCalls:
 
 
 class ServerCalls:
-    """`dcs.server()`: 5 wrappers of `DCS`."""
+    """`dcs.server()`: 8 wrappers of `DCS`."""
 
     def __init__(self, client: Any) -> None:
         self._client = client
@@ -640,6 +663,36 @@ class ServerCalls:
         """
         return self._client.dcs_call(
             "DCS.isMultiplayer", "hooks", self._recv, [], ["boolean"], key=key, timeout=timeout
+        )
+
+    def farps_and_carriers(self, *, key: str = "", timeout: float | None = None) -> Any:
+        """The FARPs and carriers the slot screen lists: {farps = {[unit id] = {name, x, y, coalition, ...}}, carriers = {...}}.
+
+        ``hooks:DCS.getFarpsAndCarriersMissionData() -> [table]``; class heavy, live check AWC-T30.
+        API revision 3: an engine of an older revision does not list it.
+        """
+        return self._client.dcs_call(
+            "DCS.getFarpsAndCarriersMissionData", "hooks", self._recv, [], ["table"], key=key, timeout=timeout
+        )
+
+    def dynamic_spawn_settings(self, airbase_id: float, is_airdrome: bool, *, key: str = "", timeout: float | None = None) -> Any:
+        """Dynamic-slot settings of an airfield (its id, is_airdrome true) or of a FARP or carrier (its unit id, false): {dynamicSpawnAvailable, allowHotSpawn, ...}.
+
+        ``hooks:DCS.getDynamicSpawnSettings(airbase_id: number, is_airdrome: boolean) -> [table?]``; class read, live check AWC-T30.
+        API revision 3: an engine of an older revision does not list it.
+        """
+        return self._client.dcs_call(
+            "DCS.getDynamicSpawnSettings", "hooks", self._recv, [arg_number(airbase_id), arg_boolean(is_airdrome)], ["table?"], key=key, timeout=timeout
+        )
+
+    def aircraft_in_warehouse(self, aircraft_type: str, airbase_id: float, is_farp_or_ship: bool, *, key: str = "", timeout: float | None = None) -> Any:
+        """How many aircraft of a type the slot screen offers at an airfield (its id, false) or a FARP or carrier (its unit id, true).
+
+        ``hooks:DCS.getAircraftAmountInAirportWarehouse(aircraft_type: string, airbase_id: number, is_farp_or_ship: boolean) -> [number]``; class read, live check AWC-T30.
+        API revision 3: an engine of an older revision does not list it.
+        """
+        return self._client.dcs_call(
+            "DCS.getAircraftAmountInAirportWarehouse", "hooks", self._recv, [arg_string(aircraft_type), arg_number(airbase_id), arg_boolean(is_farp_or_ship)], ["number"], key=key, timeout=timeout
         )
 
 
@@ -1486,6 +1539,7 @@ class AirbaseCalls:
         """Silences (true) or restores (false) the airbase's ATC.
 
         ``mission:Airbase.setRadioSilentMode(self: Airbase, silent: boolean) -> []``; class mutate, live check UC-1.
+        Superseded by the typed operation ``airbase_control``.
         """
         return self._client.dcs_call(
             "Airbase.setRadioSilentMode", "mission", self._recv, [arg_boolean(silent)], [], key=key, timeout=timeout
@@ -1504,6 +1558,7 @@ class AirbaseCalls:
         """Turns DCS's own capture of the airbase on or off.
 
         ``mission:Airbase.autoCapture(self: Airbase, on: boolean) -> []``; class mutate, live check AWC-T1.
+        Superseded by the typed operation ``airbase_control``.
         """
         return self._client.dcs_call(
             "Airbase.autoCapture", "mission", self._recv, [arg_boolean(on)], [], key=key, timeout=timeout
@@ -1513,6 +1568,7 @@ class AirbaseCalls:
         """Gives the airbase to a coalition (turn auto capture off first, or DCS may flip it back).
 
         ``mission:Airbase.setCoalition(self: Airbase, coalition: side_number) -> []``; class mutate, live check AWC-T1.
+        Superseded by the typed operation ``airbase_control``.
         """
         return self._client.dcs_call(
             "Airbase.setCoalition", "mission", self._recv, [arg_coalition(coalition)], [], key=key, timeout=timeout
@@ -1781,6 +1837,7 @@ class WarehouseCalls:
         """Adds count of an item.
 
         ``mission:Warehouse.addItem(self: Warehouse, item: item, count: number) -> []``; class mutate, live check AWC-T6.
+        Superseded by the typed operation ``warehouse_op``.
         """
         return self._client.dcs_call(
             "Warehouse.addItem", "mission", self._recv, [arg_item(item), arg_number(count)], [], key=key, timeout=timeout
@@ -1790,6 +1847,7 @@ class WarehouseCalls:
         """Removes count of an item.
 
         ``mission:Warehouse.removeItem(self: Warehouse, item: item, count: number) -> []``; class mutate, live check AWC-T6.
+        Superseded by the typed operation ``warehouse_op``.
         """
         return self._client.dcs_call(
             "Warehouse.removeItem", "mission", self._recv, [arg_item(item), arg_number(count)], [], key=key, timeout=timeout
@@ -1799,6 +1857,7 @@ class WarehouseCalls:
         """Sets the stock of an item.
 
         ``mission:Warehouse.setItem(self: Warehouse, item: item, count: number) -> []``; class mutate, live check AWC-T6.
+        Superseded by the typed operation ``warehouse_op``.
         """
         return self._client.dcs_call(
             "Warehouse.setItem", "mission", self._recv, [arg_item(item), arg_number(count)], [], key=key, timeout=timeout
@@ -1817,6 +1876,7 @@ class WarehouseCalls:
         """Adds an amount of a liquid.
 
         ``mission:Warehouse.addLiquid(self: Warehouse, liquid: number, amount: number) -> []``; class mutate, live check AWC-T9.
+        Superseded by the typed operation ``warehouse_op``.
         """
         return self._client.dcs_call(
             "Warehouse.addLiquid", "mission", self._recv, [arg_number(liquid), arg_number(amount)], [], key=key, timeout=timeout
@@ -1826,6 +1886,7 @@ class WarehouseCalls:
         """Removes an amount of a liquid.
 
         ``mission:Warehouse.removeLiquid(self: Warehouse, liquid: number, amount: number) -> []``; class mutate, live check AWC-T9.
+        Superseded by the typed operation ``warehouse_op``.
         """
         return self._client.dcs_call(
             "Warehouse.removeLiquid", "mission", self._recv, [arg_number(liquid), arg_number(amount)], [], key=key, timeout=timeout
@@ -1835,6 +1896,7 @@ class WarehouseCalls:
         """Sets the stock of a liquid.
 
         ``mission:Warehouse.setLiquidAmount(self: Warehouse, liquid: number, amount: number) -> []``; class mutate, live check AWC-T9.
+        Superseded by the typed operation ``warehouse_op``.
         """
         return self._client.dcs_call(
             "Warehouse.setLiquidAmount", "mission", self._recv, [arg_number(liquid), arg_number(amount)], [], key=key, timeout=timeout

@@ -61,6 +61,37 @@ pub async fn spawn_at(ctx: Ctx<MyMission>) -> sortie::Result<()> {
     Ok(())
 }
 
+pub async fn ground_route(ctx: Ctx<MyMission>) -> sortie::Result<()> {
+    // snippet:start sdk-ground-route
+    let armor = ctx.group(groups::ARMOR)?; // Group<Ground>
+    let target = zones::TARGET.center();
+    let route = Task::ground_route([
+        // по дорогам в точку в 8 км севернее цели
+        RoutePoint::on_road(target.offset(8_000.0, 0.0)),
+        // последний отрезок — напрямик, клином, 15 км/ч
+        RoutePoint::new(target, GroundFormation::Vee).speed(kmh(15)),
+    ])
+    .speed(kmh(40)); // для точек без своей скорости (без этого — 20 км/ч)
+    armor.set_task(route).key("armor-north").await?;
+    // snippet:end sdk-ground-route
+    Ok(())
+}
+
+pub async fn ground_hold(ctx: Ctx<MyMission>) -> sortie::Result<()> {
+    // snippet:start sdk-ground-raw
+    use sortie::proto::LuaTable;
+    use sortie::proto::LuaValue;
+
+    // Задача DCS «Hold»: колонна встаёт, где стоит. Типизированной остановки в SDK нет.
+    let hold = LuaTable::new()
+        .with("id", "Hold")
+        .with("params", LuaTable::new());
+    let armor = ctx.group(groups::ARMOR)?;
+    armor.push_task(Task::raw(LuaValue::table(hold))).await?;
+    // snippet:end sdk-ground-raw
+    Ok(())
+}
+
 pub async fn destroy(ctx: Ctx<MyMission>) -> sortie::Result<()> {
     // snippet:start sdk-destroy
     let aaa = ctx.group(groups::AAA)?;

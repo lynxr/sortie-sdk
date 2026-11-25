@@ -3,7 +3,7 @@
 use sortie::Error;
 use sortie::dcs::{DcsObject, Handle, Value};
 use sortie::prelude::*;
-use sortie::sel::GroupSel;
+use sortie::sel::{GroupSel, UnitSel};
 
 use super::my_mission::{MyMission, airbases, groups, zones};
 
@@ -32,6 +32,92 @@ pub async fn reads(ctx: Ctx<MyMission>) -> sortie::Result<()> {
     Ok(())
 }
 
+// snippet:start sdk-dcs-road-path
+#[sortie::mission(api_rev = 3)] // land().path_on_roads — API ревизии 3
+pub async fn road_path(ctx: Ctx<MyMission>, _start: Start) -> sortie::Result<()> {
+    let armor = ctx.group(groups::ARMOR)?;
+    let start = ctx.world().group(&armor).center();
+    let goal = zones::TARGET.center();
+    if let Some(a) = start {
+        // Тип дорог и четыре числа: x — север, y — восток (оси MapPoint).
+        let road: Option<Vec<MapPoint>> = ctx
+            .dcs()
+            .land()
+            .path_on_roads("roads", a.north, a.east, goal.north, goal.east)
+            .await?;
+        match road {
+            // Точки от начала к концу: длина пути по дорогам.
+            Some(points) if points.len() > 1 => {
+                let metres: f64 = points.windows(2).map(|w| w[0].distance(w[1])).sum();
+                ctx.report().set("armor_road_km", (metres / 1000.0).round());
+            }
+            _ => ctx.report().set("armor_road_km", "нет пути"),
+        }
+    }
+    ctx.end_session(Outcome::Draw).await
+}
+// snippet:end sdk-dcs-road-path
+
+// snippet:start sdk-dcs-road-summary
+#[sortie::mission(api_rev = 3)] // land().road_path — API ревизии 3
+pub async fn road_summary(ctx: Ctx<MyMission>, _start: Start) -> sortie::Result<()> {
+    let armor = ctx.group(groups::ARMOR)?; // Group<Ground>
+    let goal = zones::TARGET.center();
+    let Some(from) = ctx.world().group(&armor).center() else {
+        return ctx.end_session(Outcome::Draw).await;
+    };
+    // Сводку считает слой Sortie внутри DCS: длина и концы пути приходят без всех его точек.
+    // Some(8.0) — вернуть не больше 8 точек: оба конца и места самых крутых поворотов.
+    let summary = ctx
+        .dcs()
+        .land()
+        .road_path("roads", from, goal, Some(8.0), None)
+        .await?;
+    match summary {
+        // Дорога подходит к цели ближе 300 м: колонна едет по дорогам через повороты.
+        Some(p) if p.points.len() > 1 && p.end_gap_m.is_some_and(|gap| gap < 300.0) => {
+            ctx.report()
+                .set("armor_road_km", (p.length_m / 1000.0).round());
+            let via_turns = p.points[1..].iter().map(|&q| RoutePoint::on_road(q));
+            armor.set_task(Task::ground_route(via_turns)).await?;
+        }
+        _ => ctx.report().set("armor_road_km", "нет пути"),
+    }
+    ctx.end_session(Outcome::Draw).await
+}
+// snippet:end sdk-dcs-road-summary
+
+// snippet:start sdk-dcs-farp-slots
+#[sortie::mission(api_rev = 3)] // чтения экрана слотов — API ревизии 3
+pub async fn farp_slots(ctx: Ctx<MyMission>, _start: Start) -> sortie::Result<()> {
+    let server = ctx.dcs().server();
+    // FARP и корабли, которые знает экран слотов на сервере: id юнита -> {name, coalition, ..}.
+    let known: Value = server.farps_and_carriers().await?;
+    let farps = known
+        .get("farps")
+        .and_then(Value::as_table)
+        .unwrap_or_default();
+    for (key, entry) in farps {
+        let (Some(unit_id), Some(name)) = (key.as_f64(), entry.get("name").and_then(Value::as_str))
+        else {
+            continue;
+        };
+        // false: это не аэродром, а FARP или корабль, и id — его юнита.
+        let settings: Option<Value> = server.dynamic_spawn_settings(unit_id, false).await?;
+        let dynamic = settings
+            .as_ref()
+            .and_then(|t| t.get("dynamicSpawnAvailable"))
+            .and_then(Value::as_bool);
+        let hueys: f64 = server.aircraft_in_warehouse("UH-1H", unit_id, true).await?;
+        ctx.report().set(
+            name,
+            format!("динамические слоты: {dynamic:?}, UH-1H на складе: {hueys}"),
+        );
+    }
+    ctx.end_session(Outcome::Draw).await
+}
+// snippet:end sdk-dcs-farp-slots
+
 pub async fn objects(ctx: Ctx<MyMission>) -> sortie::Result<()> {
     // snippet:start sdk-dcs-objects
     let dcs = ctx.dcs();
@@ -57,18 +143,13 @@ pub async fn objects(ctx: Ctx<MyMission>) -> sortie::Result<()> {
 pub async fn mutators(ctx: Ctx<MyMission>) -> sortie::Result<()> {
     // snippet:start sdk-dcs-mutators
     let dcs = ctx.dcs();
-    let kutaisi = dcs.airbase(airbases::KUTAISI);
-    kutaisi.auto_capture(false).key("kutaisi-manual").await?;
-    kutaisi
-        .set_coalition(Coalition::Blue)
-        .key("kutaisi-blue")
+    // Груз в кабине вертолёта: изменение, поэтому с ключом.
+    dcs.effects()
+        .set_unit_internal_cargo(UnitSel::name("Rescue 1-1"), 800.0)
+        .key("rescue-cargo-1")
         .await?;
-    // Склад аэродрома: по селектору аэродрома.
+    // Склад аэродрома: по селектору аэродрома. Чтения ключа не берут.
     let stock = dcs.warehouse(airbases::KUTAISI);
-    stock
-        .add_item("weapons.missiles.AIM_120C", 8.0)
-        .key("resupply-1")
-        .await?;
     let left: f64 = stock.item_count("weapons.missiles.AIM_120C").await?;
     // Или по wsType, четырём числам из Scripts/Database/wsTypes.lua игры.
     let aim9: f64 = stock.item_count([4, 4, 7, 22]).await?;
@@ -119,17 +200,70 @@ pub async fn errors(ctx: Ctx<MyMission>) -> sortie::Result<()> {
     // snippet:start sdk-dcs-errors
     match ctx
         .dcs()
-        .airbase(airbases::NALCHIK)
-        .set_coalition(Coalition::Blue)
-        .key("nalchik-blue")
+        .sounds()
+        .out_sound("l10n/DEFAULT/alarm.ogg")
+        .key("alarm-all")
         .await
     {
         Ok(()) => {}
-        // Владелец движка не включил функцию: capability call:mission:Airbase.setCoalition.
-        Err(Error::Rejected(_)) => ctx.report().set("nalchik", "manual capture is off"),
+        // Владелец движка не включил функцию: capability call:mission:trigger.action.outSound.
+        Err(Error::Rejected(_)) => ctx.report().set("alarm", "sounds are off"),
         Err(e) => return Err(e),
     }
     // snippet:end sdk-dcs-errors
+    Ok(())
+}
+
+pub async fn limits(ctx: Ctx<MyMission>) -> sortie::Result<()> {
+    // snippet:start sdk-dcs-limit
+    let land = ctx.dcs().land();
+    let spot = zones::TARGET.center();
+    let mut waits = 0;
+    let surface = loop {
+        match land.surface_type(spot).await {
+            Ok(kind) => break kind,
+            // Лимит: подождать, сколько назвал движок, и отправить то же чтение снова.
+            Err(e) if waits < 3 && e.retry_after().is_some() => {
+                waits += 1;
+                if let Some(l) = e.limit() {
+                    ctx.report().set("last_limit", l.budget.as_str());
+                }
+                ctx.sleep(e.retry_after().unwrap_or_default()).await;
+            }
+            // Запрет (функция выключена или её нет в каталоге): повтор не поможет.
+            Err(e) if e.is_forbidden() => return Ok(()),
+            Err(e) => return Err(e),
+        }
+    };
+    // snippet:end sdk-dcs-limit
+    let _ = surface;
+    Ok(())
+}
+
+pub async fn owner_option(ctx: Ctx<MyMission>) -> sortie::Result<()> {
+    // snippet:start sdk-dcs-owner-enum
+    use sortie::dcs::{arg, recv};
+    use sortie::sel::ControllerSel;
+    // Запись владельца `Controller.setOption` из engine.toml выше; вызов — по имени.
+    let sam = || recv::controller(ControllerSel::group(groups::SAM));
+    let alarm = arg::enum_key("AI.Option.Ground.id", "ALARM_STATE");
+    // Ключ: число слой Sortie берёт из таблицы запущенной DCS, когда вызов выполняется.
+    let red = arg::enum_key("AI.Option.Ground.val.ALARM_STATE", "RED");
+    let dcs = ctx.dcs();
+    dcs.call("Controller.setOption")
+        .on(sam())
+        .arg(alarm)
+        .arg(red)
+        .key("sam-alarm-red")
+        .await?;
+    // Или число: слой проверит, что оно есть в таблице (иначе Error::Invalid, в DCS ничего).
+    dcs.call("Controller.setOption")
+        .on(sam())
+        .arg(arg::number(9.0)) // AI.Option.Ground.id.ALARM_STATE
+        .arg(arg::number(1.0)) // GREEN
+        .key("sam-alarm-green")
+        .await?;
+    // snippet:end sdk-dcs-owner-enum
     Ok(())
 }
 

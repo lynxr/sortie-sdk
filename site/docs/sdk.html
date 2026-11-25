@@ -24,7 +24,7 @@
 <a class="skip" href="#content">Перейти к содержанию</a>
 <header class="topbar">
 <div class="topbar-inner">
-<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.3.0</span></a>
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.4.0</span></a>
 <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
 <nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
 <div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
@@ -41,6 +41,8 @@
 <li><a href="dependency.html">Подключение SDK</a></li>
 <li><a href="sdk.html" aria-current="page">Логика на Rust</a><ul>
 <li><a href="objects.html">Объекты: статики, уничтожение, мусор</a></li>
+<li><a href="airbases.html">Аэродромы: владелец, автозахват, радио, стоянки и полосы</a></li>
+<li><a href="warehouses.html">Склады: запас аэродромов и грузов</a></li>
 <li><a href="map.html">Рисование на карте</a></li>
 <li><a href="menus.html">Деревья меню F10</a></li>
 <li><a href="dcs.html">Вызовы DCS</a></li>
@@ -50,7 +52,10 @@
 </li>
 <li><a href="generator.html">Сценарий на Python</a></li>
 <li><a href="testing.html">Тестирование</a></li>
-<li><a href="operations.html">Эксплуатация</a></li>
+<li><a href="operations.html">Эксплуатация</a><ul>
+<li><a href="web-api.html">Web API</a></li>
+</ul>
+</li>
 <li><a href="troubleshooting.html">Диагностика</a></li>
 <li><a href="faq.html">Вопросы и ограничения</a></li>
 <li><a href="changelog.html">Что нового</a></li>
@@ -65,7 +70,7 @@
 логика читает синхронно, из локальной копии. Команды в DCS — это <code>async</code>-вызовы, которые
 возвращают результат из игры.</p>
 <p>Готовый проект — шаблон из <a href="quickstart.html">быстрого старта</a>. Большой пример —
-<a href="https://github.com/lynxr/sortie-sdk/tree/v0.3.0/examples/op_north">examples/op_north</a>
+<a href="https://github.com/lynxr/sortie-sdk/tree/v0.4.0/examples/op_north">examples/op_north</a>
 в репозитории SDK.</p>
 <h2 id="крейт-логики">Крейт логики<a class="anchor" href="#крейт-логики" aria-label="Ссылка на этот раздел">#</a></h2>
 <p>Зависимости — <code>sortie</code> и, для <code>build.rs</code>, <code>sortie-build</code> (см. <a href="dependency.html">Подключение SDK</a>).
@@ -151,6 +156,13 @@ pub const SMOKE_TARGET: MenuRef&lt;MyMission&gt; = menus::SMOKE_TARGET;
 <div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let now = ctx.model_time(); // секунды модельного времени
 let paused = ctx.paused(); // DCS на паузе
 </code></pre></div>
+<p>Модельное время — секунды от начала миссии (<code>timer.getTime</code> в DCS); на паузе оно стоит. Это не
+время суток: в миссии, которая начинается в 09:00, через минуту <code>ctx.model_time()</code> около 60, а
+не 32 460. Этими часами идут тики, <code>ctx.sleep</code>, <code>ctx.timer</code>, <code>model_time</code> результатов команд и
+событий. Время суток — <code>ctx.dcs().timer().abs_time()</code> (секунды от полуночи первого дня миссии).
+Движок двигает свои часы только по модельному времени DCS; событие, время которого далеко
+впереди (больше 5 с), часы не двигает (до 0.4.0 метка F10 останавливала их на времени суток,
+и таймеры не срабатывали).</p>
 <h2 id="команды">Команды<a class="anchor" href="#команды" aria-label="Ссылка на этот раздел">#</a></h2>
 <p>Каждая команда — построитель. Ничего не происходит, пока команду не дождались через <code>.await</code>;
 <code>.await</code> возвращает результат из DCS.</p>
@@ -165,7 +177,7 @@ ctx.smoke(zones::TARGET.center(), SmokeColor::Red).await?;
 <div class="table-wrap" tabindex="0">
 <table><thead><tr><th>Метод</th><th>Что делает</th></tr></thead><tbody>
 <tr><td><code>.key("имя")</code></td><td>ключ идемпотентности: команда с ключом, который уже выполнился в этой сессии, сразу возвращает сохранённый результат и до DCS не доходит</td></tr>
-<tr><td><code>.timeout(secs(5))</code></td><td><code>Error::Timeout</code>, если DCS не ответила вовремя</td></tr>
+<tr><td><code>.timeout(secs(5))</code></td><td>срок команды (по умолчанию 10 с, у спавна и уничтожения 30 с): не дошла до DCS или не получила ответа за срок — <code>Error::Timeout</code> (<a href="#timeout-%D0%BD%D0%B5-%D0%B4%D0%BE%D1%88%D0%BB%D0%B0-%D0%B8%D0%BB%D0%B8-%D0%BD%D0%B5-%D0%BE%D1%82%D0%B2%D0%B5%D1%82%D0%B8%D0%BB%D0%B0">какой из двух</a>)</td></tr>
 <tr><td><code>.after(&amp;other)</code></td><td>выполнить только после команды <code>other</code>; если она упала, упадёт и эта</td></tr>
 <tr><td><code>.on_pause(PausePolicy::Fail)</code></td><td>на паузе сразу <code>Error::Paused</code>; по умолчанию команда ждёт конца паузы</td></tr>
 </tbody></table>
@@ -177,6 +189,10 @@ ctx.smoke(zones::TARGET.center(), SmokeColor::Red).await?;
 создаст новую.</p>
 <ul>
 <li>Ключ действует в пределах сессии. После рестарта миссии ключи снова свободны.</li>
+<li>Ключ защищает одну команду. Другая команда (другие цель, параметры или вид) под ключом,
+который в этой сессии уже выполнился или ещё выполняется, — <code>Error::Invalid</code> («key <code>k</code> was
+already used for a different command in session ...»), и до DCS она не доходит. Это так и
+после перезапуска логики: изменили команду — дайте ей новый ключ (например, <code>sam-red-v2</code>).</li>
 <li>Если команда с ключом получила <code>Timeout</code>, уже уйдя в DCS, повтор с тем же ключом не отправит её
 второй раз, а дождётся её позднего результата.</li>
 <li>Если связь с миссией оборвалась, пока команда была в пути, повтор с тем же ключом получит
@@ -219,8 +235,9 @@ sam.set_option(Roe::WeaponFree)
 aaa.destroy().key(&quot;aaa-removed&quot;).await?;
 </code></pre></div>
 <h3 id="спавн-и-задачи-авиации">Спавн и задачи авиации<a class="anchor" href="#спавн-и-задачи-авиации" aria-label="Ссылка на этот раздел">#</a></h3>
-<p>Воздушные группы для спавна объявляются в сценарии шаблонами (<code>sc.air_template(..)</code>). Спавн
-возвращает <code>Group&lt;Air&gt;</code> (или <code>Group&lt;Helo&gt;</code>), когда группа уже появилась в DCS:</p>
+<p>Воздушные группы для спавна объявляются в сценарии шаблонами (<code>sc.air_template(..)</code>; наземные —
+<code>sc.ground_template(..)</code>, <a href="generator.html">генератор</a>). Спавн возвращает <code>Group&lt;Air&gt;</code> (или
+<code>Group&lt;Helo&gt;</code>), когда группа уже появилась в DCS:</p>
 <div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let cap = ctx
     .spawn_group(templates::RED_CAP.named(&quot;Red CAP 1&quot;))
     .from_airbase(airbases::NALCHIK, StartType::Runway)
@@ -235,8 +252,21 @@ cap.push_task(patrol).timeout(secs(5)).await?;
 <li>Без <code>.named(..)</code> группа получает имя <code>&lt;имя шаблона&gt;#&lt;4 знака сессии&gt;-&lt;номер&gt;</code>. Занятое имя —
 <code>Error::NameConflict</code>.</li>
 <li>Без <code>.from_airbase(..)</code> и <code>.at(..)</code> группа появляется там, где указал сценарий.</li>
-<li>Движок спавнит не больше 2 групп и 24 юнитов в секунду. Задачу только что созданной группе он
-отдаёт не раньше чем через 2 кадра и 0,5 с модельного времени.</li>
+<li><code>.at(точка, курс)</code> ставит первую машину шаблона в точку, остальные переносит со смещениями из
+шаблона, не поворачивая строй, и даёт <strong>всем машинам один курс</strong>; маршрут шаблона заменяет одна
+точка маршрута. <code>.at_formation(точка, курс)</code> (ревизия API 3) поворачивает строй целиком и
+сохраняет разницу курсов машин —
+<a href="objects.html#%D0%B3%D1%80%D1%83%D0%BF%D0%BF%D0%B0-%D0%B8%D0%B7-%D1%88%D0%B0%D0%B1%D0%BB%D0%BE%D0%BD%D0%B0-%D0%B2-%D1%82%D0%BE%D1%87%D0%BA%D0%B5">Объекты: группа из шаблона в точке</a>.</li>
+<li>Движок спавнит не больше 2 групп и 24 юнитов в секунду, пока в сессии есть игрок (пока никого
+нет, например сразу после загрузки миссии на сервере, — сколько успевает мост, 20–50 в
+секунду). Очередь спавна не съедает срок команды: 100 спавнов, отправленных разом, выполнятся
+все.</li>
+<li>Задачу (<code>set_task</code>, <code>push_task</code>) и опцию ИИ (<code>set_option</code>) группе, созданной в этой сессии,
+движок держит у себя, пока после спавна не пройдут 2 кадра и 0,5 с модельного времени; это
+касается групп любого вида. Ждать в логике (<code>sleep</code>) не нужно. Пока спавн группы ещё в очереди
+или в DCS, это ожидание срок команды не съедает (с 0.4.0); сама задержка после ответа спавна
+(обычно до 1 с модельного времени) идёт в срок команды (по умолчанию 10 с). Вызовы
+<code>ctx.dcs()</code> (<code>Controller.setOption</code> и другие записи каталога) движок не задерживает.</li>
 </ul>
 <p>Спавн в воздухе и другие задачи:</p>
 <div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let point = zones::PATROL.center().alt(m(6_000)); // Vec3 над центром зоны
@@ -257,11 +287,84 @@ cap.push_task(Task::rtb(airbases::NALCHIK)).await?;
 <tr><td><code>Task::cap(зона)</code></td><td>патруль над зоной; по умолчанию 6000 м и 420 узлов, меняется <code>.altitude(..)</code> и <code>.speed(..)</code></td></tr>
 <tr><td><code>Task::orbit(точка)</code></td><td>круг над точкой; <code>.race_track(вторая)</code> — «ипподром»; по умолчанию 6000 м и 350 узлов</td></tr>
 <tr><td><code>Task::rtb(аэродром)</code></td><td>возврат на аэродром</td></tr>
-<tr><td><code>Task::raw(таблица)</code></td><td>сырая таблица задачи DCS; движок отклоняет в ней код Lua, имена файлов и NaN (<a href="operations.html#%D0%BF%D1%80%D0%BE%D0%B2%D0%B5%D1%80%D0%BA%D0%B0-%D1%81%D1%8B%D1%80%D1%8B%D1%85-%D1%82%D0%B0%D0%B1%D0%BB%D0%B8%D1%86">проверка сырых таблиц</a>)</td></tr>
+<tr><td><code>Task::ground_route([точки])</code></td><td>маршрут наземной группы (ревизия API 3): точки <code>RoutePoint::on_road(..)</code>, <code>off_road(..)</code>, <code>on_railroads(..)</code>, <code>RoutePoint::new(точка, GroundFormation::..)</code>, у точки и у маршрута <code>.speed(..)</code>; по умолчанию 20 км/ч (<a href="#%D0%B7%D0%B0%D0%B4%D0%B0%D1%87%D0%B8-%D0%BD%D0%B0%D0%B7%D0%B5%D0%BC%D0%BD%D1%8B%D1%85-%D0%B8-%D0%BC%D0%BE%D1%80%D1%81%D0%BA%D0%B8%D1%85-%D0%B3%D1%80%D1%83%D0%BF%D0%BF">ниже</a>)</td></tr>
+<tr><td><code>Task::raw(таблица)</code></td><td>сырая таблица задачи DCS, для любой группы; движок отклоняет в ней код Lua, имена файлов и NaN (<a href="operations.html#%D0%BF%D1%80%D0%BE%D0%B2%D0%B5%D1%80%D0%BA%D0%B0-%D1%81%D1%8B%D1%80%D1%8B%D1%85-%D1%82%D0%B0%D0%B1%D0%BB%D0%B8%D1%86">проверка сырых таблиц</a>)</td></tr>
 </tbody></table>
 </div>
 <p><code>push_task</code> кладёт задачу поверх текущих (<code>Controller.pushTask</code>), <code>set_task</code> заменяет их
-(<code>Controller.setTask</code>). Обе есть только у воздушных групп.</p>
+(<code>Controller.setTask</code>). Обе есть у групп любого вида. <code>Task::cap</code>, <code>Task::orbit</code> и
+<code>Task::rtb</code> — задачи самолётов и вертолётов, <code>Task::ground_route</code> — наземных групп: задача
+не того вида группы не компилируется (CAP, orbit и маршрут), а RTB для наземной или морской
+группы движок отклоняет (<code>Error::Invalid</code>, «only a ground route or a raw task applies to it»,
+для морской — «only raw tasks apply to it»).</p>
+<h3 id="задачи-наземных-и-морских-групп">Задачи наземных и морских групп<a class="anchor" href="#задачи-наземных-и-морских-групп" aria-label="Ссылка на этот раздел">#</a></h3>
+<p>Наземную группу ведёт типизированный маршрут <code>Task::ground_route</code> (ревизия API 3:
+<code>#[sortie::mission(api_rev = 3)]</code>). Пример: бронегруппа едет по дорогам на 8 км севернее цели,
+а оттуда — к цели клином:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let armor = ctx.group(groups::ARMOR)?; // Group&lt;Ground&gt;
+let target = zones::TARGET.center();
+let route = Task::ground_route([
+    // по дорогам в точку в 8 км севернее цели
+    RoutePoint::on_road(target.offset(8_000.0, 0.0)),
+    // последний отрезок — напрямик, клином, 15 км/ч
+    RoutePoint::new(target, GroundFormation::Vee).speed(kmh(15)),
+])
+.speed(kmh(40)); // для точек без своей скорости (без этого — 20 км/ч)
+armor.set_task(route).key(&quot;armor-north&quot;).await?;
+</code></pre></div>
+<ul>
+<li>Движок строит из маршрута задачу DCS <code>Mission</code> в том виде, в каком редактор миссий пишет
+маршрут техники. Первую точку он ставит там, где стоит первый живой юнит группы в тот кадр,
+когда DCS принимает задачу, с построением и скоростью первой точки маршрута. Свою точку
+старта давать не нужно.</li>
+<li>Построение и скорость точки — это построение и скорость отрезка, который в ней кончается.
+Так считает редактор миссий: отрезок идёт по дорогам, когда оба его конца — «по дорогам»,
+а время пути до точки — по её скорости.</li>
+<li>Построения: <code>on_road</code> (по дорогам), <code>off_road</code> (напрямик колонной), <code>on_railroads</code> (по
+железной дороге, для поездов), <code>GroundFormation::{Rank, Cone, Vee, Diamond, EchelonLeft, EchelonRight}</code> (напрямик шеренгой, конусом, клином, ромбом, уступом влево и вправо).</li>
+<li>Скорость — <code>Speed</code> (<code>kmh(..)</code>, <code>mps(..)</code>): у точки, иначе у маршрута, иначе 20 км/ч.</li>
+<li>Точки — это <code>MapPoint</code>: центр зоны, позиция юнита (<code>Vec3::map_point()</code>), точка пути по
+дорогам из <code>ctx.dcs().land().path_on_roads(..)</code> (<a href="dcs.html#%D0%BF%D1%83%D1%82%D1%8C-%D0%BF%D0%BE-%D0%B4%D0%BE%D1%80%D0%BE%D0%B3%D0%B0%D0%BC">путь по дорогам</a>).
+В маршруте от 1 до 256 точек, длиннее движок отклоняет (<code>Error::Invalid</code>). Между двумя точками
+«по дорогам» редактор миссий сам прокладывает путь по дорогам (что DCS ведёт колонну так же,
+проверяет <code>AI-L4</code>), поэтому в маршрут идут только места, где колонна поворачивает или встаёт:
+из пути по дорогам — его конец (<code>path.last()</code>) или несколько точек поворота. Весь путь — чтобы
+измерить дорогу, а не для маршрута: в длинном пути точек может быть больше предела, и каждая
+стала бы в задаче DCS отдельным коротким отрезком. Точки поворота и длину без всего пути даёт
+<a href="dcs.html#%D1%81%D0%B2%D0%BE%D0%B4%D0%BA%D0%B0-%D0%BF%D1%83%D1%82%D0%B8-%D0%BF%D0%BE-%D0%B4%D0%BE%D1%80%D0%BE%D0%B3%D0%B0%D0%BC">сводка пути</a>, <code>ctx.dcs().land().road_path(..)</code>.</li>
+<li>Маршрут — только для <code>Group&lt;Ground&gt;</code>: для самолёта, вертолёта и корабля он не компилируется.
+Если та же задача придёт через <code>Task::from(..)</code>, движок её отклонит (<code>Error::Invalid</code>).
+Кораблю нужна сырая таблица (ниже).</li>
+<li>Логика ревизии ниже 3 получает <code>Error::Revision</code>, движок старше — <code>Error::EngineTooOld</code>, и в
+обоих случаях команда не уходит.</li>
+<li>Как DCS ведёт колонну (выбор дороги, выезд на ближайшую дорогу, точка в воде или за
+краем карты), вживую ещё не замерено: это проверка <code>AI-L4</code> живой пробы.</li>
+</ul>
+<p>Чего в типизированном маршруте нет (остановка, задачи в точках маршрута, своё построение
+<code>Custom</code>, маршрут корабля), задаёт сырая таблица задачи DCS, <code>Task::raw(..)</code>. Её принимает
+любая группа. Пример: колонна встаёт.</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">use sortie::proto::LuaTable;
+use sortie::proto::LuaValue;
+
+// Задача DCS «Hold»: колонна встаёт, где стоит. Типизированной остановки в SDK нет.
+let hold = LuaTable::new()
+    .with(&quot;id&quot;, &quot;Hold&quot;)
+    .with(&quot;params&quot;, LuaTable::new());
+let armor = ctx.group(groups::ARMOR)?;
+armor.push_task(Task::raw(LuaValue::table(hold))).await?;
+</code></pre></div>
+<ul>
+<li>Точка маршрута в сырой задаче <code>Mission</code> — таблица DCS: <code>type = "Turning Point"</code>, <code>action = "On Road"</code> (по дорогам) или <code>"Off Road"</code> (напрямик), <code>x</code> — север и <code>y</code> — восток в метрах
+карты (как у <code>MapPoint</code>; у <code>Vec3</code> это <code>x</code> и <code>z</code>), <code>speed</code> — в м/с. Первую точку ставьте там,
+где группа стоит сейчас: так начинает маршрут редактор миссий. Как DCS ведёт такую сырую
+задачу, проверяет <code>AI-L3</code> живой пробы.</li>
+<li>Задачу получает вся группа (контроллер группы DCS), а не отдельный юнит.</li>
+<li>Движок проверяет таблицу только на безопасность (<a href="operations.html#%D0%BF%D1%80%D0%BE%D0%B2%D0%B5%D1%80%D0%BA%D0%B0-%D1%81%D1%8B%D1%80%D1%8B%D1%85-%D1%82%D0%B0%D0%B1%D0%BB%D0%B8%D1%86">проверка сырых
+таблиц</a>). Ошибку в её форме может вернуть DCS
+(<code>sortie::lua_error</code>), а может и молча её проигнорировать.</li>
+<li>В SDK 0.3.0 и раньше <code>push_task</code> и <code>set_task</code> были только у воздушных групп, а
+типизированного маршрута не было.</li>
+</ul>
 <h2 id="ожидание">Ожидание<a class="anchor" href="#ожидание" aria-label="Ссылка на этот раздел">#</a></h2>
 <div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">ctx.sleep(secs(30)).await; // 30 с модельного времени, пауза DCS его останавливает
 ctx.timer(&quot;red-cap-delay&quot;, mins(15)).await; // дедлайн хранится в движке
@@ -345,7 +448,17 @@ while let Some(dead) = deaths.next().await {
 <code>Hit</code>, <code>Shot</code>, <code>Takeoff</code>, <code>Land</code>, <code>BaseCaptured</code>, <code>Mark</code>, <code>PlayerEnteredUnit</code>, <code>UnitGone</code>,
 <code>PlayerConnected</code>, <code>PlayerDisconnected</code>, <code>PlayerChangedSlot</code>, <code>ChatMessage</code>,
 <code>SimulationPaused</code>, <code>SimulationResumed</code>, <code>Gap</code>, <code>Unknown</code> (событие DCS без своего типа, см.
-ниже).</p>
+ниже); событий ревизии 1 — <code>ResourceEnded</code>, <code>CapabilityChanged</code>; ревизии 2 —
+<code>AirbaseOwnerChanged</code> (смена владельца аэродрома, <a href="airbases.html#%D1%81%D0%BC%D0%B5%D0%BD%D0%B0-%D0%B2%D0%BB%D0%B0%D0%B4%D0%B5%D0%BB%D1%8C%D1%86%D0%B0-%D1%81%D0%BE%D0%B1%D1%8B%D1%82%D0%B8%D0%B5">Аэродромы</a>).
+Событие ревизии выше объявленной в <code>#[sortie::mission(event_rev = N)]</code> не приходит, а
+<code>.of::&lt;T&gt;()</code> пишет об этом предупреждение. Ревизия событий 2 — часть API ревизии 3: её
+объявляют вместе, <code>#[sortie::mission(api_rev = 3, event_rev = 2)]</code>.</p>
+<p><code>model_time</code> любого события — модельное время, как у <code>ctx.model_time()</code>. У события метки F10
+(<code>Mark</code>) так с 0.4.0: DCS кладёт в него время суток (по вики Hoggit; живая проверка <code>EVT-L18</code>
+ещё не прошла), и слой Lua переводит его в модельное. Значение DCS лежит в <code>Mark.dcs_time</code>
+(ревизия API 3; логика младшей ревизии этого поля не получает). Со слоем Lua старше 0.4.0 (не
+сделан <code>sortie install</code>) <code>model_time</code> метки по-прежнему время суток, а <code>dcs_time</code> пуст; часы
+движка от этого не страдают.</p>
 <div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let mut entered = ctx
     .events()
     .of::&lt;v1::PlayerEnteredUnit&gt;()
@@ -574,6 +687,15 @@ ctx.once_per_turn(&quot;target-down&quot;, async |ctx| {
 .await?;
 </code></pre></div>
 <p><code>once</code> возвращает <code>Ok(None)</code>, если блок уже выполнялся.</p>
+<p>Для сайта сервера логика публикует свои JSON-документы, а движок отдаёт их по HTTP:
+<code>ctx.publish("front", &amp;front).await?</code> (ревизия API 3). Документ принадлежит логике, а не сессии,
+и тоже переживает перезапуски логики и движка; подробности — на странице
+<a href="web-api.html#%D0%B4%D0%BE%D0%BA%D1%83%D0%BC%D0%B5%D0%BD%D1%82%D1%8B-%D0%BB%D0%BE%D0%B3%D0%B8%D0%BA%D0%B8">Web API</a>.</p>
+<p>Сайт может и попросить логику что-то сделать: логика объявляет действие
+(<code>ctx.api().action("send_cap")?</code>, ревизия API 3), сайт вызывает его запросом
+<code>POST /api/v1/actions/&lt;логика&gt;/send_cap</code>, а ответ логики (<code>req.reply(&amp;значение)</code> или
+<code>req.fail(422, "почему")</code>) становится ответом на запрос; см.
+<a href="web-api.html#%D0%B4%D0%B5%D0%B9%D1%81%D1%82%D0%B2%D0%B8%D1%8F-%D0%BB%D0%BE%D0%B3%D0%B8%D0%BA%D0%B8">Web API</a>.</p>
 <h2 id="конец-сессии-и-итоги">Конец сессии и итоги<a class="anchor" href="#конец-сессии-и-итоги" aria-label="Ссылка на этот раздел">#</a></h2>
 <div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">ctx.report().set(&quot;armor_left&quot;, 0);
 ctx.end_session(Outcome::BlueWin)
@@ -604,9 +726,9 @@ ctx.end_session(Outcome::BlueWin)
 <div class="table-wrap" tabindex="0">
 <table><thead><tr><th>Ошибка</th><th>Что значит</th></tr></thead><tbody>
 <tr><td><code>Gone</code></td><td>объекта уже нет в DCS: погиб или исчез</td></tr>
-<tr><td><code>Timeout</code></td><td>DCS не ответила вовремя</td></tr>
+<tr><td><code>Timeout</code></td><td>прошёл срок команды: она не дошла до DCS (<code>limit()</code> называет, чего ждала) или ушла в DCS, а ответа не было (<a href="#timeout-%D0%BD%D0%B5-%D0%B4%D0%BE%D1%88%D0%BB%D0%B0-%D0%B8%D0%BB%D0%B8-%D0%BD%D0%B5-%D0%BE%D1%82%D0%B2%D0%B5%D1%82%D0%B8%D0%BB%D0%B0">ниже</a>)</td></tr>
 <tr><td><code>Lua</code></td><td>ошибка в Lua-слое; смотрите traceback</td></tr>
-<tr><td><code>Rejected</code></td><td>движок отклонил команду; причина в сообщении</td></tr>
+<tr><td><code>Rejected</code></td><td>движок отклонил команду: лимит (<code>limit()</code>, подождать <code>retry_after()</code>) или запрет (<code>is_forbidden()</code>, повтор не поможет); подробности в сообщении</td></tr>
 <tr><td><code>SessionEnded</code></td><td>сессия кончилась раньше команды; нормальный исход для работы в конце сессии</td></tr>
 <tr><td><code>Invalid</code></td><td>команда не подходит цели, не хватает аргумента, или в dev-режиме нет <code>.key(..)</code></td></tr>
 <tr><td><code>Unavailable</code></td><td>движок не может выполнить команду сейчас</td></tr>
@@ -622,6 +744,51 @@ ctx.end_session(Outcome::BlueWin)
 </div>
 <p><code>e.code()</code> даёт стабильный код вида <code>sortie::gone</code>, <code>e.help()</code> — подсказку, <code>e.report()</code> —
 многострочный отчёт: место в коде, Lua traceback, id сессии и команды, подсказка.</p>
+<p>Отказ по лимиту (движок 0.4.0, ревизия API 3) разбирается без текста: <code>e.limit()</code> —
+<code>Option&lt;&amp;Limit&gt;</code> (вид <code>LimitKind</code>, имя бюджета, его числа), <code>e.retry_after()</code> — когда можно
+отправить ту же команду снова, <code>e.is_limit()</code>, <code>e.is_forbidden()</code> (запрет: <code>Rejected</code> с
+<code>capability()</code> и без лимита). Код ошибки и <code>capability()</code> остались как в 0.3.0; объявлять
+ревизию в логике не нужно: движок заполняет поле для любой логики. Виды лимитов,
+их бюджеты и короткий цикл повтора — в <a href="dcs.html#%D0%BE%D1%82%D0%BA%D0%B0%D0%B7-%D0%BF%D0%BE-%D0%BB%D0%B8%D0%BC%D0%B8%D1%82%D1%83">вызовах DCS</a>. SDK сам команды
+не повторяет. В <code>Failure</code> появилось поле <code>limit</code>: код, который собирает <code>Failure</code> литералом
+без <code>..Default::default()</code>, его надо добавить.</p>
+<h3 id="timeout-не-дошла-или-не-ответила">Timeout: не дошла или не ответила<a class="anchor" href="#timeout-не-дошла-или-не-ответила" aria-label="Ссылка на этот раздел">#</a></h3>
+<p><code>Error::Timeout</code> бывает двух видов, и с 0.4.0 их различает <code>e.limit()</code>:</p>
+<ul>
+<li><strong>Не дошла до DCS.</strong> Срок прошёл, пока команда ждала в движке или в мосте; сообщение
+«the deadline passed before the command could start (...)» называет в скобках, чего она
+ждала, а <code>e.limit()</code> — то же данными: <code>TaskingDelay</code> (задержка после спавна), <code>HeavySlot</code>
+(идёт другой тяжёлый вызов), <code>LinkCredits</code>, <code>LinkDown</code>, <code>After</code> (команда из <code>.after(..)</code> не
+кончилась), <code>BridgeDeadline</code> (мост не успел её начать), <code>Queue</code>. Команда не выполнялась:
+повтор безопасен.</li>
+<li><strong>Команда из <code>.after(..)</code> упала.</strong> Тогда эта команда тоже не выполнялась, но кончается не
+обязательно <code>Error::Timeout</code>: у неё код и <code>capability()</code> упавшей (у отклонённой — <code>Rejected</code>,
+у недопустимой — <code>Invalid</code>), <code>e.limit()</code> — <code>After</code> (<code>wait.after</code>), <code>retry_after()</code> — <code>None</code>,
+<code>is_forbidden()</code> — <code>false</code>. Та же команда, отправленная снова, сразу упадёт так же: движок
+помнит, что <code>.after(..)</code>-команда упала. Отправьте заново ту, после которой она идёт, и эту — с
+<code>.after(..)</code> новой.</li>
+<li><strong>Ушла в DCS, ответа нет.</strong> Сообщение «<code>op</code> was sent to DCS but no result arrived before the
+deadline», <code>e.limit()</code> — <code>None</code>. Команда может ещё выполниться: повторяйте её только с тем
+же <code>.key(..)</code>, тогда повтор дождётся её позднего ответа, а не выполнит её второй раз.</li>
+</ul>
+<p>Ошибка, которую функция миссии вернула через <code>?</code>, завершает функцию миссии (ошибка фоновой
+задачи — эту задачу): рантайм записывает её, а снова функцию запустит только следующая сессия
+или перезапуск логики. Фоновые задачи и меню продолжают работать, но всё, что функция делала бы
+после этой команды, не случится. Поэтому одна необязательная команда — опция ИИ, сообщение,
+дым — не должна завершать функцию миссии: дайте ей ключ, на <code>Timeout</code> повторите один раз,
+остальное запишите и идите дальше:</p>
+<div class="code" data-lang="rust"><pre tabindex="0"><code class="language-rust">let sam = ctx.group(groups::SAM)?;
+let go_red = || sam.set_option(Alarm::Red).key(&quot;sam-alarm-red&quot;);
+let mut outcome = go_red().await;
+if matches!(outcome, Err(sortie::Error::Timeout(_))) {
+    // С тем же ключом: команда, которая всё же дошла до DCS, второй раз не выполнится.
+    outcome = go_red().await;
+}
+if let Err(e) = outcome {
+    // Необязательная команда: записать и продолжать, не завершая функцию миссии.
+    eprintln!(&quot;{}&quot;, e.report());
+}
+</code></pre></div>
 <h2 id="запуск-программы-логики">Запуск программы логики<a class="anchor" href="#запуск-программы-логики" aria-label="Ссылка на этот раздел">#</a></h2>
 <div class="code"><pre tabindex="0"><code>my_mission_logic [--engine &lt;url&gt;] [--build-id &lt;id&gt;] [--logic &lt;name&gt;] [--dev]
 
@@ -647,10 +814,17 @@ ctx.end_session(Outcome::BlueWin)
 <tr><td>программа</td><td><code>sortie::main!(crate_name::run)</code></td></tr>
 <tr><td>символы</td><td><code>sortie::include_scenario!(name)</code>, <code>build.rs</code> с <code>sortie_build::scenario(..)</code></td></tr>
 <tr><td>группы</td><td><code>ctx.group(..)</code>, <code>group.set_option(..)</code>, <code>push_task</code>, <code>set_task</code>, <code>destroy</code></td></tr>
-<tr><td>спавн</td><td><code>ctx.spawn_group(templates::X)</code>, <code>.named</code>, <code>.from_airbase</code>, <code>.at</code></td></tr>
+<tr><td>маршрут наземной группы (ревизия 3)</td><td><code>Task::ground_route([..])</code>, <code>RoutePoint::on_road(..)</code>, <code>.off_road(..)</code>, <code>.on_railroads(..)</code>, <code>RoutePoint::new(.., GroundFormation::..)</code>, <code>.speed(..)</code> (<a href="#%D0%B7%D0%B0%D0%B4%D0%B0%D1%87%D0%B8-%D0%BD%D0%B0%D0%B7%D0%B5%D0%BC%D0%BD%D1%8B%D1%85-%D0%B8-%D0%BC%D0%BE%D1%80%D1%81%D0%BA%D0%B8%D1%85-%D0%B3%D1%80%D1%83%D0%BF%D0%BF">Задачи наземных групп</a>); остальное наземной и морской группе — <code>Task::raw</code></td></tr>
+<tr><td>спавн</td><td><code>ctx.spawn_group(templates::X)</code>, <code>.named</code>, <code>.from_airbase</code>, <code>.at</code> (один курс всем машинам), <code>.at_formation</code> (строй поворачивается целиком, ревизия 3)</td></tr>
 <tr><td>статики, уничтожение, мусор (ревизия 1)</td><td><code>ctx.spawn_static(тип, страна)</code>, <code>ctx.destroy(obj)</code>, <code>ctx.remove_junk(объёмы)</code> (<a href="objects.html">Объекты</a>)</td></tr>
 <tr><td>поиск объектов в объёме (ревизия 2)</td><td><code>ctx.search_objects(объём)</code>, <code>.categories(..)</code>, <code>.limit(n)</code> (<a href="objects.html#%D0%BF%D0%BE%D0%B8%D1%81%D0%BA-%D0%BE%D0%B1%D1%8A%D0%B5%D0%BA%D1%82%D0%BE%D0%B2">Объекты</a>)</td></tr>
 <tr><td>пакет спавнов (ревизия 1)</td><td><code>ctx.spawn_batch()</code>, <code>.group(..)</code>, <code>.static_object(..)</code>, <code>.add_group(..)</code>, <code>.add_static(..)</code>, <code>.stop_on_error()</code> (<a href="objects.html#%D0%BF%D0%B0%D0%BA%D0%B5%D1%82-%D1%81%D0%BF%D0%B0%D0%B2%D0%BD%D0%BE%D0%B2">Объекты</a>)</td></tr>
+<tr><td>владелец, автозахват и радио аэродромов (ревизия 3)</td><td><code>ctx.airbase_control(аэродромы)</code>, <code>.owner(..)</code>, <code>.auto_capture(..)</code>, <code>.radio_silent(..)</code> (<a href="airbases.html">Аэродромы</a>)</td></tr>
+<tr><td>смена владельца аэродрома (событие ревизии 2)</td><td><code>ctx.events().of::&lt;v1::AirbaseOwnerChanged&gt;()</code>, <code>.airbase(..)</code>, <code>.cause(..)</code>, <code>.coalition(..)</code> (<a href="airbases.html#%D1%81%D0%BC%D0%B5%D0%BD%D0%B0-%D0%B2%D0%BB%D0%B0%D0%B4%D0%B5%D0%BB%D1%8C%D1%86%D0%B0-%D1%81%D0%BE%D0%B1%D1%8B%D1%82%D0%B8%D0%B5">Аэродромы</a>)</td></tr>
+<tr><td>стоянки, полосы и состояние аэродромов (ревизия 3)</td><td><code>ctx.airbase(аэродром).parking()</code> (<code>.available_only()</code>), <code>.runways()</code>, <code>.state()</code>; много баз — <code>ctx.airbases_parking(..)</code>, <code>ctx.airbases_runways(..)</code>, <code>ctx.airbases_state(..)</code> (<a href="airbases.html#%D1%81%D1%82%D0%BE%D1%8F%D0%BD%D0%BA%D0%B8-%D0%BF%D0%BE%D0%BB%D0%BE%D1%81%D1%8B-%D0%B8-%D1%81%D0%BE%D1%81%D1%82%D0%BE%D1%8F%D0%BD%D0%B8%D0%B5-%D0%B7%D0%B0%D0%BF%D1%80%D0%BE%D1%81%D1%8B">Аэродромы</a>)</td></tr>
+<tr><td>запас складов (ревизия 3)</td><td><code>ctx.warehouse(склад).stock()</code> (<code>.items([..])</code>, <code>.liquids()</code>); много складов — <code>ctx.warehouses_stock(..)</code> (<a href="warehouses.html">Склады</a>)</td></tr>
+<tr><td>изменение запаса складов (ревизия 3)</td><td><code>ctx.warehouse_op()</code>, <code>.set(..)</code>, <code>.add(..)</code>, <code>.remove(..)</code>, <code>.transfer(..)</code>, <code>.key(..)</code>: до 16 замен в одном кадре, всё или ничего; в dev ключ нужен каждой команде, и <code>set</code> тоже (<a href="warehouses.html#%D0%B8%D0%B7%D0%BC%D0%B5%D0%BD%D0%B8%D1%82%D1%8C-%D0%B7%D0%B0%D0%BF%D0%B0%D1%81">Склады</a>)</td></tr>
+<tr><td>имена предметов и их wsType (ревизия 3)</td><td><code>ctx.item_names()</code> (<code>.items([..])</code>) → <code>ItemNames</code>: <code>.ws_type_of(имя)</code>, <code>.names_of(ws)</code>, <code>.knows(..)</code>; карта DCS читается раз за процесс DCS; ключа не принимает (<a href="warehouses.html#%D0%B8%D0%BC%D0%B5%D0%BD%D0%B0-%D0%BF%D1%80%D0%B5%D0%B4%D0%BC%D0%B5%D1%82%D0%BE%D0%B2">Склады</a>)</td></tr>
 <tr><td>сообщения, дым, флаги</td><td><code>ctx.message(..)</code>, <code>ctx.smoke(..)</code>, <code>ctx.flag(..).set(..)</code> / <code>.get()</code></td></tr>
 <tr><td>меню</td><td><code>ctx.menu(coalition)</code>, <code>.per_group()</code>, <code>.command(menus::X)</code>, <code>presses()</code>, <code>remove()</code></td></tr>
 <tr><td>время</td><td><code>ctx.sleep</code>, <code>ctx.timer</code>, <code>ctx.model_time</code>, <code>ctx.paused</code></td></tr>
@@ -658,6 +832,8 @@ ctx.end_session(Outcome::BlueWin)
 <tr><td>события</td><td><code>ctx.events()</code>, <code>.of::&lt;v1::Dead&gt;()</code>, <code>.in_group</code>, <code>.coalition</code>, <code>.filter</code></td></tr>
 <tr><td>задачи</td><td><code>ctx.spawn(..)</code></td></tr>
 <tr><td>состояние</td><td><code>ctx.state</code>, <code>ctx.state_in</code>, <code>ctx.once</code>, <code>ctx.once_per_turn</code></td></tr>
+<tr><td>документы для сайта (ревизия 3)</td><td><code>ctx.publish(имя, &amp;значение)</code>, <code>ctx.unpublish(имя)</code> (<a href="web-api.html#%D0%B4%D0%BE%D0%BA%D1%83%D0%BC%D0%B5%D0%BD%D1%82%D1%8B-%D0%BB%D0%BE%D0%B3%D0%B8%D0%BA%D0%B8">Web API</a>)</td></tr>
+<tr><td>действия для сайта (ревизия 3)</td><td><code>ctx.api().action(имя)</code>, <code>next()</code>, <code>req.json()</code>, <code>req.reply(..)</code>, <code>req.fail(..)</code> (<a href="web-api.html#%D0%B4%D0%B5%D0%B9%D1%81%D1%82%D0%B2%D0%B8%D1%8F-%D0%BB%D0%BE%D0%B3%D0%B8%D0%BA%D0%B8">Web API</a>)</td></tr>
 <tr><td>итоги</td><td><code>ctx.report().set(..)</code>, <code>ctx.end_session(..)</code>, <code>ctx.until_session_end()</code></td></tr>
 <tr><td>ошибки</td><td><code>sortie::Error</code>, <code>code()</code>, <code>help()</code>, <code>report()</code>, <code>capability()</code></td></tr>
 <tr><td>возможности (ревизия 1)</td><td><code>ctx.capabilities()</code>, <code>#[sortie::mission(requires = [caps::X])]</code>, <code>sortie::caps</code> (<a href="capabilities.html">Возможности движка</a>)</td></tr>
@@ -673,7 +849,7 @@ ctx.end_session(Outcome::BlueWin)
 </div>
 <footer class="footer">
 <div class="footer-inner">
-<p>Sortie SDK 0.3.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p>Sortie SDK 0.4.0. Лицензия SDK: MIT OR Apache-2.0.</p>
 <p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
 </div>
 </footer>

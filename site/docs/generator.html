@@ -24,7 +24,7 @@
 <a class="skip" href="#content">Перейти к содержанию</a>
 <header class="topbar">
 <div class="topbar-inner">
-<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.3.0</span></a>
+<a class="brand" href="../index.html"><svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M3.5 19.5 12 4.5l8.5 15z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="14.6" r="2.2" class="brand-dot"/></svg><span class="brand-name">Sortie SDK</span><span class="brand-version">0.4.0</span></a>
 <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Меню</span></button>
 <nav class="site-nav" id="site-nav" aria-label="Разделы сайта"><a href="quickstart.html">Быстрый старт</a><a href="index.html" aria-current="true">Документация</a><a href="../agents.html">Для агентов</a><a href="../downloads.html">Загрузки</a><a href="../changelog.html">Изменения</a></nav>
 <div class="tools"><button class="theme-btn" type="button" title="Светлая или тёмная тема" aria-label="Светлая или тёмная тема"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button><a class="gh" href="https://github.com/lynxr/sortie-sdk">GitHub</a></div>
@@ -41,6 +41,8 @@
 <li><a href="dependency.html">Подключение SDK</a></li>
 <li><a href="sdk.html">Логика на Rust</a><ul>
 <li><a href="objects.html">Объекты: статики, уничтожение, мусор</a></li>
+<li><a href="airbases.html">Аэродромы: владелец, автозахват, радио, стоянки и полосы</a></li>
+<li><a href="warehouses.html">Склады: запас аэродромов и грузов</a></li>
 <li><a href="map.html">Рисование на карте</a></li>
 <li><a href="menus.html">Деревья меню F10</a></li>
 <li><a href="dcs.html">Вызовы DCS</a></li>
@@ -50,7 +52,10 @@
 </li>
 <li><a href="generator.html" aria-current="page">Сценарий на Python</a></li>
 <li><a href="testing.html">Тестирование</a></li>
-<li><a href="operations.html">Эксплуатация</a></li>
+<li><a href="operations.html">Эксплуатация</a><ul>
+<li><a href="web-api.html">Web API</a></li>
+</ul>
+</li>
 <li><a href="troubleshooting.html">Диагностика</a></li>
 <li><a href="faq.html">Вопросы и ограничения</a></li>
 <li><a href="changelog.html">Что нового</a></li>
@@ -169,7 +174,26 @@ sc.air_template(&quot;Red CAP&quot;, mig, ident=&quot;RED_CAP&quot;, country=&qu
 <p>Шаблон авиагруппы в <code>.miz</code> не попадает. Он хранится в manifest, и логика спавнит его
 (<code>ctx.spawn_group(templates::RED_CAP)</code>). Параметры: тип самолёта или вертолёта, <code>ident</code>
 (обязателен), страна, <code>size</code>, <code>task</code>, <code>skill</code>, место по умолчанию (<code>at</code> или <code>airbase</code>),
-<code>altitude</code>, <code>speed</code>, <code>payload</code>.</p>
+<code>altitude</code>, <code>speed</code>, <code>payload</code>. В manifest шаблон несёт и опорный курс <code>heading_rad</code> — курс
+ведущего, под который нарисован строй: от него <code>.at_formation(..)</code> поворачивает строй
+(<a href="objects.html#%D0%B3%D1%80%D1%83%D0%BF%D0%BF%D0%B0-%D0%B8%D0%B7-%D1%88%D0%B0%D0%B1%D0%BB%D0%BE%D0%BD%D0%B0-%D0%B2-%D1%82%D0%BE%D1%87%D0%BA%D0%B5">группа из шаблона в точке</a>). В манифесте, который вы
+пишете сами, задайте <code>heading_rad</code> шаблона сами (без него опорный — курс первой машины).</p>
+<p>Наземный шаблон (0.4.0) — <code>sc.ground_template(..)</code>: тоже только в manifest, логика спавнит его
+так же (<code>ctx.spawn_group(templates::BATTERY)</code>), обычно с <code>.at(..)</code> или <code>.at_formation(..)</code>.</p>
+<div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">launcher = vehicles.AirDefence.S_300PS_5P85C_ln
+# Две пусковые под опорным курсом 90°: одна смотрит на 75°, другая на 105°.
+sc.ground_template(&quot;Battery&quot;, ident=&quot;BATTERY&quot;, country=&quot;Russia&quot;,
+                   at=sc.latlon(42.27, 42.90), units=[launcher, launcher],
+                   heading=90, unit_headings=[-15, 15], spacing=40)
+</code></pre></div>
+<p>Строй рисуется, как у <code>ground_group</code>: <code>formation</code> (<code>line</code>, <code>star</code>, <code>rectangle</code>, <code>vee</code>) с
+<code>spacing</code> метров между машинами, первая машина в <code>at</code> (без <code>at</code> — у первого объявленного
+аэродрома, иначе у bullseye коалиции). <code>heading</code> — опорный курс в градусах, под который
+нарисован строй; manifest хранит его в <code>heading_rad</code> шаблона. <code>unit_headings</code> — курс каждой
+машины относительно опорного, по одному на машину (по умолчанию все 0): в примере пусковые
+смотрят на 75° и 105°, и <code>.at_formation(точка, курс)</code> сохранит эти −15° и +15° от нового
+курса. Параметры: <code>ident</code> (обязателен), страна, <code>units</code> (типы pydcs из <code>dcs.vehicles</code>),
+<code>skill</code>, <code>roles</code>.</p>
 <p>Подвеска. По умолчанию генератор работает герметично: только с данными, встроенными в pydcs, без
 установленной DCS. Поэтому один и тот же сценарий собирается одинаково на любой машине. Подвесок
 по умолчанию в этом режиме нет, и шаблон без <code>payload</code> появится без оружия; генератор
@@ -188,7 +212,8 @@ sc.player_flight(&quot;Blue 1&quot;, planes.Su_25T, country=&quot;Georgia&quot;,
 <li><code>munitions={wsType: количество}</code> ограничивает боезапас склада аэродрома и задаёт начальный
 запас. По умолчанию склад каждого аэродрома безлимитный (самолёты, боеприпасы, топливо), а
 безлимитный запас DCS, по сообщениям, не считает: <code>add_item</code>, <code>remove_item</code> и <code>set_item</code>
-его не меняют (не измерено).
+его не меняют (не измерено), а <a href="warehouses.html#%D0%B8%D0%B7%D0%BC%D0%B5%D0%BD%D0%B8%D1%82%D1%8C-%D0%B7%D0%B0%D0%BF%D0%B0%D1%81"><code>ctx.warehouse_op()</code></a> отвергает
+замену на нём (<code>Unlimited</code>).
 Оружие названо своим wsType, четырьмя числами из <code>Scripts/Database/wsTypes.lua</code> игры:
 <code>sc.airbase("Nalchik", ident="NALCHIK", munitions={(4, 4, 7, 106): 20})</code> — 20 AIM-120C
 (<code>weapons.missiles.AIM_120C</code>) и больше ничего. Количество — целое от 0 до 1 000 000. Назвать
@@ -221,8 +246,8 @@ sc.menu(&quot;TARGET_INFO&quot;, &quot;Где цель?&quot;, path=[&quot;Це�
 подменю. В игре команда появляется, когда её добавит логика.</li>
 </ul>
 <h2 id="статика-погода-и-брифинг">Статика, погода и брифинг<a class="anchor" href="#статика-погода-и-брифинг" aria-label="Ссылка на этот раздел">#</a></h2>
-<p>Чего нет в API сценария, делается через pydcs напрямую. Функция с <code>@sc.pydcs</code> получает миссию
-pydcs при каждой сборке, после объявлений Sortie:</p>
+<p>Чего нет в API сценария на стороне карты, делается через pydcs напрямую. Функция с <code>@sc.pydcs</code>
+получает миссию pydcs при каждой сборке, после объявлений Sortie:</p>
 <div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">@sc.pydcs
 def extras(m: dcs.Mission) -&gt; None:
     # Статический объект: штаб рядом с целью (в .miz, без символа для Rust).
@@ -238,12 +263,56 @@ def extras(m: dcs.Mission) -&gt; None:
 логика находит их по имени через мир и события.</li>
 <li>Генератор проверяет уникальность всех имён и после хуков.</li>
 </ul>
-<p>Свой DO SCRIPT в хуке пишите через <code>sortie_gen.miz.InlineDoScript</code>, а не через <code>DoScript</code> из
-pydcs:</p>
-<div class="code" data-lang="python"><pre tabindex="0"><code class="language-python">@sc.pydcs
-def hello(m: dcs.Mission) -&gt; None:
-    trig = TriggerStart(comment=&quot;hello&quot;)
-    trig.add_action(InlineDoScript(&#39;trigger.action.outText(&quot;Миссия загружена&quot;, 10)&#39;))
+<h2 id="логика-миссии-и-do-script">Логика миссии и DO SCRIPT<a class="anchor" href="#логика-миссии-и-do-script" aria-label="Ссылка на этот раздел">#</a></h2>
+<p><code>.miz</code>, который собирает сценарий, — только карта: группы, юниты, статика, зоны, погода,
+брифинг, начальный запас складов и bootstrap самого Sortie. Вся игровая логика — что и когда
+происходит, спавн, задачи, счёт, меню, метки, изменения запаса складов — пишется в логике на
+Rust. Если чего-то не хватает в SDK, по порядку: типизированная команда или запрос; вызов
+функции DCS из каталога (<code>ctx.dcs()</code>, <a href="dcs.html">Вызовы DCS</a>); сырая таблица задачи DCS
+<code>Task::raw(..)</code> для любой группы (<a href="sdk.html#%D0%B7%D0%B0%D0%B4%D0%B0%D1%87%D0%B8-%D0%BD%D0%B0%D0%B7%D0%B5%D0%BC%D0%BD%D1%8B%D1%85-%D0%B8-%D0%BC%D0%BE%D1%80%D1%81%D0%BA%D0%B8%D1%85-%D0%B3%D1%80%D1%83%D0%BF%D0%BF">задачи наземных групп</a>:
+маршрут колонны — типизированный <code>Task::ground_route(..)</code>); и сообщить команде Sortie, чего не
+хватает.</p>
+<p>DO SCRIPT в хуке — только для стороннего скрипта, который миссия обязана сохранить. Sortie его не
+проверяет. После хуков <code>build</code> (и <code>register</code>, который тоже собирает) перечисляет весь Lua миссии,
+кроме триггеров самого Sortie (bootstrap и начальные значения флагов):</p>
+<ul>
+<li>скрипт инициализации миссии (<code>mission.init_script</code>) и его файл (<code>mission.init_script_file</code>):
+DCS выполняет их при старте миссии; в списке это строки <code>mission init: ...</code>;</li>
+<li>условие LUA PREDICATE в триггере: DCS выполняет его при каждой проверке триггера;</li>
+<li>действия DO SCRIPT и DO SCRIPT FILE в триггерах, любого класса pydcs, в том числе свой класс
+хука.</li>
+</ul>
+<p>Для триггера в строке — его номер, комментарий и тип, для каждого скрипта — начало кода или имя
+файла. Что дальше, решает параметр сценария <code>do_scripts</code>:</p>
+<div class="table-wrap" tabindex="0">
+<table><thead><tr><th><code>do_scripts</code></th><th>Сборка</th></tr></thead><tbody>
+<tr><td><code>"warn"</code> (по умолчанию)</td><td>предупреждает и собирает</td></tr>
+<tr><td><code>"deny"</code></td><td>падает с тем же списком; так настроен шаблон проекта</td></tr>
+<tr><td><code>"allow"</code></td><td>молчит</td></tr>
+</tbody></table>
+</div>
+<div class="code"><pre tabindex="0"><code>warning: the .miz runs 1 script that Sortie did not put there:
+  trigger 2 &#39;convoy&#39; (ONCE): DO SCRIPT local route = mist.getGroupRoute(&quot;Armor&quot;)...
+The .miz holds the map side only (...) See docs/generator.md#логика-миссии-и-do-script in the Sortie SDK.
+Scenario(do_scripts=&quot;allow&quot;) silences this warning; &quot;deny&quot; fails the build.
+</code></pre></div>
+<p><code>Scenario(..., do_scripts="deny")</code> задаёт его при создании, <code>sc.do_scripts = "allow"</code> — позже.
+<code>sortie-gen adopt</code> показывает скрипты миссии из редактора так же: их логику переносят в Rust.</p>
+<p>Чего проверка не видит: Lua в задачах точек маршрута группы (действие <code>Script</code> внутри
+<code>WrappedAction</code> в <code>ComboTask</code> точки). Такой скрипт сборка не перечисляет, и <code>"deny"</code> его не
+остановит; логике миссии там так же не место.</p>
+<p>Сторонний DO SCRIPT в хуке пишите через <code>sortie_gen.miz.InlineDoScript</code>, а не через <code>DoScript</code>
+из pydcs:</p>
+<div class="code" data-lang="python"><pre tabindex="0"><code class="language-python"># Сторонний скрипт, который миссия обязана сохранить (не логика миссии: она — в Rust).
+STATS_CONFIG = &#39;SERVER_STATS = { enabled = true, interval = 60 }&#39;
+
+sc.do_scripts = &quot;allow&quot;  # иначе сборка предупредит о DO SCRIPT (с &quot;deny&quot; — откажет)
+
+
+@sc.pydcs
+def server_stats(m: dcs.Mission) -&gt; None:
+    trig = TriggerStart(comment=&quot;server stats&quot;)
+    trig.add_action(InlineDoScript(STATS_CONFIG))
     m.triggerrules.triggers.append(trig)
 </code></pre></div>
 <p><code>DoScript</code> из pydcs хранит код в словаре миссии, а редактор миссий читает такое действие как
@@ -308,7 +377,7 @@ dedicated server и хоста сетевой игры, и в живой игр�
 <h2 id="что-получается-на-выходе">Что получается на выходе<a class="anchor" href="#что-получается-на-выходе" aria-label="Ссылка на этот раздел">#</a></h2>
 <div class="table-wrap" tabindex="0">
 <table><thead><tr><th>Файл</th><th>Что это</th></tr></thead><tbody>
-<tr><td><code>&lt;build_id&gt;.miz</code></td><td>миссия pydcs и один триггер MISSION START с bootstrap Sortie</td></tr>
+<tr><td><code>&lt;build_id&gt;.miz</code></td><td>миссия pydcs и один триггер MISSION START с bootstrap Sortie (плюс триггер начальных значений флагов, если они есть)</td></tr>
 <tr><td><code>&lt;build_id&gt;.manifest.pb</code></td><td>manifest: группы, юниты, зоны, шаблоны, флаги, аэродромы, меню, слоты</td></tr>
 <tr><td><code>&lt;build_id&gt;.manifest.json</code></td><td>то же для людей</td></tr>
 <tr><td><code>scenario.lock.json</code></td><td>символы сценария и геометрия зон для логики</td></tr>
@@ -345,7 +414,9 @@ sortie-gen lock|build|validate|register|launch|restart|watch|results &lt;scenari
 <li><code>lobby</code> — миссия-заглушка для списка миссий dedicated server: без юнитов, с одним сообщением о
 том, загружен ли мост.</li>
 <li><code>adopt</code> — разбор миссии, сделанной в редакторе: коалиции, группы, юниты, зоны, предложенные
-<code>ident</code>, конфликтующие и занятые имена. Помогает перенести миссию в сценарий.</li>
+<code>ident</code>, конфликтующие и занятые имена, её скрипты: скрипт инициализации, LUA PREDICATE,
+DO SCRIPT и DO SCRIPT FILE триггеров (кроме bootstrap Sortie). Помогает перенести миссию в
+сценарий, а её скрипты — в логику на Rust.</li>
 <li>Команды сценария можно запускать и так: <code>uv run sortie-gen build scenario.py</code>.</li>
 </ul>
 <p><code>sortie-gen worker</code> (цикл кампании) в этой версии не работает и выходит с кодом 2.</p>
@@ -359,7 +430,7 @@ sortie-gen lock|build|validate|register|launch|restart|watch|results &lt;scenari
 </div>
 <footer class="footer">
 <div class="footer-inner">
-<p>Sortie SDK 0.3.0. Лицензия SDK: MIT OR Apache-2.0.</p>
+<p>Sortie SDK 0.4.0. Лицензия SDK: MIT OR Apache-2.0.</p>
 <p><a href="https://github.com/lynxr/sortie-sdk">github.com/lynxr/sortie-sdk</a></p>
 </div>
 </footer>

@@ -35,21 +35,85 @@ match sam.set_option(Alarm::Red).key("sam-hot").await {
 
 An `Err` that leaves the mission function or a task spawned with `ctx.spawn` is recorded as a
 logic error (stderr of the logic, with its call site) and ends that task only. `SessionEnded`
-is never recorded. A panic is recorded the same way, with its location.
+is never recorded. A panic is recorded the same way, with its location. Nothing runs the
+mission function again until the next session or a restart of the logic, so the work after
+the failed command never happens: do not end the mission function on one optional command (an
+AI option, a message, smoke). Give it a key, retry it once on `Timeout`, log the rest:
+
+```rust
+let alarm = || sam.set_option(Alarm::Red).key("sam-north-red");
+let mut done = alarm().await;
+if let Err(sortie::Error::Timeout(_)) = &done {
+    // The same key: a first try that reached DCS after all does not run twice.
+    done = alarm().await;
+}
+if let Err(e) = done {
+    // Optional: note it and go on instead of ending the mission function.
+    eprintln!("SAM North stays as it was: {}", e.report());
+}
+```
+
+## Limits (engine 0.4.0)
+
+A refusal by one of the engine's limits is told by data, never by its text: `e.limit()` ->
+`Option<&sortie::Limit>` (`kind: LimitKind`, `budget`, `writer`, `capacity`, `per_second`,
+`needed`, `available`), `e.retry_after()` -> `Option<Duration>`, `e.is_limit()`. The code
+and `e.capability()` are what 0.3.0 gave; against a 0.3.0 engine both are `None`. The SDK
+never retries by itself.
+
+```rust
+let mut tries = 0;
+let fuel = loop {
+    match ctx.dcs().unit(UnitSel::name("SAM North-1")).fuel().await {
+        Ok(f) => break Some(f),
+        // A rate or DCS-time budget: the engine names the wait of this same read.
+        Err(e) if tries < 3 && e.retry_after().is_some() => {
+            tries += 1;
+            ctx.sleep(e.retry_after().unwrap_or_default()).await;
+        }
+        // A forbid (not in the catalog, switched off): waiting never helps.
+        Err(e) if e.is_forbidden() => break None,
+        Err(e) => return Err(e),
+    }
+};
+```
+
+| `LimitKind` | `budget` | Error | What helps |
+| --- | --- | --- | --- |
+| `CallRate` | `call_rate.read` (200/s), `.mutate` (50/s), `.heavy` (2/s), `.admin` (1/s) | `Rejected` | wait `retry_after()` |
+| `DcsTime` | `dcs_time.read` (reads and batches; a single read sees the debt floored at -20 ms, a batch the whole debt), `dcs_time.heavy` (heavy calls): 20 ms of DCS time a second each | `Rejected` | wait `retry_after()`; `None` for a heavy call sent while the logic's previous one is not back: send it after that one answered |
+| `BatchSize`, `RequestSize` | `batch.calls` (64, 256 reads), `request.bytes` (64 KiB) | `Invalid` | split the batch or request |
+| `CreatedHandles` | `handles.created` (256 alive) | `Rejected` (capability kept) | destroy one first |
+| `ReadHandles` | `handles.read` (1024, least recently used dropped) | `Gone` | read the object again |
+| `SlowCalls` | `bridge.slow_calls` (3 calls over 1 s in 10 min) | `Quarantined` | nothing until DCS restarts |
+| waits: `TaskingDelay`, `HeavySlot`, `LinkCredits`, `LinkDown`, `After`, `Queue`, `BridgeDeadline`, `SpawnGate`, `SpawnWindow` | `delay.tasking`, `slot.heavy`, ... | `Timeout` | it never ran in DCS: a retry is safe |
+| `After` when the `.after(..)` command failed | `wait.after` | that command's code and capability (`Rejected`, `Invalid`, ...) | it never ran; sent again it fails the same way at once: send the failed one again, then this one `.after(..)` the new one |
+
+- `retry_after()` is the wait of **the same command sent again unchanged**, from the refusal,
+  if the logic sends nothing else meanwhile: after a 256-read batch from a full bucket (200 -
+  256 = -56) another 256-read batch waits 1.28 s, a single read 0.285 s. When several budgets
+  refuse, the limit is the one with the longest wait. `None` for sizes, caps and waits, and for
+  a heavy call refused while the logic's previous heavy call is not back (one heavy call of a
+  writer at a time: do not `join!` two).
+- A batch refused at the limit check ran no call (the engine checks it whole before sending).
+- `e.is_forbidden()`: `Rejected` with a capability and no limit (a path not in the catalog, off
+  by default or switched off by the owner, an operation disabled in `engine.toml`).
+- `ctx.sleep` follows the ticks, so a wait can end a little early: the next refusal names the
+  rest, which the loop above survives.
 
 ## Command errors
 
 | Code | Meaning | Usual cause → fix |
 | --- | --- | --- |
 | `sortie::gone` | the target no longer exists in DCS | it died or was despawned before the command ran → match `Error::Gone` where a target can die (always in a live mission) |
-| `sortie::timeout` | DCS did not answer in time (10 s, 30 s for spawns and destroys) | a big spawn wave queued behind the spawn pacing, or a busy server → `.timeout(..)`, spawn in smaller steps, check `sortie status` / `sortie top` |
+| `sortie::timeout` | the deadline passed (10 s, 30 s for spawns and destroys). Two kinds: "the deadline passed before the command could start (why)" never reached DCS (`e.limit()` names what it waited for: `TaskingDelay`, `HeavySlot`, `LinkCredits`, `LinkDown`, `After`, `BridgeDeadline`, `Queue`); "`op` was sent to DCS but no result arrived before the deadline" may still run (`e.limit()` is `None`) | never reached DCS: retry (safe); sent: retry only with the same `.key(..)`, which waits for the late result instead of running it twice. A task or AI option right after a spawn waits 2 frames and 0.5 s of model time (`set_task`, `push_task`, `set_option`; held without its deadline running while the spawn is still queued or in DCS since 0.4.0); a busy server → `.timeout(..)`, check `sortie status` / `sortie top` |
 | `sortie::lua_error` | the Lua layer raised an error | a bad `Task::raw` table, a wrong option for the unit type → read `e.lua_traceback()` |
-| `sortie::invalid` | the command does not fit | a spawn or destroy without `.key(..)` under `--dev`; a key reused for another command ("key `k` was already used for a different command in session ..."); a manifest without the template |
+| `sortie::invalid` | the command does not fit | a spawn or destroy without `.key(..)` under `--dev`; a key reused for another command ("key `k` was already used for a different command in session ...", also after a logic restart: a changed command needs a new key such as `sam-red-v2`); a batch or request over its size (`e.limit()`: `BatchSize`, `RequestSize`); a manifest without the template; `Task::rtb` (or a `Task` converted from a CAP or orbit) for a ground group ("group `X` is not an aircraft group; only a ground route or a raw task applies to it": give it `Task::ground_route(..)`, or `Task::raw` for what the route lacks, such as a stop) or for a naval group ("...; only raw tasks apply to it": give it `Task::raw`); a ground route that does not fit: through `Task::from(..)` for a group that is no ground group ("a ground route is for ground groups"), with no point, with more than 256 points ("a ground route takes at most 256 points, got N": give the places where it turns or stops, not every point of a road path), a speed not above 0 |
 | `sortie::name_conflict` | a live group already has this name | `.named("..")` twice → drop `.named` (default names are unique) or add a counter |
 | `sortie::session_ended` | the session ended before the command completed | normal at the end of a turn → return `Ok(())` |
 | `sortie::unavailable` | the engine cannot run it now | no mission session is running; or a keyed command was in flight when the DCS link dropped ("whether it ran is not known": check the world, then use a new key) |
 | `sortie::paused` | the simulation is paused | the command was sent with `.on_pause(v1::PausePolicy::Fail)` |
-| `sortie::rejected` | the engine refused the command | read the message; capability `dev_eval` = a raw table (`Task::raw`, `.raw(..)` of a static, a `ctx.dcs()` argument) holds Lua code or a file name at the path the message names (`Script` / `ScriptFile` actions, `condition`, `command`, `file` strings) → use the typed operation; raw tables carry data only; another capability (`e.capability()`) = the engine owner switched that operation off (`engine.toml [operations]`) |
+| `sortie::rejected` | the engine refused the command | a limit (`e.limit()` is `Some`: a rate, the DCS time, the created handles) → wait `e.retry_after()` and send it again (section "Limits"); a forbid (`e.is_forbidden()`) → no retry helps; read the message; capability `dev_eval` = a raw table (`Task::raw`, `.raw(..)` of a static, a `ctx.dcs()` argument) holds Lua code or a file name at the path the message names (`Script` / `ScriptFile` actions, `condition`, `command`, `file` strings) → use the typed operation; raw tables carry data only; another capability (`e.capability()`) = the engine owner switched that operation off (`engine.toml [operations]`) |
 | `sortie::quarantined` | this command kind (for a universal call: this catalog function) is quarantined: DCS crashed while one ran, or it faulted the bridge 3 times | `e.capability()` names it (`"call:mission:land.getHeight"`: one catalog function); the engine owner releases it with `sortie caps --release <name>`; report it with `Logs/sortie-bridge.log` |
 | `sortie::bridge_fault` | the bridge caught a fault | report it with `Logs/sortie-bridge.log` |
 | `sortie::conflict` | a state write lost against another writer | `StateDoc::update` retries by itself; seen only after 8 conflicts in a row |
@@ -77,7 +141,8 @@ is never recorded. A panic is recorded the same way, with its location.
 | `include_scenario!` | ``no generated module for scenario `x` (...); build.rs generated: ...`` | use the same name in `include_scenario!` and `sortie_build::scenario` |
 | `#[sortie::mission]` | ``a mission must be an `async fn` ...``, `the arguments are swapped ...`, ``a mission must return `sortie::Result<()>` ...`` | the signature is `async fn run(ctx: Ctx<M>, start: Start) -> sortie::Result<()>` |
 | `#[sortie::mission]` | `` `X` is not a scenario marker `` | `Ctx<M>` takes the marker from the generated module, e.g. `Ctx<frontline::Frontline>` |
-| `#[sortie::test]` | a compile error: tests without DCS arrive in SDK 0.2 | test decisions in plain functions with `#[test]`; test the mission in DCS |
+| `#[sortie::test]` | a compile error: FakeDcs carries the engine and is not part of the public SDK yet | test decisions in plain functions with `#[test]`; test the mission in DCS |
+| `set_task` / `push_task` | ``error[E0277]: `Ground` groups do not fly: CAP and orbit are tasks for aircraft and helicopters`` | a ground group takes a route, `Task::ground_route(..)`, or a raw DCS task table, `Task::raw(..)`; a naval group a raw table (references/api.md, "A ground group's route") |
 | any `.await` on a borrow | clippy `await_holding_refcell_ref` | end the `ctx.world()` / `StateDoc::get()` borrow before the `.await` |
 
 ## Attach and runtime messages (the logic's stderr)

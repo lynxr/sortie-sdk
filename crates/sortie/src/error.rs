@@ -8,6 +8,7 @@
 //! runtime uses it for errors it records. `Error` also implements [`miette::Diagnostic`].
 
 use std::fmt;
+use std::time::Duration;
 
 use sortie_proto::v1;
 use sortie_types::{NotYet, SymbolKind};
@@ -33,6 +34,154 @@ pub struct Failure {
     /// The capability the refusal names (`CommandError.capability`: missing, switched off or
     /// quarantined), empty when none; see [`Error::capability`].
     pub capability: String,
+    /// The limit that refused the command, or what it waited for until its deadline
+    /// (`CommandError.limit`, engine 0.4.0, API revision 3); see [`Error::limit`]. `None` for
+    /// every other failure and from an older engine.
+    pub limit: Option<Limit>,
+}
+
+/// Which of the engine's limits refused a command, or what the command waited for until its
+/// deadline (`CommandError.limit`; engine 0.4.0, API revision 3). Read it with
+/// [`Error::limit`]; a logic tells the cause from [`Limit::kind`] and [`Limit::budget`]
+/// without parsing the message.
+///
+/// The numbers are whole, in the budget's unit: calls (`call_rate.*`, `batch.calls`),
+/// microseconds of DCS time (`dcs_time.*`), bytes (`request.bytes`), handles (`handles.*`),
+/// slow calls in 10 minutes (`bridge.slow_calls`); 0 where a number does not apply (the
+/// waits).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Limit {
+    pub kind: LimitKind,
+    /// The budget's stable name: `"call_rate.read"`, `"dcs_time.read"`, `"dcs_time.heavy"`,
+    /// `"batch.calls"`, `"handles.created"`, `"delay.tasking"`, ... (the docs list them).
+    pub budget: String,
+    /// Whose budget: the writer (the API token's name, else the logic's) for `call_rate.*`
+    /// and `dcs_time.*`; empty for a limit of the session or of DCS.
+    pub writer: String,
+    /// What the budget holds at most.
+    pub capacity: i64,
+    /// What it refills a second (0: it does not refill).
+    pub per_second: i64,
+    /// What this command needed from it.
+    pub needed: i64,
+    /// What it held when the command was refused (below 0: a debt).
+    pub available: i64,
+    /// When this same command, sent again unchanged, passes every rate budget it needs, if
+    /// the logic sends nothing else meanwhile; `None` where no refill can tell (a size, a cap,
+    /// a wait, a heavy call while the previous one is not back). See [`Error::retry_after`].
+    pub retry_after: Option<Duration>,
+}
+
+/// The kind of a [`Limit`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum LimitKind {
+    /// A kind this SDK does not know (a newer engine), or none.
+    #[default]
+    Unknown,
+    /// Calls per second of one class (`call_rate.read` 200, `.mutate` 50, `.heavy` 2,
+    /// `.admin` 1): [`Error::Rejected`].
+    CallRate,
+    /// DCS time per second (`dcs_time.read`, `dcs_time.heavy`): [`Error::Rejected`]. Also a
+    /// heavy call sent while the logic's previous heavy call has not come back
+    /// (`dcs_time.heavy`, no [`Limit::retry_after`]).
+    DcsTime,
+    /// Calls of one batch (`batch.calls`: 64, 256 reads): [`Error::Invalid`].
+    BatchSize,
+    /// Bytes of one call or batch (`request.bytes`: 64 KiB): [`Error::Invalid`].
+    RequestSize,
+    /// Objects made by calls alive in the session (`handles.created`: 256):
+    /// [`Error::Rejected`].
+    CreatedHandles,
+    /// A handle the Lua layer dropped as the least recently used of its 1024 read handles
+    /// (`handles.read`): [`Error::Gone`]; read the object again.
+    ReadHandles,
+    /// A catalog path refused until DCS restarts after three calls slower than the bridge's
+    /// 1 s watchdog in 10 minutes (`bridge.slow_calls`): [`Error::Quarantined`].
+    SlowCalls,
+    /// The waits ([`LimitKind::is_wait`]; the command never ran in DCS), which end at the
+    /// deadline ([`Error::Timeout`]): the spawn gate (`gate.spawn`, `gate.warmup`), the spawns
+    /// in flight (`window.spawns`), the tasking delay after a spawn (`delay.tasking`), one heavy
+    /// call at a time (`slot.heavy`), the link's credits (`link.credits`), the link was down
+    /// (`link.down`), the `after` command (`wait.after`), the engine's queue (`wait.queue`),
+    /// the bridge did not start it (`bridge.deadline`).
+    ///
+    /// [`LimitKind::After`] also ends when the `after` command failed: the error then has that
+    /// command's code (and capability), [`Error::Rejected`] for a refused one, and the same
+    /// command sent again fails the same way at once (the engine remembers that failure). Send
+    /// the `after` command again, then this one after the new one.
+    SpawnGate,
+    SpawnWindow,
+    TaskingDelay,
+    HeavySlot,
+    LinkCredits,
+    LinkDown,
+    After,
+    Queue,
+    BridgeDeadline,
+}
+
+impl LimitKind {
+    fn of(kind: i32) -> Self {
+        use v1::LimitKind as K;
+        match K::try_from(kind).unwrap_or(K::Unspecified) {
+            K::Unspecified => LimitKind::Unknown,
+            K::CallRate => LimitKind::CallRate,
+            K::DcsTime => LimitKind::DcsTime,
+            K::BatchSize => LimitKind::BatchSize,
+            K::RequestSize => LimitKind::RequestSize,
+            K::CreatedHandles => LimitKind::CreatedHandles,
+            K::ReadHandles => LimitKind::ReadHandles,
+            K::SlowCalls => LimitKind::SlowCalls,
+            K::SpawnGate => LimitKind::SpawnGate,
+            K::SpawnWindow => LimitKind::SpawnWindow,
+            K::TaskingDelay => LimitKind::TaskingDelay,
+            K::HeavySlot => LimitKind::HeavySlot,
+            K::LinkCredits => LimitKind::LinkCredits,
+            K::LinkDown => LimitKind::LinkDown,
+            K::After => LimitKind::After,
+            K::Queue => LimitKind::Queue,
+            K::BridgeDeadline => LimitKind::BridgeDeadline,
+        }
+    }
+
+    /// A wait: the command never ran in DCS. It ended at the deadline ([`Error::Timeout`]),
+    /// except [`LimitKind::After`] when the `after` command failed: then the error has that
+    /// command's code, and sending the same command again does not help.
+    #[must_use]
+    pub fn is_wait(self) -> bool {
+        matches!(
+            self,
+            LimitKind::SpawnGate
+                | LimitKind::SpawnWindow
+                | LimitKind::TaskingDelay
+                | LimitKind::HeavySlot
+                | LimitKind::LinkCredits
+                | LimitKind::LinkDown
+                | LimitKind::After
+                | LimitKind::Queue
+                | LimitKind::BridgeDeadline
+        )
+    }
+}
+
+impl Limit {
+    /// The SDK's form of `CommandError.limit`.
+    #[must_use]
+    pub fn from_proto(l: &v1::Limit) -> Self {
+        Self {
+            kind: LimitKind::of(l.kind),
+            budget: l.budget.clone(),
+            writer: l.writer.clone(),
+            capacity: l.capacity,
+            per_second: l.per_second,
+            needed: l.needed,
+            available: l.available,
+            retry_after: (l.retry_after_ms > 0)
+                .then(|| Duration::from_millis(u64::from(l.retry_after_ms))),
+        }
+    }
 }
 
 impl Failure {
@@ -174,6 +323,7 @@ impl Error {
             message: e.message.clone(),
             lua_traceback: (!e.lua_traceback.is_empty()).then(|| e.lua_traceback.clone()),
             capability: e.capability.clone(),
+            limit: e.limit.as_deref().map(Limit::from_proto),
             ..failure
         };
         Self::with_code(
@@ -284,6 +434,55 @@ impl Error {
             .filter(|c| !c.is_empty())
     }
 
+    /// The limit that refused the command, or what it waited for until its deadline (engine
+    /// 0.4.0; `None` from an older engine and for every other failure). The code stays what it
+    /// was: [`Error::Rejected`] for a rate, the DCS time or the created handles,
+    /// [`Error::Invalid`] for a batch or request size, [`Error::Gone`] for a dropped read
+    /// handle, [`Error::Quarantined`] for a path the bridge refuses after slow calls,
+    /// [`Error::Timeout`] for a wait (the command never ran in DCS), except [`LimitKind::After`]
+    /// when the `after` command failed: then the code is that command's.
+    ///
+    /// ```ignore
+    /// match ctx.dcs().timer().time().await {
+    ///     Err(e) if e.limit().is_some_and(|l| l.kind == LimitKind::DcsTime) => { /* .. */ }
+    ///     other => { /* .. */ }
+    /// }
+    /// ```
+    #[must_use]
+    pub fn limit(&self) -> Option<&Limit> {
+        self.failure().and_then(|f| f.limit.as_ref())
+    }
+
+    /// When the same command, sent again unchanged, passes the limit that refused it
+    /// ([`Limit::retry_after`]): `Some` for the rate budgets (`call_rate.*`, `dcs_time.*`),
+    /// counted from the refusal, if the logic sends nothing else meanwhile and no earlier
+    /// command's DCS time is charged meanwhile. `None` for a heavy call refused because the
+    /// logic's previous heavy call has not come back (`dcs_time.heavy`; its cost is not known
+    /// yet): send it again once that one answered. The SDK never retries by itself.
+    #[must_use]
+    pub fn retry_after(&self) -> Option<Duration> {
+        self.limit().and_then(|l| l.retry_after)
+    }
+
+    /// One of the engine's limits refused the command, or it waited until its deadline
+    /// ([`Error::limit`] is `Some`).
+    #[must_use]
+    pub fn is_limit(&self) -> bool {
+        self.limit().is_some()
+    }
+
+    /// A forbid, which no retry helps: the engine refused the command by policy, naming the
+    /// capability ([`Error::Rejected`] with [`Error::capability`] and no [`Error::limit`]): a
+    /// catalog path that is not in the catalog, that is off by default or that the owner
+    /// switched off, an operation the owner disabled, a guarded argument (`admin.addresses`),
+    /// a player's object the guard keeps. A rate refusal names no capability, so it is never
+    /// a forbid; against an engine before 0.4.0, the Lua layer's refusal of a create past its
+    /// 256 handles names one and carries no limit, so it reads as a forbid there.
+    #[must_use]
+    pub fn is_forbidden(&self) -> bool {
+        matches!(self, Error::Rejected(_)) && self.capability().is_some() && !self.is_limit()
+    }
+
     /// The Lua traceback, for errors raised by the Lua layer.
     #[must_use]
     pub fn lua_traceback(&self) -> Option<&str> {
@@ -306,14 +505,20 @@ impl Error {
                  ran); match on `Error::Gone` to handle it"
             }
             Error::Timeout(_) => {
-                "DCS did not answer in time: raise `.timeout(..)`, or check `sortie top` for a \
-                 busy pump"
+                "the deadline passed: with `Error::limit()` the command waited and never ran in \
+                 DCS (the limit names what for), else it was sent and may still run; a retry \
+                 with the same `.key(..)` never runs it twice. Raise `.timeout(..)`, or check \
+                 `sortie top` for a busy pump"
             }
             Error::Lua(_) => "the Lua layer raised an error; the traceback shows where",
             Error::BridgeFault(_) => {
                 "the bridge caught a fault; see Logs/sortie-bridge.log and report it"
             }
-            Error::Rejected(_) => "the engine refused the command; the message says why",
+            Error::Rejected(_) => {
+                "the engine refused the command: `Error::limit()` names a limit (wait \
+                 `Error::retry_after()` and send it again), `Error::is_forbidden()` a forbid \
+                 (no retry helps); the message says more"
+            }
             Error::SessionEnded(_) => {
                 "the session ended first; the next session runs the mission function again"
             }
@@ -450,6 +655,7 @@ mod tests {
             message: "Unit doesn't exist".into(),
             lua_traceback: "layer/exec/set_task.lua:41: Unit doesn't exist".into(),
             capability: String::new(),
+            limit: None,
         };
         let base = Failure {
             target: "group \"Red CAP 1\"".into(),
@@ -545,6 +751,101 @@ mod tests {
             let help = e.help().unwrap_or_default();
             assert!(!help.contains("  "), "{}: {help:?}", e.code());
         }
+    }
+
+    fn refusal(code: v1::ErrorCode, capability: &str, limit: Option<v1::Limit>) -> Error {
+        let e = v1::CommandError {
+            code: code as i32,
+            message: "m".into(),
+            lua_traceback: String::new(),
+            capability: capability.into(),
+            limit: limit.map(Box::new),
+        };
+        Error::from_command_error("dcs_call", Failure::default(), &e)
+    }
+
+    /// 0.4.0: a limit refusal is told by data, not by its text: `limit()`, `retry_after()`,
+    /// `is_limit()`; a forbid (a capability and no limit) by `is_forbidden()`. The variant
+    /// and the capability stay those of 0.3.0.
+    #[test]
+    fn a_limit_is_read_without_parsing_the_message() {
+        let rate = refusal(
+            v1::ErrorCode::Rejected,
+            "",
+            Some(v1::Limit {
+                kind: v1::LimitKind::CallRate as i32,
+                budget: "call_rate.read".into(),
+                writer: "w".into(),
+                capacity: 200,
+                per_second: 200,
+                needed: 200,
+                available: -56,
+                retry_after_ms: 1280,
+            }),
+        );
+        assert!(matches!(rate, Error::Rejected(_)));
+        assert!(rate.is_limit() && !rate.is_forbidden());
+        let l = rate.limit().unwrap();
+        assert_eq!(l.kind, LimitKind::CallRate);
+        assert_eq!(
+            (l.budget.as_str(), l.writer.as_str()),
+            ("call_rate.read", "w")
+        );
+        assert_eq!(
+            (l.capacity, l.per_second, l.needed, l.available),
+            (200, 200, 200, -56)
+        );
+        assert_eq!(rate.retry_after(), Some(Duration::from_millis(1280)));
+        // A wait: a TIMEOUT that never ran; no retry time.
+        let waited = refusal(
+            v1::ErrorCode::Timeout,
+            "",
+            Some(v1::Limit {
+                kind: v1::LimitKind::TaskingDelay as i32,
+                budget: "delay.tasking".into(),
+                ..Default::default()
+            }),
+        );
+        assert_eq!(waited.limit().unwrap().kind, LimitKind::TaskingDelay);
+        assert!(waited.limit().unwrap().kind.is_wait());
+        assert_eq!(waited.retry_after(), None);
+        // A forbid: REJECTED with a capability and no limit; never a limit.
+        let off = refusal(
+            v1::ErrorCode::Rejected,
+            "call:mission:Airbase.setCoalition",
+            None,
+        );
+        assert!(off.is_forbidden() && !off.is_limit());
+        assert_eq!(off.retry_after(), None);
+        assert_eq!(off.capability(), Some("call:mission:Airbase.setCoalition"));
+        // The layer's created-handle cap keeps the path's capability and is a limit.
+        let cap = refusal(
+            v1::ErrorCode::Rejected,
+            "call:mission:Spot.createLaser",
+            Some(v1::Limit {
+                kind: v1::LimitKind::CreatedHandles as i32,
+                budget: "handles.created".into(),
+                capacity: 256,
+                ..Default::default()
+            }),
+        );
+        assert!(cap.is_limit() && !cap.is_forbidden());
+        assert_eq!(cap.capability(), Some("call:mission:Spot.createLaser"));
+        // A kind this SDK does not know (a newer engine) keeps its budget's name.
+        let newer = refusal(
+            v1::ErrorCode::Rejected,
+            "",
+            Some(v1::Limit {
+                kind: 999,
+                budget: "something.new".into(),
+                ..Default::default()
+            }),
+        );
+        assert_eq!(newer.limit().unwrap().kind, LimitKind::Unknown);
+        assert_eq!(newer.limit().unwrap().budget, "something.new");
+        // A QUARANTINED path is no forbid (it is not REJECTED), nor a GONE.
+        assert!(!refusal(v1::ErrorCode::Quarantined, "call:mission:x.y", None).is_forbidden());
+        assert!(!gone().is_forbidden() && !gone().is_limit());
     }
 
     #[test]
